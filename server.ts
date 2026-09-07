@@ -1246,6 +1246,96 @@ app.post("/api/chat/messages", async (req, res) => {
   }
 });
 
+// AI Psychologist Chat History
+app.get("/api/ai/messages/:login", async (req, res) => {
+  try {
+    const login = String(req.params.login || "").toLowerCase().replace(/^@/, "");
+    if (!login) return res.status(400).json({ error: "Missing login" });
+    const coupleId = `ai_${login}`;
+    
+    if (isSqlConfigured()) {
+      try {
+        const rows = await db
+          .select()
+          .from(chatMessages)
+          .where(eq(chatMessages.coupleId, coupleId))
+          .orderBy(chatMessages.createdAt)
+          .limit(100);
+        if (rows && rows.length > 0) {
+          const formatted = rows.map((r: any) => ({
+            id: r.id,
+            role: r.role === "model" || r.role === "ai" ? "model" : "user",
+            content: r.content,
+            timestamp: r.createdAt,
+            authorName: r.role === "model" || r.role === "ai" ? "Сова" : login,
+          }));
+          return res.json({ messages: formatted });
+        }
+      } catch (e) {
+        // Fallback to file store
+      }
+    }
+
+    const store = readDbFile();
+    const list = (store.chatMessages || [])
+      .filter((m: any) => m.coupleId === coupleId)
+      .slice(-100)
+      .map((m: any) => ({
+        id: m.id,
+        role: m.role === "model" || m.role === "ai" ? "model" : "user",
+        content: m.content,
+        timestamp: m.createdAt,
+        authorName: m.role === "model" || m.role === "ai" ? "Сова" : login,
+      }));
+    return res.json({ messages: list });
+  } catch (err) {
+    console.error("Fetch AI messages error:", err);
+    return res.status(500).json({ error: "Failed to fetch AI messages" });
+  }
+});
+
+const saveAIMessageToDb = async (login: string | undefined, userText: string, aiText: string) => {
+  if (!login) return;
+  const cleanLogin = login.toLowerCase().replace(/^@/, "");
+  const coupleId = `ai_${cleanLogin}`;
+  const now = new Date().toISOString();
+  const userMsg = {
+    id: `aimsg_${Date.now()}_u`,
+    coupleId,
+    senderLogin: cleanLogin,
+    role: "user",
+    content: userText,
+    isRead: true,
+    createdAt: now,
+  };
+  const botMsg = {
+    id: `aimsg_${Date.now()}_b`,
+    coupleId,
+    senderLogin: "ai",
+    role: "model",
+    content: aiText,
+    isRead: true,
+    createdAt: new Date(Date.now() + 50).toISOString(),
+  };
+
+  if (isSqlConfigured()) {
+    try {
+      await db.insert(chatMessages).values(userMsg);
+      await db.insert(chatMessages).values(botMsg);
+    } catch (e) {
+      console.warn("Failed to persist AI messages to SQL:", e);
+    }
+  }
+  try {
+    const store = readDbFile();
+    if (!store.chatMessages) store.chatMessages = [];
+    store.chatMessages.push(userMsg, botMsg);
+    writeDbFile(store);
+  } catch (e) {
+    // ignore
+  }
+};
+
 app.post("/api/couple/sync", async (req, res) => {
   try {
     const { login1, login2, payload } = req.body;
@@ -1435,13 +1525,17 @@ app.post("/api/ai/chat", async (req, res) => {
       })),
     ];
 
+    const userLogin = req.body?.userLogin;
+
     const groqReply = await callGroqChat(groqMessages);
     if (groqReply) {
+      await saveAIMessageToDb(userLogin, lastUserText, groqReply);
       return res.json({ reply: groqReply, mode: "groq" });
     }
 
     console.error("❌ [AI] Groq недоступен — возвращаю заглушку");
     const smartReply = generateSmartPsychologistReply(lastUserText, partnerName, partner2Name);
+    await saveAIMessageToDb(userLogin, lastUserText, smartReply);
     return res.json({
       reply: smartReply,
       mode: "smart_psychologist_engine",
@@ -1455,6 +1549,9 @@ app.post("/api/ai/chat", async (req, res) => {
       partnerName,
       partner2Name
     );
+    const userLogin = req.body?.userLogin;
+    const lastUserText = req.body?.messages?.slice(-1)?.[0]?.content || "";
+    await saveAIMessageToDb(userLogin, lastUserText, fallback);
     return res.json({
       reply: fallback,
       mode: "safety_fallback",

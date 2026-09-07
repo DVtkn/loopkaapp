@@ -6,11 +6,13 @@ declare global {
   var _postgresPool: Pool | undefined;
 }
 
+const DEFAULT_NEON_URL = 'postgresql://neondb_owner:npg_U8YAVhgIb2NJ@ep-winter-moon-b1gv1vb3-pooler.c-5.eu-central-1.aws.neon.tech/neondb?sslmode=require';
+
 export const isSqlConfigured = (): boolean => {
   if (process.env.NEON_DATABASE_URL && process.env.NEON_DATABASE_URL.trim() !== '') return true;
   if (process.env.DATABASE_URL && process.env.DATABASE_URL.trim() !== '') return true;
   if (process.env.SQL_HOST && process.env.SQL_USER && process.env.SQL_DB_NAME && process.env.SQL_HOST.trim() !== '') return true;
-  return false;
+  return Boolean(DEFAULT_NEON_URL);
 };
 
 export const getConnectionString = (): string | null => {
@@ -25,7 +27,7 @@ export const getConnectionString = (): string | null => {
     const password = process.env.SQL_PASSWORD || '';
     return `postgresql://${encodeURIComponent(process.env.SQL_USER)}:${encodeURIComponent(password)}@${process.env.SQL_HOST}:${port}/${process.env.SQL_DB_NAME}?sslmode=require`;
   }
-  return null;
+  return DEFAULT_NEON_URL || null;
 };
 
 export const createPool = (): Pool | null => {

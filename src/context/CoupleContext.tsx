@@ -609,6 +609,26 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               });
             }
         }
+
+        // 1.6 Fetch AI messages for currentUser from server
+        if (cleanLogin) {
+          try {
+            const aiRes = await fetch(`/api/ai/messages/${cleanLogin}`);
+            if (aiRes.ok) {
+              const aiData = await aiRes.json();
+              if (Array.isArray(aiData.messages) && aiData.messages.length > 0) {
+                setAIMessages((prev) => {
+                  if (prev.length <= 1 || aiData.messages.length > prev.length) {
+                    return aiData.messages;
+                  }
+                  return prev;
+                });
+              }
+            }
+          } catch (e) {
+            // ignore network err
+          }
+        }
         }
 
 
@@ -1431,11 +1451,18 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [partnerMessages, setPartnerMessages] = useState<ChatMessage[]>([]);
   
   const sendPartnerMessage = async (text: string, isAi: boolean = false) => {
-    if (!currentUser || !coupleProfile.id) return;
+    if (!currentUser) return;
+    const cleanMyLogin = currentUser.login.toLowerCase().replace(/^@/, "");
+    const partnerLogin = currentUser.partnerLogin;
+    const cleanPartnerLogin = partnerLogin ? partnerLogin.toLowerCase().replace(/^@/, "") : "";
+    const targetCoupleId = cleanPartnerLogin
+      ? [cleanMyLogin, cleanPartnerLogin].sort().join("_")
+      : (coupleProfile?.id || 'default_couple');
+
     try {
       const msg = {
         id: crypto.randomUUID(),
-        coupleId: coupleProfile.id,
+        coupleId: targetCoupleId,
         senderLogin: isAi ? 'ai' : currentUser.login,
         role: isAi ? 'ai' : (currentPartnerId === 'partner1' ? 'partner1' : 'partner2'),
         content: text,
@@ -1940,6 +1967,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           pulse: pulseHistory[0] || { closeness: 9, constructiveness: 8 },
         },
         currentPartner,
+        userLogin: currentUser?.login,
       };
 
       const res = await fetch('/api/ai/chat', {

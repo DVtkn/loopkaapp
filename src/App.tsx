@@ -16,6 +16,7 @@ import { IOSInstallPrompt } from './components/IOSInstallPrompt';
 import { AmbientBackground } from './components/AmbientBackground';
 import { NavigationTab } from './types';
 import { LoopLogo } from './components/LoopLogo';
+import { AchievementsModal } from './components/AchievementsModal';
 
 const MainLayout: React.FC = () => {
   const { isOnboarded, currentUser, activeTab, setActiveTab } = useCouple();
@@ -105,13 +106,21 @@ const MainLayout: React.FC = () => {
       
       {/* Sidebar Navigation for Desktop */}
       <div className="hidden md:flex shrink-0">
-        <Navigation activeTab={activeTab} setActiveTab={setActiveTab} />
+        <Navigation 
+          activeTab={activeTab} 
+          setActiveTab={setActiveTab} 
+          onTabChange={setActiveTab}
+          onOpenAchievements={() => setShowAchievementsModal(true)}
+        />
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative z-0">
         {!isChatTab && (
           <div className="shrink-0 z-10">
-            <Header />
+            <Header 
+              onOpenAchievements={() => setShowAchievementsModal(true)}
+              onOpenSettings={() => setActiveTab('profile')}
+            />
           </div>
         )}
 
@@ -129,12 +138,26 @@ const MainLayout: React.FC = () => {
         
         {/* Mobile Navigation Tab Bar */}
         <div className="md:hidden shrink-0 z-10">
-          <Navigation activeTab={activeTab} setActiveTab={setActiveTab} />
+          <Navigation 
+            activeTab={activeTab} 
+            setActiveTab={setActiveTab}
+            onTabChange={setActiveTab}
+            onOpenAchievements={() => setShowAchievementsModal(true)}
+          />
         </div>
       </div>
       
       {/* iOS Home Screen Install Helper Banner */}
       <IOSInstallPrompt />
+
+      <AnimatePresence>
+        {showAchievementsModal && (
+          <AchievementsModal 
+            isOpen={showAchievementsModal} 
+            onClose={() => setShowAchievementsModal(false)} 
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

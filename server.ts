@@ -81,11 +81,19 @@ const PORT = 3000;
 // ==========================================
 // 1. SECURITY & INFRASTRUCTURE MIDDLEWARE
 // ==========================================
-
-// Helmet configured for AI Studio iframe embedding and security
+// Helmet configured for security
 app.use(
   helmet({
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        connectSrc: ["'self'", ...(process.env.APP_URL ? [process.env.APP_URL] : [])],
+        imgSrc: ["'self'", "data:", "blob:"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+        fontSrc: ["'self'", "data:"],
+      }
+    },
     crossOriginEmbedderPolicy: false,
     crossOriginOpenerPolicy: false,
     crossOriginResourcePolicy: { policy: "cross-origin" },
@@ -98,15 +106,18 @@ app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
+      const appUrl = process.env.APP_URL;
+      const allowed = [...config.allowedOrigins, appUrl];
+      
       if (
-        config.allowedOrigins.includes(origin) ||
+        allowed.includes(origin) ||
         origin.includes("run.app") ||
         origin.includes("localhost") ||
         origin.includes("127.0.0.1")
       ) {
         return callback(null, true);
       }
-      return callback(null, true); // Permissive in preview environment
+      return callback(new Error('Not allowed by CORS'));
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -1221,7 +1232,29 @@ process.on("unhandledRejection", (reason, promise) => {
 // 11. VITE SPA & STATIC ASSETS SERVER
 // ==========================================
 
+function checkEnvVariables() {
+  const isProd = process.env.NODE_ENV === "production";
+  const missing = [];
+  
+  if (!process.env.NEON_DATABASE_URL && !process.env.DATABASE_URL && !process.env.SQL_HOST) {
+    missing.push('Database Connection String (NEON_DATABASE_URL / DATABASE_URL)');
+  }
+  if (!process.env.JWT_SECRET) {
+    missing.push('JWT_SECRET');
+  }
+  if (!process.env.APP_URL) {
+    missing.push('APP_URL');
+  }
+
+  if (missing.length > 0) {
+    logger.warn(`Missing critical environment variables: ${missing.join(', ')}. Server will use fallbacks, which is NOT recommended for production.`);
+  } else {
+    logger.info('All critical environment variables are present.');
+  }
+}
+
 async function startServer() {
+  checkEnvVariables();
   await initDatabase();
 
   if (process.env.NODE_ENV !== "production") {

@@ -8,6 +8,7 @@ import { DbUser, DbPairRequest } from '../types.ts';
 
 export async function acceptPair(cleanMe: string, cleanPartner: string) {
   const now = new Date().toISOString();
+
   let sqlSuccess = false;
 
   // 1. Transactional update in PostgreSQL (Single Source of Truth)
@@ -33,13 +34,19 @@ export async function acceptPair(cleanMe: string, cleanPartner: string) {
           )
         );
       });
-
       sqlSuccess = true;
       logger.info('Транзакция связывания пары успешно завершена', {
         partner1: cleanMe,
         partner2: cleanPartner,
       });
     } catch (err: unknown) {
+      if (process.env.NODE_ENV === "production") {
+        logger.error('CRITICAL: Transaction acceptPair failed in production.', err, {
+          partner1: cleanMe,
+          partner2: cleanPartner,
+        });
+        throw err;
+      }
       logger.error('Транзакция связывания пары завершилась ошибкой (откат)', err, {
         partner1: cleanMe,
         partner2: cleanPartner,
@@ -49,6 +56,9 @@ export async function acceptPair(cleanMe: string, cleanPartner: string) {
 
   // 2. Fallback to file storage ONLY if SQL failed or is not configured
   if (!sqlSuccess) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("Cannot accept pair: Database is not configured and file fallback is disabled in production.");
+    }
     logger.warn('Использован аварийный механизм связывания пары в файле db_store.json', {
       partner1: cleanMe,
       partner2: cleanPartner,
@@ -83,8 +93,8 @@ export async function disconnectPair(cleanLogin: string) {
   if (!user) {
     return { error: 'Пользователь не найден', status: 404 };
   }
-
   const partnerLogin = user.partnerLogin ? String(user.partnerLogin).toLowerCase() : null;
+
   let sqlSuccess = false;
 
   if (isSqlConfigured() && db) {
@@ -109,13 +119,19 @@ export async function disconnectPair(cleanLogin: string) {
           );
         }
       });
-
       sqlSuccess = true;
       logger.info('Транзакция разрыва пары успешно завершена', {
         user: cleanLogin,
         partner: partnerLogin,
       });
     } catch (err: unknown) {
+      if (process.env.NODE_ENV === "production") {
+        logger.error('CRITICAL: Transaction disconnectPair failed in production.', err, {
+          user: cleanLogin,
+          partner: partnerLogin,
+        });
+        throw err;
+      }
       logger.error('Транзакция разрыва пары завершилась ошибкой (откат)', err, {
         user: cleanLogin,
         partner: partnerLogin,
@@ -124,6 +140,9 @@ export async function disconnectPair(cleanLogin: string) {
   }
 
   if (!sqlSuccess) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("Cannot disconnect pair: Database is not configured and file fallback is disabled in production.");
+    }
     logger.warn('Использован аварийный механизм разрыва пары в файле db_store.json', {
       user: cleanLogin,
       partner: partnerLogin,
@@ -184,11 +203,18 @@ export async function createPairRequest(fromUser: DbUser, toUser: DbUser) {
       sqlSuccess = true;
       logger.info('Запрос на пару создан (SQL транзакция)', { from: cleanFrom, to: cleanTo });
     } catch (err: unknown) {
+      if (process.env.NODE_ENV === "production") {
+        logger.error('CRITICAL: Transaction createPairRequest failed in production.', err, { from: cleanFrom, to: cleanTo });
+        throw err;
+      }
       logger.error('Сбой создания запроса на пару в SQL', err, { from: cleanFrom, to: cleanTo });
     }
   }
 
   if (!sqlSuccess) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("Cannot create pair request: Database is not configured and file fallback is disabled in production.");
+    }
     logger.warn('Запрос на пару сохранён в аварийное хранилище JSON', { from: cleanFrom, to: cleanTo });
     const store = readEmergencyFile();
     if (!store.pairRequests) store.pairRequests = [];

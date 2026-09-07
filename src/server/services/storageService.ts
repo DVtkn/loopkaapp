@@ -40,6 +40,11 @@ export function readEmergencyFile(): JsonStoreShape {
 }
 
 export function writeEmergencyFile(data: JsonStoreShape): void {
+  if (process.env.NODE_ENV === "production") {
+    // В Cloud Run контейнер эфемерен. Запись в файл бесполезна и может
+    // скрыть проблему с БД. В production этот фолбэк полностью отключён.
+    return;
+  }
   ensureDataDir();
   try {
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
@@ -122,8 +127,16 @@ export async function upsertUser(userData: DbUserInsert): Promise<void> {
         });
       return;
     } catch (err: unknown) {
+      if (process.env.NODE_ENV === "production") {
+        logger.error('CRITICAL: SQL upsertUser failed in production. File fallback is disabled.', err, { login: cleanLogin });
+        throw err;
+      }
       logger.error('SQL запись пользователя завершилась сбоем, сохранение в аварийное хранилище', err, { login: cleanLogin });
     }
+  }
+
+  if (process.env.NODE_ENV === "production") {
+     throw new Error("Cannot save user: Database is not configured and file fallback is disabled in production.");
   }
 
   const store = readEmergencyFile();
@@ -169,8 +182,16 @@ export async function saveCoupleData(key: string, data: any): Promise<void> {
         });
       return;
     } catch (err: unknown) {
+      if (process.env.NODE_ENV === "production") {
+        logger.error('CRITICAL: SQL saveCoupleData failed in production. File fallback is disabled.', err, { key });
+        throw err;
+      }
       logger.error('SQL запись coupleData сбоит, сохранение в аварийный файл', err, { key });
     }
+  }
+
+  if (process.env.NODE_ENV === "production") {
+     throw new Error("Cannot save couple data: Database is not configured and file fallback is disabled in production.");
   }
 
   const store = readEmergencyFile();

@@ -1,5 +1,7 @@
 import winston from "winston";
 
+const isProd = process.env.NODE_ENV === "production";
+
 export type LogLevel = 'info' | 'warn' | 'error' | 'security';
 
 export interface LogPayload {
@@ -44,23 +46,27 @@ const formatError = (err: unknown): { message: string; stack?: string; name?: st
   return undefined;
 };
 
+const prodFormat = winston.format.combine(
+  winston.format.timestamp(),
+  winston.format.errors({ stack: true }),
+  winston.format.json() // Cloud Logging automatically parses this
+);
+
+const devFormat = winston.format.combine(
+  winston.format.timestamp(),
+  winston.format.colorize({ all: true }),
+  winston.format.printf(({ level, message, timestamp, context, error }) => {
+    const details = context || error ? `\n  ${JSON.stringify({ ...(context as object || {}), ...(error ? { error } : {}) }, null, 2)}` : "";
+    return `[${timestamp}] ${level}: ${message}${details}`;
+  })
+);
+
 const winstonLogger = winston.createLogger({
   levels: customLevels.levels,
-  level: process.env.NODE_ENV === "production" ? "info" : "debug",
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.errors({ stack: true }),
-    winston.format.json()
-  ),
+  level: isProd ? "info" : "debug",
   transports: [
     new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize({ all: true }),
-        winston.format.printf(({ level, message, timestamp, context, error }) => {
-          const details = context || error ? `\n  ${JSON.stringify({ ...(context as object || {}), ...(error ? { error } : {}) }, null, 2)}` : "";
-          return `[${timestamp}] ${level}: ${message}${details}`;
-        })
-      ),
+      format: isProd ? prodFormat : devFormat,
     }),
   ],
 });

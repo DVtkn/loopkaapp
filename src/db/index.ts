@@ -1,6 +1,7 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from './schema.ts';
+import { logger } from '../server/logger.ts';
 
 declare global {
   var _postgresPool: Pool | undefined;
@@ -44,7 +45,7 @@ export const createPool = (): Pool | null => {
     });
 
     global._postgresPool.on('error', (err) => {
-      console.warn('PostgreSQL pool connection notice:', err?.message || err);
+      logger.warn('PostgreSQL pool connection notice:', undefined, err);
     });
   }
   return global._postgresPool;

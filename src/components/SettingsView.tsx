@@ -25,6 +25,7 @@ import { useCouple } from '../context/CoupleContext';
 import { getPushStatus, requestPushPermission, triggerLocalTestPush, PushStatus } from '../utils/pushManager';
 import { IOSInstallPrompt } from './IOSInstallPrompt';
 import { UserProfileCabinet } from './UserProfileCabinet';
+import { PageLayout } from './ui/PageLayout';
 
 export const SettingsView: React.FC = () => {
   const {
@@ -41,6 +42,7 @@ export const SettingsView: React.FC = () => {
     loadDemoCouple,
     resetCoupleData,
     updatePartnerNames,
+    setActiveTab: setAppActiveTab,
   } = useCouple();
 
   const [activeTab, setActiveTab] = useState<'cabinet' | 'system' | 'about'>('cabinet');
@@ -136,8 +138,9 @@ export const SettingsView: React.FC = () => {
   };
 
   return (
-    <div className="max-w-xl mx-auto w-full space-y-4 pb-16 animate-fadeIn">
-      {/* Top Segmented Sub-Tabs */}
+    <PageLayout title="Настройки" subtitle="Личный кабинет и оформление" onBack={() => setAppActiveTab('home')}>
+      <div className="w-full space-y-4 animate-fadeIn">
+        {/* Top Segmented Sub-Tabs */}
       <div className="grid grid-cols-2 p-1 bg-[var(--surface-2)] rounded-2xl border border-[var(--divider)] mb-2">
         <button
           onClick={() => setActiveTab('cabinet')}
@@ -525,6 +528,7 @@ export const SettingsView: React.FC = () => {
 
       {/* iOS Modal Helper if triggered */}
       <IOSInstallPrompt forceOpen={showIOSHelper} onClose={() => setShowIOSHelper(false)} />
-    </div>
+      </div>
+    </PageLayout>
   );
 };

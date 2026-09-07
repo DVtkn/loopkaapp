@@ -10,6 +10,9 @@ import { UsView } from './components/UsView';
 import { DatesView } from './components/DatesView';
 import { ChatView } from './components/ChatView';
 import { SettingsView } from './components/SettingsView';
+import { TestsView } from './components/TestsView';
+import { ReportView } from './components/ReportView';
+import { CareBaseView } from './components/CareBaseView';
 import { AchievementsModal } from './components/AchievementsModal';
 import { IOSInstallPrompt } from './components/IOSInstallPrompt';
 import { AmbientBackground } from './components/AmbientBackground';
@@ -75,10 +78,13 @@ const MainLayout: React.FC = () => {
       case 'dashboard':
         return <DashboardView setActiveTab={setActiveTab} />;
       case 'us':
-      case 'tests':
-      case 'report':
-      case 'care':
         return <UsView />;
+      case 'tests':
+        return <TestsView />;
+      case 'report':
+        return <ReportView onStartTest={() => setActiveTab('tests')} />;
+      case 'care':
+        return <CareBaseView />;
       case 'dates':
         return <DatesView />;
       case 'chat':
@@ -98,51 +104,21 @@ const MainLayout: React.FC = () => {
     <div className="h-full w-full text-[var(--text)] flex font-sans selection:bg-[var(--accent)]/20 selection:text-[var(--accent)] transition-colors overflow-hidden relative">
       {/* Dynamic Apple Ambient Aurora Mesh Background */}
       <AmbientBackground />
-      
-      {/* Desktop Sidebar & Mobile Bottom Navigation */}
-      <Navigation
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        setActiveTab={setActiveTab}
-        onOpenAchievements={() => setShowAchievementsModal(true)}
-      />
 
-      {/* Main App Container */}
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative z-0">
-        {/* Top Header - Hidden in chat tab so chat has its own compact Telegram-style header */}
-        {!isChatTab && (
-          <Header
-            onOpenAchievements={() => setShowAchievementsModal(true)}
-            onOpenSettings={() => setActiveTab('profile')}
-          />
-        )}
-
-        {/* View Content Area with Smooth Motion Transitions */}
-        <main className={`flex-1 min-h-0 flex flex-col min-w-0 w-full mx-auto ${
-          isChatTab
-            ? 'max-w-xl overflow-hidden px-0 pb-0 h-full'
-            : 'max-w-4xl px-4 sm:px-6 py-4 pb-[calc(86px+env(safe-area-inset-bottom,0px))] md:pb-8 overflow-y-auto'
-        }`}>
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={isChatTab ? 'chat' : activeTab}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-              className={isChatTab ? "flex-1 flex flex-col min-h-0 h-full w-full" : "w-full flex-1 flex flex-col"}
-            >
-              {renderActiveView()}
-            </motion.div>
-          </AnimatePresence>
-        </main>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={isChatTab ? 'chat' : activeTab}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            className="flex-1 flex flex-col min-h-0 h-full w-full"
+          >
+            {renderActiveView()}
+          </motion.div>
+        </AnimatePresence>
       </div>
-
-      {/* Achievements Modal */}
-      <AchievementsModal
-        isOpen={showAchievementsModal}
-        onClose={() => setShowAchievementsModal(false)}
-      />
 
       {/* iOS Home Screen Install Helper Banner */}
       <IOSInstallPrompt />

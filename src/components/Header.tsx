@@ -28,7 +28,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAchievements, onOpenSettin
   return (
     <header 
       className="shrink-0 z-30 apple-glass border-b border-[var(--divider)] select-none transition-all"
-      style={{ paddingTop: 'max(52px, calc(env(safe-area-inset-top, 0px) + 8px))' }}
+      style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 6px)', paddingBottom: '4px' }}
     >
       <div className="max-w-6xl mx-auto px-3 sm:px-6">
         <div className="flex items-center justify-between h-14 sm:h-16 gap-2 sm:gap-4 overflow-x-auto no-scrollbar">

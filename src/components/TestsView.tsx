@@ -23,6 +23,7 @@ import {
 import { useCouple } from '../context/CoupleContext';
 import { TestCategory, Question } from '../types';
 import { ColoredIcon, IconColorTheme } from './ColoredIcon';
+import { PageLayout } from './ui/PageLayout';
 
 export const TestsView: React.FC = () => {
   const {
@@ -33,6 +34,7 @@ export const TestsView: React.FC = () => {
     triggerConfetti,
     coupleXP,
     coupleLevelInfo,
+    setActiveTab,
   } = useCouple();
 
   const currentPartner = currentPartnerId === 'partner1' ? coupleProfile.partner1 : coupleProfile.partner2;
@@ -104,8 +106,9 @@ export const TestsView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* 1. Top Header Banner */}
+    <PageLayout title="Психологические тесты" subtitle="Опросники глубины отношений" onBack={() => setActiveTab('us')}>
+      <div className="space-y-6">
+        {/* 1. Top Header Banner */}
       <div className="relative overflow-hidden rounded-3xl bg-[var(--surface)] border border-[var(--divider)] p-6 sm:p-7 shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
@@ -470,6 +473,7 @@ export const TestsView: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </PageLayout>
   );
 };

@@ -24,6 +24,7 @@ import {
 import { useCouple } from '../context/CoupleContext';
 import { SmallCraving, WishlistItem } from '../types';
 import { ColoredIcon, MoodBadge, IconColorTheme } from './ColoredIcon';
+import { PageLayout } from './ui/PageLayout';
 
 export const CareBaseView: React.FC = () => {
   const {
@@ -40,6 +41,7 @@ export const CareBaseView: React.FC = () => {
     deleteWishlistItem,
     moodHistory,
     addMoodStatus,
+    setActiveTab,
   } = useCouple();
 
   const [activeCareTab, setActiveCareTab] = useState<'cravings' | 'flowers' | 'wishlist' | 'mood'>(
@@ -110,8 +112,9 @@ export const CareBaseView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* 1. Header Banner */}
+    <PageLayout title="База заботы" subtitle="Шпаргалка внимания и радости" onBack={() => setActiveTab('us')}>
+      <div className="space-y-6">
+        {/* 1. Header Banner */}
       <div className="rounded-3xl bg-[var(--surface)] border border-[var(--divider)] p-6 sm:p-7 shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-2">
@@ -649,6 +652,7 @@ export const CareBaseView: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </PageLayout>
   );
 };

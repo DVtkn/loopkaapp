@@ -25,6 +25,7 @@ import {
   Compass,
 } from 'lucide-react';
 import { useCouple } from '../context/CoupleContext';
+import { PulseEntry, MoodHistoryItem } from "../types";
 
 export interface MetricDetail {
   key: 'trust' | 'closeness' | 'communication' | 'sex' | 'routine';
@@ -35,6 +36,9 @@ export interface MetricDetail {
   p1Score: number;
   p2Score: number;
   avgScore: number;
+  p1Steps: number;
+  p2Steps: number;
+  gapSteps: number;
   status: 'excellent' | 'good' | 'growth';
   statusLabel: string;
   description: string;
@@ -63,6 +67,8 @@ export const RelationshipRadar: React.FC<RelationshipRadarProps> = ({
     smallCravings,
     moodHistory,
     dateInvites,
+    loveTaps,
+    dailyQuiz,
   } = useCouple();
 
   const [viewMode, setViewMode] = useState<'both' | 'average' | 'partner1' | 'partner2'>('both');
@@ -73,150 +79,163 @@ export const RelationshipRadar: React.FC<RelationshipRadarProps> = ({
 
   const p1Label = `${p1.name}${p1.gender === 'female' ? ' (Она)' : p1.gender === 'male' ? ' (Он)' : ''}`;
   const p2Label = `${p2.name}${p2.gender === 'female' ? ' (Она)' : p2.gender === 'male' ? ' (Он)' : ''}`;
-
   // Compute live 5 metrics based on actual tests completion & activities
+  // METHODOLOGY: Gottman 5:1 Ratio + Sue Johnson A.R.E. (Accessibility, Responsiveness, Engagement)
   const metricsData = useMemo(() => {
     // 1. Tests completion
-    const test1 = tests.find((t) => t.id === 'test-1' || t.slug === 'attachment-style');
-    const test2 = tests.find((t) => t.id === 'test-2' || t.slug === 'love-languages');
-    const test3 = tests.find((t) => t.id === 'test-3' || t.slug === 'conflict-gottman');
-    const test4 = tests.find((t) => t.id === 'test-4' || t.slug === 'core-values');
-    const test5 = tests.find((t) => t.id === 'test-5' || t.slug === 'intimacy-passion');
-    const test6 = tests.find((t) => t.id === 'test-6' || t.slug === 'domestic-lifestyle');
+    const test1 = tests.find((t) => t.id === "TEST-S1" || t.id === "test-1" || t.slug === "attachment-style");
+    const test2 = tests.find((t) => t.id === "TEST-S2" || t.id === "test-2" || t.slug === "five-love-languages" || t.slug === "love-languages");
+    const test3 = tests.find((t) => t.id === "TEST-S3" || t.id === "TEST-D2" || t.id === "test-3" || t.slug === "gottman-four-horsemen" || t.slug === "conflict-resolution-styles" || t.slug === "conflict-gottman");
+    const test4 = tests.find((t) => t.id === "TEST-C1" || t.id === "TEST-D1" || t.id === "test-4" || t.slug === "ideal-day" || t.slug === "family-scripts" || t.slug === "core-values");
+    const test5 = tests.find((t) => t.id === "TEST-S4" || t.id === "test-5" || t.slug === "sternberg-love-triangle" || t.slug === "intimacy-passion");
+    const test6 = tests.find((t) => t.id === "TEST-D1" || t.id === "test-6" || t.slug === "family-scripts" || t.slug === "domestic-lifestyle");
 
     // 2. Pulse averages
-    const p1Pulses = pulseHistory.filter((p) => p.author === 'partner1');
-    const p2Pulses = pulseHistory.filter((p) => p.author === 'partner2');
-
-    const avgPulseClosenessP1 = p1Pulses.length
-      ? (p1Pulses.reduce((s, p) => s + p.closeness, 0) / p1Pulses.length) * 10
-      : 0;
-    const avgPulseClosenessP2 = p2Pulses.length
-      ? (p2Pulses.reduce((s, p) => s + p.closeness, 0) / p2Pulses.length) * 10
-      : 0;
-
-    const avgPulseConstructP1 = p1Pulses.length
-      ? (p1Pulses.reduce((s, p) => s + p.constructiveness, 0) / p1Pulses.length) * 10
-      : 0;
-    const avgPulseConstructP2 = p2Pulses.length
-      ? (p2Pulses.reduce((s, p) => s + p.constructiveness, 0) / p2Pulses.length) * 10
-      : 0;
+    const p1Pulses = pulseHistory.filter((p) => p.author === "partner1");
+    const p2Pulses = pulseHistory.filter((p) => p.author === "partner2");
+    const avgPulseClosenessP1 = p1Pulses.length ? (p1Pulses.reduce((s, p) => s + p.closeness, 0) / p1Pulses.length) * 10 : 0;
+    const avgPulseClosenessP2 = p2Pulses.length ? (p2Pulses.reduce((s, p) => s + p.closeness, 0) / p2Pulses.length) * 10 : 0;
+    const avgPulseConstructP1 = p1Pulses.length ? (p1Pulses.reduce((s, p) => s + p.constructiveness, 0) / p1Pulses.length) * 10 : 0;
+    const avgPulseConstructP2 = p2Pulses.length ? (p2Pulses.reduce((s, p) => s + p.constructiveness, 0) / p2Pulses.length) * 10 : 0;
 
     // 3. Completed challenges
-    const commChallenges = challenges.filter((c) => c.category === 'communication' || c.category === 'gottman');
-    const intimacyChallenges = challenges.filter((c) => c.category === 'intimacy');
+    const commChallenges = challenges.filter((c) => c.category === "communication" || c.category === "gottman");
+    const intimacyChallenges = challenges.filter((c) => c.category === "intimacy");
+    const funChallenges = challenges.filter((c) => c.category === "fun" || c.category === "adventure");
 
     // 4. Mood logs
-    const p1Moods = moodHistory.filter((m) => m.partnerId === 'partner1');
-    const p2Moods = moodHistory.filter((m) => m.partnerId === 'partner2');
+    const p1Moods = moodHistory.filter((m) => m.partnerId === "partner1");
+    const p2Moods = moodHistory.filter((m) => m.partnerId === "partner2");
     const avgMoodP1 = p1Moods.length ? (p1Moods.reduce((s, m) => s + m.score, 0) / p1Moods.length) * 10 : 0;
     const avgMoodP2 = p2Moods.length ? (p2Moods.reduce((s, m) => s + m.score, 0) / p2Moods.length) * 10 : 0;
 
     // 5. Cravings fulfilled
-    const fulfilledCravings = smallCravings.filter((c) => c.fulfilled).length;
+    const fulfilledCravings = smallCravings.filter((c) => c.fulfilled);
+    const p1FulfilledCravings = fulfilledCravings.filter(c => c.forPartner === "partner1").length;
+    const p2FulfilledCravings = fulfilledCravings.filter(c => c.forPartner === "partner2").length;
 
-    // Metric 1: Доверие (Trust & Security)
-    // Depends on test1 (Attachment) and test4 (Core values) + pulse
-    let trustP1 = 0;
-    let trustP2 = 0;
+    // 6. Dynamic Interactions (Love Taps & Dates - Gottman Positive Deposits)
+    const p1TapsSent = loveTaps?.filter(t => t.senderLogin === p1.login).length || 0;
+    const p2TapsSent = loveTaps?.filter(t => t.senderLogin === p2.login).length || 0;
+    const p1DatesInitiated = dateInvites?.filter(d => d.senderId === "partner1").length || 0;
+    const p2DatesInitiated = dateInvites?.filter(d => d.senderId === "partner2").length || 0;
+    const quizMatches = dailyQuiz?.isMatch ? 1 : 0;
+
+    // A.R.E. Responsiveness Engine
+    const calculateARE = (p1Actions: number, p2Actions: number) => {
+      if (p1Actions === 0 && p2Actions === 0) return { p1: 0, p2: 0 };
+      return { p1: Math.min(20, p1Actions * 5), p2: Math.min(20, p2Actions * 5) };
+    };
+    const tapsARE = calculateARE(p1TapsSent, p2TapsSent);
+    const datesARE = calculateARE(p1DatesInitiated, p2DatesInitiated);
+
+    // Gottman 5:1 Positive Balance Tracker
+    const calculateGottmanBalance = (pulses: PulseEntry[], moods: MoodHistoryItem[]) => {
+      let positive = 0;
+      let negative = 0;
+      pulses.forEach(p => {
+        if (p.constructiveness >= 6) positive++;
+        if (p.closeness >= 6) positive++;
+        if (p.constructiveness <= 4) negative++;
+        if (p.closeness <= 4) negative++;
+      });
+      moods.forEach(m => {
+        if (m.score >= 6) positive++;
+        if (m.score <= 4) negative++;
+      });
+      const ratio = positive / Math.max(1, negative);
+      return Math.min(25, ratio * 5);
+    };
+    const gottmanP1 = calculateGottmanBalance(p1Pulses, p1Moods);
+    const gottmanP2 = calculateGottmanBalance(p2Pulses, p2Moods);
+
+    let trustP1 = 0, trustP2 = 0;
     const hasTrustDataP1 = !!(test1?.partner1Done || test4?.partner1Done || p1Pulses.length > 0);
     const hasTrustDataP2 = !!(test1?.partner2Done || test4?.partner2Done || p2Pulses.length > 0);
-
     if (hasTrustDataP1) {
-      if (test1?.partner1Done) trustP1 += 50;
-      if (test4?.partner1Done) trustP1 += 30;
-      if (p1Pulses.length > 0) trustP1 += Math.round(avgPulseConstructP1 * 0.15);
-      if (p1Moods.length > 0) trustP1 += Math.round(avgMoodP1 * 0.05);
+      if (test1?.partner1Done) trustP1 += 40;
+      if (test4?.partner1Done) trustP1 += 20;
+      if (quizMatches > 0) trustP1 += 5;
+      if (p1Pulses.length > 0) trustP1 += Math.round(avgPulseConstructP1 * 0.1);
+      trustP1 += gottmanP1;
       trustP1 = Math.min(100, Math.max(20, trustP1));
     }
-
     if (hasTrustDataP2) {
-      if (test1?.partner2Done) trustP2 += 50;
-      if (test4?.partner2Done) trustP2 += 30;
-      if (p2Pulses.length > 0) trustP2 += Math.round(avgPulseConstructP2 * 0.15);
-      if (p2Moods.length > 0) trustP2 += Math.round(avgMoodP2 * 0.05);
+      if (test1?.partner2Done) trustP2 += 40;
+      if (test4?.partner2Done) trustP2 += 20;
+      if (quizMatches > 0) trustP2 += 5;
+      if (p2Pulses.length > 0) trustP2 += Math.round(avgPulseConstructP2 * 0.1);
+      trustP2 += gottmanP2;
       trustP2 = Math.min(100, Math.max(20, trustP2));
     }
 
-    // Metric 2: Близость (Closeness & Emotional Intimacy)
-    // Depends on test2 (Love languages) + pulse closeness + cravings
-    let closeP1 = 0;
-    let closeP2 = 0;
-    const hasCloseDataP1 = !!(test2?.partner1Done || p1Pulses.length > 0 || fulfilledCravings > 0);
-    const hasCloseDataP2 = !!(test2?.partner2Done || p2Pulses.length > 0 || fulfilledCravings > 0);
-
+    let closeP1 = 0, closeP2 = 0;
+    const hasCloseDataP1 = !!(test2?.partner1Done || p1Pulses.length > 0 || p1FulfilledCravings > 0 || p1TapsSent > 0);
+    const hasCloseDataP2 = !!(test2?.partner2Done || p2Pulses.length > 0 || p2FulfilledCravings > 0 || p2TapsSent > 0);
     if (hasCloseDataP1) {
-      if (test2?.partner1Done) closeP1 += 60;
-      if (p1Pulses.length > 0) closeP1 += Math.round(avgPulseClosenessP1 * 0.25);
-      if (fulfilledCravings > 0) closeP1 += Math.min(15, fulfilledCravings * 5);
+      if (test2?.partner1Done) closeP1 += 40;
+      if (p1Pulses.length > 0) closeP1 += Math.round(avgPulseClosenessP1 * 0.20);
+      closeP1 += Math.min(15, p2FulfilledCravings * 5);
+      closeP1 += tapsARE.p1;
       closeP1 = Math.min(100, Math.max(20, closeP1));
     }
-
     if (hasCloseDataP2) {
-      if (test2?.partner2Done) closeP2 += 60;
-      if (p2Pulses.length > 0) closeP2 += Math.round(avgPulseClosenessP2 * 0.25);
-      if (fulfilledCravings > 0) closeP2 += Math.min(15, fulfilledCravings * 5);
+      if (test2?.partner2Done) closeP2 += 40;
+      if (p2Pulses.length > 0) closeP2 += Math.round(avgPulseClosenessP2 * 0.20);
+      closeP2 += Math.min(15, p1FulfilledCravings * 5);
+      closeP2 += tapsARE.p2;
       closeP2 = Math.min(100, Math.max(20, closeP2));
     }
 
-    // Metric 3: Коммуникация (Communication & Soft Start)
-    // Depends on test3 (Gottman conflict) + pulse constructiveness + challenges
-    let commP1 = 0;
-    let commP2 = 0;
+    let commP1 = 0, commP2 = 0;
     const hasCommDataP1 = !!(test3?.partner1Done || p1Pulses.length > 0 || commChallenges.some(c => c.partner1Completed));
     const hasCommDataP2 = !!(test3?.partner2Done || p2Pulses.length > 0 || commChallenges.some(c => c.partner2Completed));
-
     if (hasCommDataP1) {
-      if (test3?.partner1Done) commP1 += 60;
-      if (p1Pulses.length > 0) commP1 += Math.round(avgPulseConstructP1 * 0.25);
+      if (test3?.partner1Done) commP1 += 50;
+      if (p1Pulses.length > 0) commP1 += Math.round(avgPulseConstructP1 * 0.20);
       if (commChallenges.some(c => c.partner1Completed)) commP1 += 15;
+      commP1 += gottmanP1;
       commP1 = Math.min(100, Math.max(20, commP1));
     }
-
     if (hasCommDataP2) {
-      if (test3?.partner2Done) commP2 += 60;
-      if (p2Pulses.length > 0) commP2 += Math.round(avgPulseConstructP2 * 0.25);
+      if (test3?.partner2Done) commP2 += 50;
+      if (p2Pulses.length > 0) commP2 += Math.round(avgPulseConstructP2 * 0.20);
       if (commChallenges.some(c => c.partner2Completed)) commP2 += 15;
+      commP2 += gottmanP2;
       commP2 = Math.min(100, Math.max(20, commP2));
     }
 
-    // Metric 4: Секс (Physical Passion & Romance)
-    // Depends on test5 (Intimacy) + dates + intimacy challenges
-    let sexP1 = 0;
-    let sexP2 = 0;
-    const hasSexDataP1 = !!(test5?.partner1Done || dateInvites.length > 0 || intimacyChallenges.some(c => c.partner1Completed));
-    const hasSexDataP2 = !!(test5?.partner2Done || dateInvites.length > 0 || intimacyChallenges.some(c => c.partner2Completed));
-
+    let sexP1 = 0, sexP2 = 0;
+    const hasSexDataP1 = !!(test5?.partner1Done || datesARE.p1 > 0 || intimacyChallenges.some(c => c.partner1Completed));
+    const hasSexDataP2 = !!(test5?.partner2Done || datesARE.p2 > 0 || intimacyChallenges.some(c => c.partner2Completed));
     if (hasSexDataP1) {
-      if (test5?.partner1Done) sexP1 += 65;
-      if (dateInvites.length > 0) sexP1 += 20;
+      if (test5?.partner1Done) sexP1 += 50;
+      sexP1 += datesARE.p1;
       if (intimacyChallenges.some(c => c.partner1Completed)) sexP1 += 15;
+      sexP1 += Math.round(avgMoodP1 * 0.1);
       sexP1 = Math.min(100, Math.max(20, sexP1));
     }
-
     if (hasSexDataP2) {
-      if (test5?.partner2Done) sexP2 += 65;
-      if (dateInvites.length > 0) sexP2 += 20;
+      if (test5?.partner2Done) sexP2 += 50;
+      sexP2 += datesARE.p2;
       if (intimacyChallenges.some(c => c.partner2Completed)) sexP2 += 15;
+      sexP2 += Math.round(avgMoodP2 * 0.1);
       sexP2 = Math.min(100, Math.max(20, sexP2));
     }
 
-    // Metric 5: Быт (Daily Routine & Domestic Harmony)
-    // Depends on test6 (Lifestyle) + cravings + lifestyle challenges
-    let routineP1 = 0;
-    let routineP2 = 0;
-    const hasRoutineDataP1 = !!(test6?.partner1Done || fulfilledCravings > 0);
-    const hasRoutineDataP2 = !!(test6?.partner2Done || fulfilledCravings > 0);
-
+    let routineP1 = 0, routineP2 = 0;
+    const hasRoutineDataP1 = !!(test6?.partner1Done || p2FulfilledCravings > 0);
+    const hasRoutineDataP2 = !!(test6?.partner2Done || p1FulfilledCravings > 0);
     if (hasRoutineDataP1) {
-      if (test6?.partner1Done) routineP1 += 70;
-      if (fulfilledCravings > 0) routineP1 += Math.min(20, fulfilledCravings * 7);
+      if (test6?.partner1Done) routineP1 += 60;
+      if (p2FulfilledCravings > 0) routineP1 += Math.min(20, p2FulfilledCravings * 7);
+      if (funChallenges.some(c => c.partner1Completed)) routineP1 += 10;
       routineP1 = Math.min(100, Math.max(20, routineP1));
     }
-
     if (hasRoutineDataP2) {
-      if (test6?.partner2Done) routineP2 += 70;
-      if (fulfilledCravings > 0) routineP2 += Math.min(20, fulfilledCravings * 7);
+      if (test6?.partner2Done) routineP2 += 60;
+      if (p1FulfilledCravings > 0) routineP2 += Math.min(20, p1FulfilledCravings * 7);
+      if (funChallenges.some(c => c.partner2Completed)) routineP2 += 10;
       routineP2 = Math.min(100, Math.max(20, routineP2));
     }
 
@@ -227,11 +246,11 @@ export const RelationshipRadar: React.FC<RelationshipRadarProps> = ({
       return 0;
     };
 
-    const getStatus = (avg: number): { status: 'excellent' | 'good' | 'growth'; statusLabel: string } => {
-      if (avg === 0) return { status: 'growth', statusLabel: 'Тест не пройден' };
-      if (avg >= 80) return { status: 'excellent', statusLabel: 'Высокая гармония' };
-      if (avg >= 50) return { status: 'good', statusLabel: 'Баланс и устойчивость' };
-      return { status: 'growth', statusLabel: 'Зона роста' };
+    const getStatus = (avg: number): { status: "excellent" | "good" | "growth"; statusLabel: string } => {
+      if (avg === 0) return { status: "growth", statusLabel: "Тест не пройден" };
+      if (avg >= 80) return { status: "excellent", statusLabel: "Высокая гармония" };
+      if (avg >= 50) return { status: "good", statusLabel: "Баланс и устойчивость" };
+      return { status: "growth", statusLabel: "Зона роста" };
     };
 
     const trustAvg = calcAvg(trustP1, trustP2);
@@ -240,6 +259,18 @@ export const RelationshipRadar: React.FC<RelationshipRadarProps> = ({
     const sexAvg = calcAvg(sexP1, sexP2);
     const routineAvg = calcAvg(routineP1, routineP2);
 
+    const computeSteps = (score1: number, score2: number) => {
+      const totalPoints = score1 + score2;
+      let totalSteps = Math.round(totalPoints / 10);
+      if (totalSteps > 20) totalSteps = 20;
+      if (totalPoints === 0) return { p1Steps: 0, p2Steps: 0, gapSteps: 20 };
+      let s1 = Math.round((score1 / totalPoints) * totalSteps);
+      let s2 = totalSteps - s1;
+      if (s1 > 20) { s1 = 20; s2 = 0; }
+      if (s2 > 20) { s2 = 20; s1 = 0; }
+      return { p1Steps: s1, p2Steps: s2, gapSteps: Math.max(0, 20 - s1 - s2) };
+    };
+
     const list: MetricDetail[] = [
       {
         key: 'trust',
@@ -247,6 +278,7 @@ export const RelationshipRadar: React.FC<RelationshipRadarProps> = ({
         shortName: 'Доверие',
         icon: ShieldCheck,
         color: '#6366f1', // Indigo
+        ...computeSteps(trustP1, trustP2),
         p1Score: trustP1,
         p2Score: trustP2,
         avgScore: trustAvg,
@@ -265,6 +297,7 @@ export const RelationshipRadar: React.FC<RelationshipRadarProps> = ({
         shortName: 'Близость',
         icon: Heart,
         color: '#f43f5e', // Rose
+        ...computeSteps(closeP1, closeP2),
         p1Score: closeP1,
         p2Score: closeP2,
         avgScore: closeAvg,
@@ -283,6 +316,7 @@ export const RelationshipRadar: React.FC<RelationshipRadarProps> = ({
         shortName: 'Коммуникация',
         icon: MessageCircle,
         color: '#0ea5e9', // Sky blue
+        ...computeSteps(commP1, commP2),
         p1Score: commP1,
         p2Score: commP2,
         avgScore: commAvg,
@@ -301,6 +335,7 @@ export const RelationshipRadar: React.FC<RelationshipRadarProps> = ({
         shortName: 'Секс',
         icon: Flame,
         color: '#f59e0b', // Amber / Flame
+        ...computeSteps(sexP1, sexP2),
         p1Score: sexP1,
         p2Score: sexP2,
         avgScore: sexAvg,
@@ -319,6 +354,7 @@ export const RelationshipRadar: React.FC<RelationshipRadarProps> = ({
         shortName: 'Быт',
         icon: Home,
         color: '#10b981', // Emerald
+        ...computeSteps(routineP1, routineP2),
         p1Score: routineP1,
         p2Score: routineP2,
         avgScore: routineAvg,
@@ -610,7 +646,7 @@ export const RelationshipRadar: React.FC<RelationshipRadarProps> = ({
 
       {/* 4. The 5 Key Metric Detail Cards */}
       <div className="mt-6 space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mb-2">
           <h4 className="text-xs font-extrabold uppercase tracking-wider text-[var(--text-2)]">
             5 ключевых метрик союза
           </h4>
@@ -663,21 +699,44 @@ export const RelationshipRadar: React.FC<RelationshipRadarProps> = ({
                     </div>
                   </div>
 
-                  {/* Dual Comparison Progress Bar */}
-                  <div className="space-y-1.5 my-2.5">
-                    <div className="flex items-center justify-between text-[10px] font-semibold text-[var(--text-2)]">
-                      <span className="text-[var(--accent-blue)] font-bold">{p1Label}: {m.p1Score}%</span>
-                      <span className="text-[var(--accent)] font-bold">{p2Label}: {m.p2Score}%</span>
+                  {/* Bridge of 20 Steps Metaphor */}
+                  <div className="space-y-2 my-3">
+                    <div className="flex items-end justify-between text-[10px] font-bold uppercase tracking-wider text-[var(--text-2)] relative">
+                      <div className="flex flex-col items-start min-w-0 max-w-[35%]">
+                        <span className="text-[var(--accent-blue)] truncate w-full" title={p1Label}>{p1Label}</span>
+                        <span className="text-[var(--accent-blue)]">{m.p1Steps}</span>
+                      </div>
+                      
+                      <div className="flex flex-col items-center justify-end px-1 shrink-0 absolute left-1/2 -translate-x-1/2 bottom-0">
+                        {m.gapSteps === 0 ? (
+                          <span className="text-emerald-500 font-extrabold px-2 bg-emerald-500/10 rounded-full border border-emerald-500/20 shadow-2xs whitespace-nowrap">Встретились!</span>
+                        ) : (
+                          <span className="text-[var(--text-2)] whitespace-nowrap">{m.gapSteps} {m.gapSteps === 1 ? 'шаг' : (m.gapSteps >= 2 && m.gapSteps <= 4 ? 'шага' : 'шагов')} разрыв</span>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col items-end min-w-0 max-w-[35%] text-right">
+                        <span className="text-[var(--accent)] truncate w-full" title={p2Label}>{p2Label}</span>
+                        <span className="text-[var(--accent)]">{m.p2Steps}</span>
+                      </div>
                     </div>
-                    <div className="h-2 w-full rounded-full bg-[var(--divider)] overflow-hidden flex">
-                      <div
-                        className="h-full rounded-l-full bg-[var(--accent-blue)] transition-all duration-500"
-                        style={{ width: `${m.p1Score / 2}%` }}
-                      />
-                      <div
-                        className="h-full rounded-r-full bg-[var(--accent)] ml-0.5 transition-all duration-500"
-                        style={{ width: `${m.p2Score / 2}%` }}
-                      />
+                    
+                    <div className="w-full flex items-center justify-between gap-[2px] h-3.5 p-0.5 rounded-full overflow-hidden bg-[var(--surface-2)] border border-[var(--divider)] shadow-inner">
+                      {Array.from({ length: 20 }).map((_, i) => {
+                        const isP1 = i < m.p1Steps;
+                        const isP2 = i >= 20 - m.p2Steps;
+                        
+                        let bgColor = 'bg-transparent';
+                        if (isP1) bgColor = 'bg-[var(--accent-blue)] shadow-[0_0_8px_rgba(59,130,246,0.6)] rounded-sm';
+                        else if (isP2) bgColor = 'bg-[var(--accent)] shadow-[0_0_8px_rgba(239,68,68,0.6)] rounded-sm';
+
+                        return (
+                          <div 
+                            key={i} 
+                            className={`flex-1 h-full transition-all duration-700 ${bgColor}`} 
+                          />
+                        );
+                      })}
                     </div>
                   </div>
 

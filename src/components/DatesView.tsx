@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { PageLayout } from './ui/PageLayout';
 import {
   MapPin,
   Calendar,
@@ -241,7 +242,8 @@ export const DatesView: React.FC = () => {
   };
 
   return (
-    <div className="max-w-xl mx-auto w-full space-y-4 pb-8 animate-fadeIn">
+    <PageLayout title="Свидания" hideHeader>
+      <div className="max-w-xl mx-auto w-full space-y-4 pb-8 animate-fadeIn">
       {/* Header */}
       <div className="flex items-end justify-between pt-1">
         <div>
@@ -1377,6 +1379,7 @@ export const DatesView: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </PageLayout>
   );
 };

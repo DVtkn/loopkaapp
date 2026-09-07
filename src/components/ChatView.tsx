@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Markdown from 'react-markdown';
+import { PageLayout } from './ui/PageLayout';
 import {
   Bot,
   Send,
@@ -133,7 +134,8 @@ export const ChatView: React.FC = () => {
   ];
 
   return (
-    <div className="flex flex-col flex-1 h-full min-h-0 w-full overflow-hidden bg-[var(--bg)]">
+    <PageLayout hideHeader className="p-0 sm:p-0 sm:px-0">
+      <div className="flex flex-col flex-1 h-full min-h-0 w-full overflow-hidden bg-[var(--bg)]">
       
       {/* 1. SINGLE COMPACT TELEGRAM HEADER */}
       <header className="shrink-0 px-3 pt-[calc(8px+env(safe-area-inset-top,0px))] pb-2 bg-[var(--surface)] border-b border-[var(--divider)] shadow-2xs z-10 backdrop-blur-md">
@@ -413,7 +415,8 @@ export const ChatView: React.FC = () => {
         </button>
       </form>
 
-    </div>
+      </div>
+    </PageLayout>
   );
 };
 

@@ -226,16 +226,32 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [dailyQuizIndex, setDailyQuizIndex] = useState<number>(0);
   const [dailyQuiz, setDailyQuiz] = useState<DailyCoupleQuiz>(() => {
     const defaultQ = DAILY_QUIZ_QUESTIONS[0];
-    return safeGetStorage('together_daily_quiz', {
-      id: defaultQ.id,
-      question: defaultQ.question,
-      options: [
+    const saved = safeGetStorage<Partial<DailyCoupleQuiz> | null>('together_daily_quiz', null);
+    if (!saved) {
+      return {
+        id: defaultQ.id,
+        question: defaultQ.question,
+        options: [
+          { key: 'me', label: 'Я' },
+          { key: 'partner', label: 'Партнёр' },
+          { key: 'both', label: 'Оба одинаково' },
+        ],
+        category: defaultQ.category,
+      };
+    }
+    return {
+      id: saved.id || defaultQ.id,
+      question: saved.question || defaultQ.question,
+      options: saved.options && saved.options.length > 0 ? saved.options : [
         { key: 'me', label: 'Я' },
         { key: 'partner', label: 'Партнёр' },
         { key: 'both', label: 'Оба одинаково' },
       ],
-      category: defaultQ.category,
-    });
+      category: saved.category || defaultQ.category,
+      partner1Answer: saved.partner1Answer,
+      partner2Answer: saved.partner2Answer,
+      isMatch: saved.isMatch,
+    };
   });
 
   const deepCards = DEEP_TALK_CARDS;

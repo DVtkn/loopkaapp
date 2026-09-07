@@ -31,8 +31,9 @@ import {
   Pencil,
 } from 'lucide-react';
 import { useCouple } from '../context/CoupleContext';
+import { DAILY_QUIZ_QUESTIONS } from '../data/gamificationData';
 import { NavigationTab } from '../types';
-import { RelationshipRadar } from './RelationshipRadar';
+import { PageLayout } from './ui/PageLayout';
 import { RelationshipTemperature } from './RelationshipTemperature';
 import {
   ColoredIcon,
@@ -57,8 +58,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
     challenges,
     toggleChallenge,
     smallCravings,
-    addMoodStatus,
-    questionAnswer,
+    addMoodStatus,    questionAnswer,
     answerQuestionOfDay,
     feedItems,
     addFeedItem,
@@ -196,7 +196,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
   const formattedDate = todayStr.charAt(0).toUpperCase() + todayStr.slice(1);
 
   return (
-    <div className="max-w-xl mx-auto w-full space-y-3 pb-8">
+    <PageLayout hideHeader>
       
       {/* 1. Nav Large Greeting Header with subtle parallax float */}
       <motion.div 
@@ -266,7 +266,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end relative z-10">
             {incomingRequests.length > 0 ? (
               <>
-                <button
+              <button
                   onClick={() => acceptPairRequest(incomingRequests[0].fromLogin)}
                   className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl apple-btn-primary text-sm font-semibold flex items-center justify-center gap-1.5"
                 >
@@ -292,13 +292,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
         </motion.div>
       )}
 
-      {/* 2. Top Row Metric Cards: Streak, Mood & Partner Status */}
+      
+        {/* 2. Top Row Metric Cards: Streak, Mood & Partner Status */}
       <motion.div 
         initial={{ opacity: 0, y: 15 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, margin: "-20px" }}
         transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-        className="grid grid-cols-2 sm:grid-cols-3 gap-3"
+        className="grid grid-cols-2 sm:grid-cols-3 gap-3 shrink-0"
       >
         {/* Streak Card */}
         <motion.div 
@@ -445,11 +446,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
 
       {/* 3. FAST ACTIONS & REACTIONS */}
       <motion.div 
-        initial={{ opacity: 0, y: 20, filter: 'blur(4px)' }}
-        whileInView={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-        viewport={{ once: true, margin: "-30px", amount: 0.1 }}
-        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-        className="app-card p-4 sm:p-5 space-y-4"
+        initial={{ opacity: 0, y: 16 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.05 }}
+        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+        className="app-card p-4 sm:p-5 space-y-4 shrink-0 min-h-fit"
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -535,100 +536,155 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
         </div>
       </motion.div>
 
-      {/* 4. DAILY COUPLE QUIZ: Игра дня «Кто из нас двоих...» */}
-      <motion.div 
-        initial={{ opacity: 0, y: 22, filter: 'blur(4px)' }}
-        whileInView={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-        viewport={{ once: true, margin: "-30px", amount: 0.1 }}
-        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-        className="app-card p-5 space-y-3 relative overflow-hidden"
-      >
-        <div className="absolute top-0 right-0 w-24 h-24 bg-[var(--accent)]/5 rounded-full blur-2xl pointer-events-none" />
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-[var(--accent)]" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">
-              Игра дня «Кто из нас двоих...»
-            </span>
-          </div>
-          <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[var(--accent)]/15 text-[var(--accent)] border border-[var(--accent)]/20 shadow-2xs">
-            +50 XP
-          </span>
-        </div>
+      
+        {/* 4. DAILY COUPLE QUIZ: Игра дня «Кто из нас двоих...» */}
+      {(() => {
+        const isPartner1 = currentPartnerId === 'partner1';
+        const myQuizAnswer = isPartner1 ? dailyQuiz?.partner1Answer : dailyQuiz?.partner2Answer;
+        const partnerQuizAnswer = isPartner1 ? dailyQuiz?.partner2Answer : dailyQuiz?.partner1Answer;
+        const bothAnswered = !!(dailyQuiz?.partner1Answer && dailyQuiz?.partner2Answer);
+        const quizQuestion = dailyQuiz?.question || (DAILY_QUIZ_QUESTIONS && DAILY_QUIZ_QUESTIONS.length > 0 ? DAILY_QUIZ_QUESTIONS[0].question : 'Кто из нас двоих скорее сделает первый шаг к примирению?');
 
-        <p className="text-base sm:text-lg font-semibold text-[var(--text)] leading-snug">
-          {dailyQuiz.question}
-        </p>
+        const getAnswerText = (ans?: 'me' | 'partner' | 'both', answeringPartnerIs1 = isPartner1) => {
+          if (!ans) return '';
+          if (ans === 'both') return 'Оба одинаково';
+          if (answeringPartnerIs1) {
+            return ans === 'me' ? coupleProfile.partner1.name : coupleProfile.partner2.name;
+          } else {
+            return ans === 'me' ? coupleProfile.partner2.name : coupleProfile.partner1.name;
+          }
+        };
 
-        {dailyQuiz.partner1Answer && dailyQuiz.partner2Answer ? (
-          <div className="p-3.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] space-y-2">
-            <div className="flex items-center justify-between text-xs sm:text-sm font-medium">
-              <span className="text-[var(--text-2)]">{currentPartner.name}:</span>
-              <span className="text-[var(--accent)] font-semibold">
-                {dailyQuiz.partner1Answer === 'me' ? 'Я' : dailyQuiz.partner1Answer === 'partner' ? otherPartner.name : 'Оба одинаково'}
+        return (
+          <motion.div 
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.05 }}
+            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+            className="app-card p-5 space-y-3.5 relative shrink-0 min-h-fit overflow-hidden"
+          >
+            <div className="absolute top-0 right-0 w-24 h-24 bg-[var(--accent)]/5 rounded-full blur-2xl pointer-events-none" />
+            
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-[var(--accent)] shrink-0" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">
+                  Игра дня «Кто из нас двоих...»
+                </span>
+              </div>
+              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[var(--accent)]/15 text-[var(--accent)] border border-[var(--accent)]/20 shadow-2xs shrink-0">
+                +50 XP
               </span>
             </div>
-            <div className="flex items-center justify-between text-xs sm:text-sm font-medium">
-              <span className="text-[var(--text-2)]">{otherPartner.name}:</span>
-              <span className="text-[var(--accent)] font-semibold">
-                {dailyQuiz.partner2Answer === 'me' ? otherPartner.name : dailyQuiz.partner2Answer === 'partner' ? currentPartner.name : 'Оба одинаково'}
-              </span>
-            </div>
-            <div className="pt-1 border-t border-[var(--divider)] text-center">
-              <span className="text-xs sm:text-sm font-semibold text-emerald-500 flex items-center justify-center gap-1.5">
-                {dailyQuiz.isMatch ? (
-                  <>
-                    <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
-                    <span>Совпадение! Вы отлично чувствуете друг друга</span>
-                  </>
-                ) : (
-                  <>
-                    <Heart className="w-3.5 h-3.5 text-rose-500" />
-                    <span>Разные взгляды делают вас уникальной парой!</span>
-                  </>
+
+            <p className="text-base sm:text-lg font-semibold text-[var(--text)] leading-snug">
+              {quizQuestion}
+            </p>
+
+            {bothAnswered ? (
+              <div className="p-3.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] space-y-2.5">
+                <div className="flex items-center justify-between text-xs sm:text-sm font-medium">
+                  <span className="text-[var(--text-2)]">{currentPartner.name}:</span>
+                  <span className="text-[var(--accent)] font-semibold">
+                    {getAnswerText(myQuizAnswer, isPartner1)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs sm:text-sm font-medium">
+                  <span className="text-[var(--text-2)]">{otherPartner.name}:</span>
+                  <span className="text-[var(--accent)] font-semibold">
+                    {getAnswerText(partnerQuizAnswer, !isPartner1)}
+                  </span>
+                </div>
+                <div className="pt-2 border-t border-[var(--divider)] text-center">
+                  <span className="text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5">
+                    {dailyQuiz?.isMatch ? (
+                      <>
+                        <Sparkles className="w-4 h-4 text-emerald-500 shrink-0" />
+                        <span className="text-emerald-500">Совпадение! Вы отлично чувствуете друг друга</span>
+                      </>
+                    ) : (
+                      <>
+                        <Heart className="w-4 h-4 text-rose-500 shrink-0" />
+                        <span className="text-rose-500">Разные взгляды делают вас уникальной парой!</span>
+                      </>
+                    )}
+                  </span>
+                </div>
+              </div>
+            ) : myQuizAnswer ? (
+              <div className="p-3.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] space-y-2">
+                <div className="flex items-center justify-between text-xs sm:text-sm">
+                  <span className="text-[var(--text-2)]">Ваш выбор:</span>
+                  <span className="text-[var(--accent)] font-semibold">
+                    {myQuizAnswer === 'me' ? 'Я' : myQuizAnswer === 'partner' ? otherPartner.name : 'Оба одинаково'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between pt-1.5 border-t border-[var(--divider)]">
+                  <p className="text-xs text-[var(--text-2)] flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    <span>Ожидаем ответ {otherPartner.name}...</span>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      submitDailyQuizAnswer(myQuizAnswer === 'me' ? 'partner' : myQuizAnswer === 'partner' ? 'both' : 'me');
+                    }}
+                    className="text-xs text-[var(--accent)] hover:underline font-semibold cursor-pointer py-1 px-2 -mr-2"
+                  >
+                    Изменить
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {partnerQuizAnswer && (
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                    <span>{otherPartner.name} уже сделал{otherPartner.gender === 'female' ? 'а' : ''} свой выбор! Ваш черёд:</span>
+                  </p>
                 )}
-              </span>
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-3 gap-2">
-            <motion.button
-              whileTap={{ scale: 0.94 }}
-              type="button"
-              onClick={() => submitDailyQuizAnswer('me')}
-              className="py-2.5 px-3 rounded-xl bg-[var(--surface-2)] hover:bg-[var(--accent)] hover:text-white border border-[var(--divider)] text-xs sm:text-sm font-semibold text-[var(--text)] transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <User className="w-3.5 h-3.5 text-[var(--accent)]" />
-              <span>Я</span>
-            </motion.button>
-            <motion.button
-              whileTap={{ scale: 0.94 }}
-              type="button"
-              onClick={() => submitDailyQuizAnswer('partner')}
-              className="py-2.5 px-3 rounded-xl bg-[var(--surface-2)] hover:bg-[var(--accent)] hover:text-white border border-[var(--divider)] text-xs sm:text-sm font-semibold text-[var(--text)] transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <Heart className="w-3.5 h-3.5 text-rose-500" />
-              <span>{otherPartner.name}</span>
-            </motion.button>
-            <motion.button
-              whileTap={{ scale: 0.94 }}
-              type="button"
-              onClick={() => submitDailyQuizAnswer('both')}
-              className="py-2.5 px-3 rounded-xl bg-[var(--surface-2)] hover:bg-[var(--accent)] hover:text-white border border-[var(--divider)] text-xs sm:text-sm font-semibold text-[var(--text)] transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <HeartHandshake className="w-3.5 h-3.5 text-amber-500" />
-              <span>Оба одинаково</span>
-            </motion.button>
-          </div>
-        )}
-      </motion.div>
+                <div className="grid grid-cols-3 gap-2">
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    type="button"
+                    onClick={() => submitDailyQuizAnswer('me')}
+                    className="min-h-[44px] py-2.5 px-3 rounded-xl bg-[var(--surface-2)] hover:bg-[var(--accent)] hover:text-white border border-[var(--divider)] text-xs sm:text-sm font-semibold text-[var(--text)] transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <User className="w-3.5 h-3.5 text-[var(--accent)] shrink-0" />
+                    <span>Я</span>
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    type="button"
+                    onClick={() => submitDailyQuizAnswer('partner')}
+                    className="min-h-[44px] py-2.5 px-3 rounded-xl bg-[var(--surface-2)] hover:bg-[var(--accent)] hover:text-white border border-[var(--divider)] text-xs sm:text-sm font-semibold text-[var(--text)] transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Heart className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                    <span className="truncate">{otherPartner.name}</span>
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.95 }}
+                    type="button"
+                    onClick={() => submitDailyQuizAnswer('both')}
+                    className="min-h-[44px] py-2.5 px-3 rounded-xl bg-[var(--surface-2)] hover:bg-[var(--accent)] hover:text-white border border-[var(--divider)] text-xs sm:text-sm font-semibold text-[var(--text)] transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <HeartHandshake className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    <span className="truncate">Оба</span>
+                  </motion.button>
+                </div>
+              </div>
+            )}
+          </motion.div>
+        );
+      })()}
 
       {/* 5. GAMIFICATION & FEATURES QUICK LAUNCH HUB */}
       <motion.div
-        initial={{ opacity: 0, y: 22, filter: 'blur(4px)' }}
-        whileInView={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-        viewport={{ once: true, margin: "-30px", amount: 0.1 }}
-        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+        initial={{ opacity: 0, y: 16 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.05 }}
+        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+        className="shrink-0"
       >
         <div className="flex items-center justify-between mb-2.5 px-1">
           <p className="text-xs font-semibold text-[var(--text-2)] uppercase tracking-wider">
@@ -708,13 +764,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
         </div>
       </motion.div>
 
-      {/* 3. Question of the Day Card */}
+      {/* 6. Question of the Day Card */}
       <motion.div 
-        initial={{ opacity: 0, y: 22, filter: 'blur(4px)' }}
-        whileInView={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-        viewport={{ once: true, margin: "-30px", amount: 0.1 }}
-        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-        className="app-card p-5 relative overflow-hidden"
+        initial={{ opacity: 0, y: 16 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.05 }}
+        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+        className="app-card p-5 relative overflow-hidden shrink-0 min-h-fit"
       >
         <div className="absolute top-0 left-0 w-24 h-24 bg-[var(--accent)]/5 rounded-full blur-2xl pointer-events-none" />
         <div className="flex items-center justify-between mb-2">
@@ -787,131 +843,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
 
       
 
-      {/* 6. Relationship Temperature Chart (Recharts) */}
-      <motion.div
-        initial={{ opacity: 0, y: 22, filter: 'blur(4px)' }}
-        whileInView={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-        viewport={{ once: true, margin: "-30px", amount: 0.1 }}
-        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-      >
-        <RelationshipTemperature
-          onNavigateToTests={() => {
-            setUsSubTab('tests');
-            setActiveTab('us');
-          }}
-          onNavigateToDates={() => {
-            setDatesSubTab('wheel');
-            setActiveTab('dates');
-          }}
-          onNavigateToChat={() => {
-            setActiveTab('chat');
-          }}
-        />
-      </motion.div>
-
-      {/* 7. Relationship Radar Component (Recharts) */}
-      {isPaired && (
-        <motion.div
-          initial={{ opacity: 0, y: 22, filter: 'blur(4px)' }}
-          whileInView={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-          viewport={{ once: true, margin: "-30px", amount: 0.1 }}
-          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-        >
-          <RelationshipRadar
-            onStartTest={(testId) => {
-              // we don't have direct access to tests array here easily, but we can set tab to tests 
-              // wait, we can just navigate to US tab and 'tests' subtab
-              setUsSubTab('tests');
-              setActiveTab('us');
-            }}
-          />
-        </motion.div>
-      )}
-
-      {/* 8. Couple XP & Rating Widget */}
-      {isPaired && (
-        <motion.div 
-          initial={{ opacity: 0, y: 22, filter: 'blur(4px)' }}
-          whileInView={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-          viewport={{ once: true, margin: "-30px", amount: 0.1 }}
-          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-          className="app-card p-5 space-y-4 relative overflow-hidden"
-        >
-          <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-2xl bg-[var(--surface-2)] border border-[var(--divider)] flex items-center justify-center shadow-xs">
-                <ColoredIcon name={coupleLevelInfo.iconName} color={coupleLevelInfo.color} size="md" />
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-amber-600 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">
-                    Уровень {coupleLevelInfo.level}
-                  </span>
-                  <span className="text-sm font-semibold text-[var(--text)]">
-                    {coupleLevelInfo.levelName}
-                  </span>
-                </div>
-                <p className="text-xs text-[var(--text-2)] font-normal mt-0.5">
-                  {coupleLevelInfo.description}
-                </p>
-              </div>
-            </div>
-
-            <div className="text-right">
-              <span className="text-xl font-bold text-[var(--text)] font-mono tracking-tight">
-                {coupleXP} <span className="text-xs font-semibold text-amber-500">XP</span>
-              </span>
-            </div>
-          </div>
-
-          {/* Level Progress Bar */}
-          <div className="space-y-1.5">
-            <div className="flex justify-between text-xs font-medium text-[var(--text-2)]">
-              <span>Прогресс до «{coupleLevelInfo.nextLevelName}»</span>
-              <span className="text-[var(--accent)] font-mono">
-                {coupleLevelInfo.xpToNext > 0 ? `ещё ${coupleLevelInfo.xpToNext} XP` : 'Максимальный ранг'}
-              </span>
-            </div>
-            <div className="h-2.5 w-full rounded-full bg-[var(--divider)] overflow-hidden p-0.5">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-[var(--accent)] via-[var(--accent-2)] to-[var(--accent-blue)] transition-all duration-700 shadow-xs"
-                style={{ width: `${coupleLevelInfo.progressPercent}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Quick XP Earning Chips */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-xs font-medium text-[var(--text-2)]">
-            <div className="p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-center shadow-2xs">
-              <span className="text-[var(--accent)] block font-semibold">+200 XP</span>
-              <span className="truncate block">Свидание</span>
-            </div>
-            <div className="p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-center shadow-2xs">
-              <span className="text-[var(--accent-blue)] block font-semibold">+100 XP</span>
-              <span className="truncate block">Тест пары</span>
-            </div>
-            <div className="p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-center shadow-2xs">
-              <span className="text-amber-500 block font-semibold">+50 XP</span>
-              <span className="truncate block">Испытание</span>
-            </div>
-            <div className="p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-center shadow-2xs">
-              <span className="text-emerald-500 block font-semibold">+5 XP</span>
-              <span className="truncate block">Прикосновение</span>
-            </div>
-          </div>
-
-          <button
-            onClick={() => setActiveTab('report')}
-            className="w-full py-3 rounded-xl bg-[var(--surface-2)] hover:bg-[var(--accent)] hover:text-white text-[var(--text)] font-semibold text-sm border border-[var(--divider)] transition-all shadow-xs flex items-center justify-center gap-1.5 active:scale-98"
-          >
-            <Award className="w-4 h-4" />
-            <span>Открыть паспорт и полную аналитику пары</span>
-          </button>
-        </motion.div>
-      )}
-
-      
       {/* MODAL 1: Mood Picker Bottom Sheet (Instagram / iOS Style) */}
       {showMoodPicker && (
         <div className="fixed inset-0 z-[100] flex flex-col justify-end sm:justify-center items-center">
@@ -1146,6 +1077,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
           </div>
         </div>
       )}
-    </div>
+    </PageLayout>
   );
 };

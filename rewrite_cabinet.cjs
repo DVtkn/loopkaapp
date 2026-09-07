@@ -1,159 +1,22 @@
-import React, { useState } from 'react';
-import { Settings, Moon, ChevronRight, ArrowLeft,
-  User,
-  Copy,
-  CheckCircle2,
-  Heart,
-  Users,
-  Sparkles,
-  Lock,
-  LogOut,
-  KeyRound,
-  Shield,
-  MapPin,
-  Calendar,
-  AlertTriangle,
-  Send,
-  UserPlus,
-  X,
-  Check,
-  RefreshCw,
-  Edit2,
-  Smile,
-  Save,
-  ArrowRight,
-  BrainCircuit,
-  MessageCircleHeart,
-  Info,
-} from 'lucide-react';
-import { useCouple } from '../context/CoupleContext';
-import { ActionRow } from './ui/ActionRow';
-import { SectionCard } from './ui/SectionCard';
-import { LOVE_TAP_PRESETS, ColoredIcon } from './ColoredIcon';
+const fs = require('fs');
+const file = 'src/components/UserProfileCabinet.tsx';
+let content = fs.readFileSync(file, 'utf8');
 
-export const UserProfileCabinet: React.FC = () => {
-  const {
-    currentUser,
-    updateUserProfile,
-    changePassword,
-    authLogout,
-    allUsers,
-    switchAccount,
-    incomingRequests,
-    outgoingRequests,
-    sendPairRequestByLogin,
-    acceptPairRequest,
-    rejectPairRequest,
-    disconnectPair,
-    coupleProfile,
-    updateCoupleStartDate,
-    daysTogether, formattedTimeTogether,
-    triggerConfetti,
-    setActiveTab,
-    setUsSubTab,
-    sendLoveTap,
-  } = useCouple();
+// I'll extract all state and hooks, but replace the render logic.
+const renderStart = content.indexOf('return (');
+const logic = content.substring(0, renderStart);
 
-  // Profile Edit States
-  const [isEditingName, setIsEditingName] = useState<boolean>(false);
-  const [nameInput, setNameInput] = useState<string>(currentUser?.name || '');
-  const [startDateInput, setStartDateInput] = useState<string>(currentUser?.startDate || '2023-04-15');
-  const [copiedLogin, setCopiedLogin] = useState<boolean>(false);
+const newRender = `  return (
+    <div className="flex-1 min-h-0 flex flex-col w-full max-w-2xl mx-auto px-4 py-6 space-y-6 overflow-y-auto pb-24">
+      <div className="flex items-center gap-3 mb-2">
+        <button onClick={() => setActiveTab('home')} className="p-2 -ml-2 rounded-xl text-[var(--text-2)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors">
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <h1 className="text-2xl font-bold text-[var(--text)]">Настройки</h1>
+      </div>
 
-  // Pairing input
-  const [targetPartnerLogin, setTargetPartnerLogin] = useState<string>('');
-  const [pairMessage, setPairMessage] = useState<{ text: string; isError: boolean } | null>(null);
-  const [isPairingLoading, setIsPairingLoading] = useState<boolean>(false);
-
-  // Password change state
-  const [showPasswordChange, setShowPasswordChange] = useState<boolean>(false);
-  const [oldPassword, setOldPassword] = useState<string>('');
-  const [newPassword, setNewPassword] = useState<string>('');
-  const [passwordMsg, setPasswordMsg] = useState<{ text: string; isError: boolean } | null>(null);
-
-  // Disconnect Confirmation
-  const [showDisconnectModal, setShowDisconnectModal] = useState<boolean>(false);
-
-  if (!currentUser) return null;
-
-  const [lastTapped, setLastTapped] = useState<string | null>(null);
-
-  const handleLoveTap = (tap: typeof LOVE_TAP_PRESETS[0]) => {
-    sendLoveTap(tap.type);
-    setLastTapped(tap.label);
-    setTimeout(() => setLastTapped(null), 2500);
-  };
-
-  const handleCopyLogin = () => {
-    try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-        navigator.clipboard.writeText(`@${currentUser.login}`).catch(() => {});
-      }
-    } catch {}
-    setCopiedLogin(true);
-    setTimeout(() => setCopiedLogin(false), 2500);
-  };
-
-  const handleSaveName = async () => {
-    if (!nameInput.trim()) return;
-    await updateUserProfile({ name: nameInput.trim() });
-    setIsEditingName(false);
-  };
-
-  const handleSaveStartDate = async () => {
-    await updateCoupleStartDate(startDateInput);
-    triggerConfetti();
-  };
-
-  const handleSendPairRequest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPairMessage(null);
-    setIsPairingLoading(true);
-
-    try {
-      const res = await sendPairRequestByLogin(targetPartnerLogin);
-      if (res.success) {
-        setPairMessage({ text: res.message || 'Запрос отправлен!', isError: false });
-        setTargetPartnerLogin('');
-      } else {
-        setPairMessage({ text: res.error || 'Ошибка отправки запроса', isError: true });
-      }
-    } catch (err: any) {
-      setPairMessage({ text: err?.message || 'Ошибка сети', isError: true });
-    } finally {
-      setIsPairingLoading(false);
-    }
-  };
-
-  const handleAcceptRequest = async (partnerLogin: string) => {
-    const res = await acceptPairRequest(partnerLogin);
-    if (res.success) {
-      setPairMessage({ text: res.message || 'Пара создана!', isError: false });
-    } else {
-      setPairMessage({ text: res.error || 'Ошибка', isError: true });
-    }
-  };
-
-  const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPasswordMsg(null);
-
-    const res = await changePassword(oldPassword, newPassword);
-    if (res.success) {
-      setPasswordMsg({ text: 'Пароль успешно обновлен!', isError: false });
-      setOldPassword('');
-      setNewPassword('');
-      setTimeout(() => setShowPasswordChange(false), 2000);
-    } else {
-      setPasswordMsg({ text: res.error || 'Ошибка изменения пароля', isError: true });
-    }
-  };
-
-  const isPaired = !!currentUser.partnerLogin;
-
-  return (
-    <div className="space-y-4">
-      <SectionCard id="profile" title="Мой профиль">
+      <section aria-labelledby="profile-title" className="app-card p-5 space-y-4">
+        <h2 id="profile-title" className="text-sm font-semibold text-[var(--text-2)] uppercase tracking-wider">Мой профиль</h2>
         
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 rounded-full bg-[var(--accent)]/15 text-[var(--accent)] flex items-center justify-center text-2xl font-bold">
@@ -185,9 +48,10 @@ export const UserProfileCabinet: React.FC = () => {
             )}
           </div>
         </div>
-      </SectionCard>
+      </section>
 
-      <SectionCard id="couple" title="Наш союз">
+      <section aria-labelledby="couple-title" className="app-card p-5 space-y-4">
+        <h2 id="couple-title" className="text-sm font-semibold text-[var(--text-2)] uppercase tracking-wider">Наш союз</h2>
         
         {coupleProfile.partner2 ? (
           <div className="space-y-4">
@@ -230,9 +94,10 @@ export const UserProfileCabinet: React.FC = () => {
             </div>
           </div>
         )}
-      </SectionCard>
+      </section>
 
-      <SectionCard id="system" title="Система">
+      <section aria-labelledby="system-title" className="app-card p-5 space-y-3">
+        <h2 id="system-title" className="text-sm font-semibold text-[var(--text-2)] uppercase tracking-wider mb-2">Система</h2>
         
         <button onClick={() => setShowPasswordChange(true)} className="w-full flex items-center justify-between p-4 rounded-2xl bg-[var(--surface-2)] border border-[var(--divider)] hover:bg-[var(--surface-3)] transition-colors active:scale-[0.98]">
           <div className="flex items-center gap-3">
@@ -252,7 +117,11 @@ export const UserProfileCabinet: React.FC = () => {
             <div className="text-sm font-semibold text-red-500">Выйти из аккаунта</div>
           </div>
         </button>
-      </SectionCard>
+      </section>
     </div>
   );
 };
+`;
+
+fs.writeFileSync(file, logic + newRender, 'utf8');
+console.log('Cabinet rewritten');

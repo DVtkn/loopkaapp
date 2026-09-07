@@ -1,0 +1,127 @@
+{
+  "users": {
+    "dmitry": {
+      "id": "u_1787579359162_z59nbc",
+      "login": "dmitry",
+      "passwordHash": "$2b$10$Cxg8/lO5K67TOGANOKeNE.uZHGNe31m9bFZAMByrUEvlhm7hB0J76",
+      "name": "Dmitry",
+      "avatarEmoji": "✨",
+      "partnerLogin": null,
+      "city": null,
+      "loveLanguage": null,
+      "attachmentStyle": null,
+      "currentMood": null,
+      "createdAt": "2026-08-24T13:49:19.162Z",
+      "pairedAt": null,
+      "startDate": null,
+      "gender": null
+    },
+    "vyatkin": {
+      "id": "u_1787487455168",
+      "login": "vyatkin",
+      "passwordHash": "Qazwsx",
+      "name": "Дмитрий",
+      "avatarEmoji": "✨",
+      "partnerLogin": null,
+      "city": "Москва",
+      "loveLanguage": "Пройдите тест",
+      "attachmentStyle": "Пройдите тест",
+      "createdAt": "2026-08-23T12:17:35.168Z",
+      "pairedAt": null,
+      "startDate": null,
+      "currentMood": null,
+      "gender": null
+    },
+    "testuser": {
+      "id": "u_1787490416700_lncw8",
+      "login": "testuser",
+      "passwordHash": "123456",
+      "name": "Тестовый",
+      "avatarEmoji": "✨",
+      "partnerLogin": null,
+      "city": "Москва",
+      "loveLanguage": "Пройдите тест",
+      "attachmentStyle": "Пройдите тест",
+      "currentMood": {
+        "note": "Только что присоединился(-ась) к Loop",
+        "emoji": "✨",
+        "label": "Приветствие",
+        "updatedAt": "2026-08-23T13:06:56.700Z"
+      },
+      "createdAt": "2026-08-23T13:06:56.700Z",
+      "pairedAt": null,
+      "startDate": null,
+      "gender": null
+    },
+    "dmitr": {
+      "id": "u_1787627211622_irm7rl",
+      "login": "dmitr",
+      "passwordHash": "1234",
+      "name": "Dmitr",
+      "avatarEmoji": "✨",
+      "partnerLogin": null,
+      "pairedAt": null,
+      "startDate": null,
+      "city": null,
+      "loveLanguage": null,
+      "attachmentStyle": null,
+      "currentMood": null,
+      "createdAt": "2026-08-25T03:06:51.622Z",
+      "gender": null
+    },
+    "виктория": {
+      "id": "u_1787707520603_3ucm2",
+      "login": "виктория",
+      "passwordHash": "$2b$10$hITxZFZWpz4oRVI9jZa9heS1zVTbko3YHU8zEDA.hiK5xkj51JTXK",
+      "name": "Виктория",
+      "gender": "female",
+      "avatarEmoji": "👩",
+      "partnerLogin": "никита",
+      "pairedAt": "2026-08-26T01:25:39.637Z",
+      "startDate": null,
+      "city": null,
+      "loveLanguage": null,
+      "attachmentStyle": null,
+      "currentMood": null,
+      "createdAt": "2026-08-26T01:25:20.603Z"
+    },
+    "никита": {
+      "id": "u_1787707371393_xhbhoe",
+      "login": "никита",
+      "passwordHash": "$2b$10$3LlO76cSP.QcaQ12Preq0eKZftgKY6elh6GFSJzv1f1oD2hGNUgX6",
+      "name": "Никита",
+      "gender": "male",
+      "avatarEmoji": "👨",
+      "partnerLogin": "виктория",
+      "pairedAt": "2026-08-26T01:25:39.637Z",
+      "startDate": null,
+      "city": null,
+      "loveLanguage": null,
+      "attachmentStyle": null,
+      "currentMood": null,
+      "createdAt": "2026-08-26T01:22:51.394Z"
+    }
+  },
+  "pairRequests": [],
+  "coupleData": {},
+  "chatMessages": [
+    {
+      "id": "f41cd757-1cf5-43de-908d-dc16bc061c0f",
+      "coupleId": "c-7729",
+      "senderLogin": "dmitry",
+      "role": "partner1",
+      "content": "Сова, помоги нам разобраться с этим.",
+      "isRead": false,
+      "createdAt": "2026-09-06T09:56:15.762Z"
+    },
+    {
+      "id": "3c24d5f8-f92b-413c-8957-f726f62245bd",
+      "coupleId": "c-7729",
+      "senderLogin": "ai",
+      "role": "ai",
+      "content": "Я здесь! Слышу вас. Как я могу помочь?",
+      "isRead": false,
+      "createdAt": "2026-09-06T09:56:18.218Z"
+    }
+  ]
+}

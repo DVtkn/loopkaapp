@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Rich Apple Red Gradient Background matching Home Screen icon -->
+    <linearGradient id="bgGrad" x1="10%" y1="0%" x2="90%" y2="100%">
+      <stop offset="0%" stop-color="#FF3B30"/>
+      <stop offset="45%" stop-color="#FF2D55"/>
+      <stop offset="100%" stop-color="#C9183B"/>
+    </linearGradient>
+
+    <radialGradient id="centerGlow" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#FFA8B8" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#FF2D55" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Glowing Heart Gradient -->
+    <linearGradient id="heartGrad" x1="20%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="35%" stop-color="#FFF2F4"/>
+      <stop offset="100%" stop-color="#FFD6DE"/>
+    </linearGradient>
+
+    <linearGradient id="heartHighlight" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.9"/>
+      <stop offset="25%" stop-color="#ffffff" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="32" stdDeviation="28" flood-color="#800018" flood-opacity="0.5" />
+      <feDropShadow dx="0" dy="14" stdDeviation="12" flood-color="#000000" flood-opacity="0.25" />
+    </filter>
+    
+    <filter id="sparkleGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="10" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Solid background, iOS masks corners automatically -->
+  <rect width="1024" height="1024" fill="url(#bgGrad)"/>
+  
+  <circle cx="512" cy="460" r="480" fill="url(#centerGlow)"/>
+
+  <!-- The Glowing 3D Heart -->
+  <g filter="url(#shadow)">
+    <path 
+      d="M512 864.5 c-33.1 0-218.4-181.7-295.6-267.4 -44.5-49.5-67.4-106.3-67.4-167 0-112.5 87-200.7 197.8-200.7 63.8 0 120.3 32.5 152 82.2 6.5 10.3 22 10.3 28.5 0 31.7-49.7 88.2-82.2 152-82.2 110.8 0 197.8 88.2 197.8 200.7 0 60.7-22.9 117.5-67.4 167 -77.2 85.7-262.5 267.4-295.6 267.4 h-2.1z" 
+      fill="url(#heartGrad)" 
+    />
+    <path 
+      d="M512 864.5 c-33.1 0-218.4-181.7-295.6-267.4 -44.5-49.5-67.4-106.3-67.4-167 0-112.5 87-200.7 197.8-200.7 63.8 0 120.3 32.5 152 82.2 6.5 10.3 22 10.3 28.5 0 31.7-49.7 88.2-82.2 152-82.2 110.8 0 197.8 88.2 197.8 200.7 0 60.7-22.9 117.5-67.4 167 -77.2 85.7-262.5 267.4-295.6 267.4 h-2.1z" 
+      fill="url(#heartHighlight)" 
+    />
+  </g>
+
+  <!-- Elegant Top Right Sparkle Star -->
+  <path 
+    d="M760 210 C760 280 805 325 875 325 C805 325 760 370 760 440 C760 370 715 325 645 325 C715 325 760 280 760 210 Z" 
+    fill="#ffffff" 
+    filter="url(#sparkleGlow)"
+    opacity="0.98"
+  />
+
+  <!-- Smaller Sparkle Bottom Left -->
+  <path 
+    d="M250 680 C250 725 275 750 320 750 C275 750 250 775 250 820 C250 775 225 750 180 750 C225 750 250 725 250 680 Z" 
+    fill="#ffffff" 
+    opacity="0.9"
+    filter="url(#sparkleGlow)"
+  />
+</svg>

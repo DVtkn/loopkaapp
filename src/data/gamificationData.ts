@@ -1,0 +1,214 @@
+import { DeepTalkCard, DailyCoupleQuiz } from '../types';
+import { IconColorTheme } from '../components/ColoredIcon';
+
+export interface DateWheelOption {
+  id: string;
+  title: string;
+  category: string;
+  iconName: string;
+  colorTheme: IconColorTheme;
+  duration: string;
+  cost: string;
+  description: string;
+  vibe: string;
+  color: string;
+}
+
+export const DATE_WHEEL_OPTIONS: DateWheelOption[] = [
+  {
+    id: 'wheel-1',
+    title: 'Ужин при свечах без телефонов',
+    category: 'Романтика',
+    iconName: 'Wine',
+    colorTheme: 'rose',
+    duration: '2 часа',
+    cost: '₽',
+    description: 'Готовим вместе любимую пасту или заказываем доставку, включаем джаз и убираем телефоны в другую комнату.',
+    vibe: 'Нежность и фокус друг на друге',
+    color: 'from-rose-500 to-pink-500',
+  },
+  {
+    id: 'wheel-2',
+    title: 'Вечер настольных игр и глинтвейна',
+    category: 'Уют',
+    iconName: 'Gamepad2',
+    colorTheme: 'amber',
+    duration: '2-3 часа',
+    cost: '₽',
+    description: 'Варим ароматный чай или глинтвейн, достаем любимую настолку или карты вопросов и играем на желания.',
+    vibe: 'Тепло, смех и азарт',
+    color: 'from-amber-500 to-orange-500',
+  },
+  {
+    id: 'wheel-3',
+    title: 'Домашний кинотеатр с попкорном',
+    category: 'Кино',
+    iconName: 'Film',
+    colorTheme: 'indigo',
+    duration: '2.5 часа',
+    cost: '₽',
+    description: 'Строим шалаш из пледов и подушек, выбираем фильм, который никто из нас не видел, и запасаемся вкусняшками.',
+    vibe: 'Обнимашки и расслабление',
+    color: 'from-indigo-500 to-purple-500',
+  },
+  {
+    id: 'wheel-4',
+    title: 'Спонтанная ночная прогулка',
+    category: 'Приключение',
+    iconName: 'Compass',
+    colorTheme: 'teal',
+    duration: '1.5 часа',
+    cost: 'Бесплатно',
+    description: 'Берем кофе с собой в термокружках и идем гулять по ночному городу, заглядывая в незнакомые улочки.',
+    vibe: 'Магия ночи и глубокие разговоры',
+    color: 'from-blue-500 to-cyan-500',
+  },
+  {
+    id: 'wheel-5',
+    title: 'Домашний СПА и массаж при свечах',
+    category: 'Забота',
+    iconName: 'Heart',
+    colorTheme: 'emerald',
+    duration: '1.5 часа',
+    cost: '₽',
+    description: 'Ароматические масла, расслабляющая музыка, пенная ванна и сеанс массажа плеч и спины по очереди.',
+    vibe: 'Тактильность и снятие стресса',
+    color: 'from-emerald-500 to-teal-500',
+  },
+  {
+    id: 'wheel-6',
+    title: 'Кулинарный поединок шеф-поваров',
+    category: 'Творчество',
+    iconName: 'Flame',
+    colorTheme: 'coral',
+    duration: '2 часа',
+    cost: '₽₽',
+    description: 'Каждый готовит своё фирменное блюдо или десерт из ограниченного набора продуктов. Затем оцениваем подачу!',
+    vibe: 'Веселье и вкусная еда',
+    color: 'from-red-500 to-amber-500',
+  },
+  {
+    id: 'wheel-7',
+    title: 'Свидание-сюрприз вслепую',
+    category: 'Интрига',
+    iconName: 'Sparkles',
+    colorTheme: 'purple',
+    duration: '3 часа',
+    cost: '₽₽',
+    description: 'Один из партнёров планирует вечер от начала до конца, а второй до последнего момента не знает локацию!',
+    vibe: 'Предвкушение и сюрприз',
+    color: 'from-purple-500 to-pink-500',
+  },
+  {
+    id: 'wheel-8',
+    title: 'Пикник на закате или панораме',
+    category: 'Природа',
+    iconName: 'Sun',
+    colorTheme: 'gold',
+    duration: '2 часа',
+    cost: '₽',
+    description: 'Плед, фрукты, сырная тарелка и вид на закатное солнце под звуки природы или акустической гитары.',
+    vibe: 'Красота момента и вдохновение',
+    color: 'from-fuchsia-500 to-rose-500',
+  },
+];
+
+export const DEEP_TALK_CARDS: DeepTalkCard[] = [
+  {
+    id: 'card-1',
+    category: 'future',
+    categoryLabel: 'Наше будущее',
+    categoryColor: 'from-indigo-500 to-blue-500',
+    question: 'Какое самое яркое совместное воспоминание мы создадим через 5 лет, если всё пойдет идеально?',
+    tip: 'Постарайтесь описать детали: где вы, чем занимаетесь, что чувствуете.',
+  },
+  {
+    id: 'card-2',
+    category: 'intimacy',
+    categoryLabel: 'Близость и чувства',
+    categoryColor: 'from-rose-500 to-pink-500',
+    question: 'В какой момент за последний месяц ты почувствовал(а) наибольшую любовь и тепло ко мне?',
+    tip: 'Вспомните конкретный жест, взгляд или слова.',
+  },
+  {
+    id: 'card-3',
+    category: 'memories',
+    categoryLabel: 'Воспоминания',
+    categoryColor: 'from-amber-500 to-orange-500',
+    question: 'Какой момент в начале наших отношений заставил тебя подумать: «Да, этот человек особенный»?',
+    tip: 'Поделитесь тем, о чем, возможно, еще никогда не говорили вслух.',
+  },
+  {
+    id: 'card-4',
+    category: 'dreams',
+    categoryLabel: 'Мечты и желания',
+    categoryColor: 'from-purple-500 to-indigo-500',
+    question: 'Какую детскую или давнюю мечту ты до сих пор хочешь воплотить, и как я могу помочь тебе в этом?',
+    tip: 'Поддержите партнёра без критики и практических сомнений.',
+  },
+  {
+    id: 'card-5',
+    category: 'fun',
+    categoryLabel: 'Улыбки и юмор',
+    categoryColor: 'from-emerald-500 to-teal-500',
+    question: 'Если бы о нашей совместной жизни сняли комедийный ситком, какая сцена была бы самой смешной в 1-й серии?',
+    tip: 'Смех над общими забавными привычками сближает лучше всего.',
+  },
+  {
+    id: 'card-6',
+    category: 'future',
+    categoryLabel: 'Наше будущее',
+    categoryColor: 'from-indigo-500 to-blue-500',
+    question: 'В какую страну или город нашей мечты мы отправимся в следующее большое путешествие только вдвоём?',
+    tip: 'Опишите идеальное утро в этом месте.',
+  },
+  {
+    id: 'card-7',
+    category: 'intimacy',
+    categoryLabel: 'Близость и чувства',
+    categoryColor: 'from-rose-500 to-pink-500',
+    question: 'Какое моё прикосновение или знак внимания быстрее всего возвращает тебе душевное спокойствие?',
+    tip: 'Попробуйте повторить это прямо сейчас.',
+  },
+  {
+    id: 'card-8',
+    category: 'dreams',
+    categoryLabel: 'Мечты и желания',
+    categoryColor: 'from-purple-500 to-indigo-500',
+    question: 'Какой совместный навык или хобби нам стоит освоить этой зимой или весной?',
+    tip: 'Танцы, кулинария, сноуборд, гончарное дело, языки.',
+  },
+];
+
+export const DAILY_QUIZ_QUESTIONS: { id: string; question: string; category: string }[] = [
+  {
+    id: 'quiz-1',
+    question: 'Кто из нас двоих скорее всего уснёт на середине интересного фильма?',
+    category: 'Привычки',
+  },
+  {
+    id: 'quiz-2',
+    question: 'Кто дольше выбирает, что заказать в ресторане или доставке?',
+    category: 'Еда и стиль',
+  },
+  {
+    id: 'quiz-3',
+    question: 'Кто из нас быстрее собирает чемодан в поездку?',
+    category: 'Путешествия',
+  },
+  {
+    id: 'quiz-4',
+    question: 'Кто первый проявляет инициативу помириться после разногласий?',
+    category: 'Отношения',
+  },
+  {
+    id: 'quiz-5',
+    question: 'Кто чаще включает музыку на всю квартиру и танцует?',
+    category: 'Настроение',
+  },
+  {
+    id: 'quiz-6',
+    question: 'Кто из нас больший романтик в душе?',
+    category: 'Чувства',
+  },
+];

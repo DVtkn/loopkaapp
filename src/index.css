@@ -1,0 +1,440 @@
+@import "tailwindcss";
+
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --radius-xl: 24px;
+  --radius-lg: 20px;
+  --radius-md: 14px;
+  --radius-sm: 10px;
+  --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-system: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-golos: 'Golos Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-manrope: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-main: var(--font-inter);
+}
+
+:root[data-font="inter"], html[data-font="inter"], body[data-font="inter"] {
+  --font-main: var(--font-inter);
+}
+:root[data-font="system"], html[data-font="system"], body[data-font="system"] {
+  --font-main: var(--font-system);
+}
+:root[data-font="golos"], html[data-font="golos"], body[data-font="golos"] {
+  --font-main: var(--font-golos);
+}
+:root[data-font="manrope"], html[data-font="manrope"], body[data-font="manrope"] {
+  --font-main: var(--font-manrope);
+}
+
+/* Apple Light Theme - System Red / Product(RED) */
+:root, [data-theme="aurora"] {
+  --bg: #F4F4F8;
+  --surface: rgba(255, 255, 255, 0.86);
+  --surface-solid: #FFFFFF;
+  --surface-2: rgba(242, 242, 247, 0.78);
+  --surface-3: rgba(229, 229, 234, 0.85);
+  --text: #1C1C1E;
+  --text-2: #636366;
+  --text-3: #8E8E93;
+  --divider: rgba(60, 60, 67, 0.12);
+  --divider-subtle: rgba(60, 60, 67, 0.06);
+  --accent: #FF3B30;
+  --accent-rgb: 255, 59, 48;
+  --accent-hover: #E02E24;
+  --accent-light: rgba(255, 59, 48, 0.10);
+  --accent-glow: rgba(255, 59, 48, 0.35);
+  --accent-2: #FF2D55;
+  --accent-3: #34C759;
+  --accent-blue: #007AFF;
+  --accent-orange: #FF9500;
+  --tabbar-bg: rgba(255, 255, 255, 0.82);
+  --header-bg: rgba(244, 244, 248, 0.82);
+  --card-shadow: 0 10px 32px -4px rgba(0, 0, 0, 0.06), 0 4px 12px -2px rgba(0, 0, 0, 0.03);
+  --card-shadow-hover: 0 14px 44px -4px rgba(0, 0, 0, 0.08), 0 6px 16px -2px rgba(0, 0, 0, 0.04);
+  --card-border: 1px solid rgba(0, 0, 0, 0.04);
+  --card-highlight: none;
+  --btn-highlight: none;
+  --mesh-opacity: 0.88;
+}
+
+/* Apple Dark Theme - Pure Black & Dark System Red (OLED Velvet) */
+[data-theme="night"], .dark {
+  --bg: #070709;
+  --surface: rgba(22, 22, 28, 0.72);
+  --surface-solid: #151518;
+  --surface-2: rgba(32, 32, 40, 0.70);
+  --surface-3: rgba(45, 45, 56, 0.80);
+  --text: #FFFFFF;
+  --text-2: #9E9EA7;
+  --text-3: #686872;
+  --divider: rgba(255, 255, 255, 0.10);
+  --divider-subtle: rgba(255, 255, 255, 0.05);
+  --accent: #FF453A;
+  --accent-rgb: 255, 69, 58;
+  --accent-hover: #FF6961;
+  --accent-light: rgba(255, 69, 58, 0.16);
+  --accent-glow: rgba(255, 69, 58, 0.45);
+  --accent-2: #FF375F;
+  --accent-3: #30D158;
+  --accent-blue: #0A84FF;
+  --accent-orange: #FF9F0A;
+  --tabbar-bg: rgba(18, 18, 24, 0.82);
+  --header-bg: rgba(10, 10, 14, 0.82);
+  --card-shadow: 0 10px 32px -4px rgba(0, 0, 0, 0.4), 0 4px 12px -2px rgba(0, 0, 0, 0.2);
+  --card-shadow-hover: 0 14px 44px -4px rgba(0, 0, 0, 0.5), 0 6px 16px -2px rgba(0, 0, 0, 0.3);
+  --card-border: 1px solid rgba(255, 255, 255, 0.09);
+  --card-highlight: none;
+  --btn-highlight: none;
+  --mesh-opacity: 0.82;
+}
+
+html, body {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  -webkit-text-size-adjust: 100%;
+  font-family: var(--font-main);
+  font-size: 15px;
+  background-color: var(--bg);
+  color: var(--text);
+  letter-spacing: 0;
+  line-height: 1.5;
+  transition: background-color 0.25s cubic-bezier(0.16, 1, 0.3, 1), color 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (min-width: 640px) {
+  html, body {
+    font-size: 15.5px;
+  }
+}
+
+#root {
+  position: fixed;
+  top: var(--viewport-offset-top, 0px);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--viewport-height, 100%);
+  max-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: transparent;
+  font-family: var(--font-main);
+  letter-spacing: 0;
+  line-height: 1.5;
+}
+
+html, body, #root, button, input, textarea, select, h1, h2, h3, h4, h5, h6, p, span, a, label, li {
+  font-family: var(--font-main);
+}
+
+/* Instagram & Apple Typography Hierarchy Rules (+1 step weight for headers, 600 for actionable labels) */
+.font-black {
+  font-weight: 800 !important;
+}
+
+.font-extrabold {
+  font-weight: 750 !important;
+}
+
+.font-bold {
+  font-weight: 700 !important;
+}
+
+.font-semibold {
+  font-weight: 600 !important;
+}
+
+.font-medium {
+  font-weight: 500 !important;
+}
+
+.font-normal {
+  font-weight: 400 !important;
+}
+
+/* Enhanced Header Hierarchy (+1 step font-weight, adjusted line-height) */
+h1 {
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.30;
+}
+
+h2 {
+  font-weight: 700;
+  letter-spacing: -0.016em;
+  line-height: 1.33;
+}
+
+h3 {
+  font-weight: 650;
+  letter-spacing: -0.012em;
+  line-height: 1.35;
+}
+
+h4 {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.40;
+}
+
+/* Standard Semi-Bold (600) Weight for Key Actionable Labels throughout the app */
+button, 
+.apple-btn-primary, 
+[role="button"],
+.btn-action,
+.action-label,
+.tab-label {
+  font-weight: 600;
+}
+
+p {
+  letter-spacing: 0;
+  line-height: 1.6;
+}
+
+span, li, input, textarea {
+  letter-spacing: 0;
+  line-height: 1.5;
+}
+
+/* Prevent unreadable micro text */
+.text-\[9px\], .text-\[9\.5px\], .text-\[10px\] {
+  font-size: 12px !important;
+}
+
+.text-\[11px\] {
+  font-size: 12.5px !important;
+}
+
+.tracking-tight {
+  letter-spacing: -0.01em;
+}
+
+.tracking-normal {
+  letter-spacing: 0;
+}
+
+.tracking-wide {
+  letter-spacing: 0.025em;
+}
+
+.tracking-wider {
+  letter-spacing: 0.04em;
+}
+
+/* Telegram / Instagram style keyboard & modal bottom-nav responsiveness */
+body.keyboard-open .bottom-nav,
+body.keyboard-visible .bottom-nav,
+body.has-active-modal .bottom-nav,
+body.modal-open .bottom-nav,
+body.in-chat-view .bottom-nav {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Input font-size to prevent iOS Safari auto-zoom */
+@media screen and (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Apple Safe Area Utility helpers */
+.pt-safe {
+  padding-top: max(1rem, env(safe-area-inset-top, 1rem));
+}
+
+.pb-safe {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 1rem));
+}
+
+.pl-safe {
+  padding-left: max(1rem, env(safe-area-inset-left, 1rem));
+}
+
+.pr-safe {
+  padding-right: max(1rem, env(safe-area-inset-right, 1rem));
+}
+
+/* iOS Standalone Mode Custom Styling */
+@media all and (display-mode: standalone) {
+  .ios-standalone-header {
+    padding-top: calc(env(safe-area-inset-top, 20px) + 0.5rem);
+  }
+  .ios-standalone-nav {
+    padding-bottom: calc(env(safe-area-inset-bottom, 20px) + 0.5rem);
+  }
+}
+
+.ios-scroll {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* Apple-style subtle scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--divider);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-2);
+}
+
+/* Apple Card & Surface utilities with high-end physical depth & frosted glass */
+.app-card {
+  background-color: var(--surface);
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  border-radius: var(--radius-lg);
+  border: var(--card-border);
+  box-shadow: var(--card-shadow);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.app-card-interactive {
+  background-color: var(--surface);
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  border-radius: var(--radius-lg);
+  border: var(--card-border);
+  box-shadow: var(--card-shadow);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease;
+}
+
+.app-card-interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--card-shadow-hover);
+}
+
+.app-card-interactive:active {
+  transform: scale(0.985) translateY(0);
+}
+
+.app-surface-2 {
+  background-color: var(--surface-2);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: none;
+}
+
+/* Apple Inset Group List item */
+.apple-group {
+  background-color: var(--surface);
+  border-radius: var(--radius-lg);
+  border: var(--card-border);
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+}
+
+.apple-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--divider);
+  transition: background-color 0.15s ease;
+}
+
+.apple-row:last-child {
+  border-bottom: none;
+}
+
+.apple-row:active {
+  background-color: var(--surface-2);
+}
+
+/* Apple Flat Button */
+.apple-btn-primary {
+  background-color: var(--accent);
+  color: #FFFFFF;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  padding: 12px 24px;
+  box-shadow: 0 4px 16px var(--accent-glow);
+  border: none;
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.15s ease, opacity 0.12s ease;
+}
+
+.apple-btn-primary:hover {
+  box-shadow: 0 6px 20px var(--accent-glow);
+}
+
+.apple-btn-primary:active {
+  transform: scale(0.965);
+  box-shadow: 0 2px 8px var(--accent-glow);
+}
+
+.apple-btn-secondary {
+  background-color: var(--surface-2);
+  color: var(--accent);
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  padding: 12px 24px;
+  border: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease;
+}
+
+.apple-btn-secondary:hover {
+  background-color: var(--surface-3);
+}
+
+.apple-btn-secondary:active {
+  transform: scale(0.965);
+}
+
+/* Apple Frosted Glass with specular rim highlight */
+.apple-glass {
+  background: var(--tabbar-bg);
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  border: var(--card-border);
+  box-shadow: var(--card-shadow);
+}
+
+.apple-glass-card {
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: var(--card-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--card-shadow);
+}
+
+[data-theme="night"] .apple-glass-card, .dark .apple-glass-card {
+  background: rgba(28, 28, 30, 0.65);
+}
+
+/* Subtle Apple Grid & Noise Textures overlay */
+.apple-bg-grid {
+  background-size: 36px 36px;
+  background-image: 
+    radial-gradient(circle, var(--divider) 1.2px, transparent 1.2px);
+}
+
+.ambient-noise {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.04'/%3E%3C/svg%3E");
+}

@@ -16,11 +16,7 @@ export function generateToken(login: string): string {
   return jwt.sign({ login: login.toLowerCase() }, config.jwtSecret, { expiresIn: "30d" });
 }
 
-export function isUserInCouple(coupleId: string, userLogin?: string): boolean {
-  if (!coupleId || !userLogin) return false;
-  const parts = coupleId.toLowerCase().split("_");
-  return parts.includes(userLogin.toLowerCase());
-}
+export { getPairKey, isUserInCouple, requirePairOwnership } from "./pairOwnership.ts";
 
 export function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;

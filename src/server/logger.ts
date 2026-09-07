@@ -1,3 +1,5 @@
+import winston from "winston";
+
 export type LogLevel = 'info' | 'warn' | 'error' | 'security';
 
 export interface LogPayload {
@@ -12,46 +14,68 @@ export interface LogPayload {
   };
 }
 
-function formatLog(level: LogLevel, message: string, context?: Record<string, unknown>, err?: unknown): string {
-  const timestamp = new Date().toISOString();
-  let errorObj: { message: string; stack?: string; name?: string } | undefined;
+const customLevels = {
+  levels: {
+    error: 0,
+    security: 1,
+    warn: 2,
+    info: 3,
+    debug: 4,
+  },
+  colors: {
+    error: "red",
+    security: "magenta",
+    warn: "yellow",
+    info: "green",
+    debug: "blue",
+  },
+};
 
+winston.addColors(customLevels.colors);
+
+const formatError = (err: unknown): { message: string; stack?: string; name?: string } | undefined => {
   if (err instanceof Error) {
-    errorObj = {
-      name: err.name,
-      message: err.message,
-      stack: err.stack,
-    };
-  } else if (err && typeof err === 'object') {
-    errorObj = { message: JSON.stringify(err) };
+    return { name: err.name, message: err.message, stack: err.stack };
+  } else if (err && typeof err === "object") {
+    return { message: JSON.stringify(err) };
   } else if (err) {
-    errorObj = { message: String(err) };
+    return { message: String(err) };
   }
+  return undefined;
+};
 
-  const payload: LogPayload = {
-    level,
-    message,
-    timestamp,
-    ...(context ? { context } : {}),
-    ...(errorObj ? { error: errorObj } : {}),
-  };
-
-  const prefix = `[${level.toUpperCase()}] ${timestamp} - ${message}`;
-  const details = context || errorObj ? ` | ${JSON.stringify({ ...(context || {}), ...(errorObj ? { error: errorObj } : {}) })}` : '';
-  return `${prefix}${details}`;
-}
+const winstonLogger = winston.createLogger({
+  levels: customLevels.levels,
+  level: process.env.NODE_ENV === "production" ? "info" : "debug",
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.errors({ stack: true }),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.colorize({ all: true }),
+        winston.format.printf(({ level, message, timestamp, context, error }) => {
+          const details = context || error ? `\n  ${JSON.stringify({ ...(context as object || {}), ...(error ? { error } : {}) }, null, 2)}` : "";
+          return `[${timestamp}] ${level}: ${message}${details}`;
+        })
+      ),
+    }),
+  ],
+});
 
 export const logger = {
   info: (message: string, context?: Record<string, unknown>) => {
-    console.log(formatLog('info', message, context));
+    winstonLogger.info(message, { context });
   },
   warn: (message: string, context?: Record<string, unknown>, err?: unknown) => {
-    console.warn(formatLog('warn', message, context, err));
+    winstonLogger.warn(message, { context, error: formatError(err) });
   },
   error: (message: string, err?: unknown, context?: Record<string, unknown>) => {
-    console.error(formatLog('error', message, context, err));
+    winstonLogger.error(message, { context, error: formatError(err) });
   },
   security: (message: string, context?: Record<string, unknown>) => {
-    console.error(formatLog('security', message, context));
+    winstonLogger.log("security", message, { context });
   },
 };

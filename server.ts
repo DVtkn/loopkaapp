@@ -44,9 +44,13 @@ import {
 import {
   requireAuth,
   generateToken,
-  isUserInCouple,
   AuthenticatedRequest,
 } from "./src/server/middleware/auth.ts";
+import {
+  getPairKey,
+  isUserInCouple,
+  requirePairOwnership,
+} from "./src/server/middleware/pairOwnership.ts";
 import {
   findUserByLogin,
   findUserByQuery,
@@ -717,14 +721,10 @@ app.post("/api/pair/disconnect", requireAuth, validateBody(pairDisconnectSchema)
   }
 });
 
-app.get("/api/pair/status/:login", requireAuth, async (req: AuthenticatedRequest, res) => {
+app.get("/api/pair/status/:login", requireAuth, requirePairOwnership, async (req: AuthenticatedRequest, res) => {
   try {
     const login = String(req.params.login || "").toLowerCase().replace(/^@/, "");
     const userLogin = req.user?.login;
-
-    if (login !== userLogin) {
-      return res.status(403).json({ error: "Нет доступа к статусу чужой пары" });
-    }
 
     const user = await findUserByLogin(login);
     if (!user) return res.status(404).json({ error: "Пользователь не найден" });
@@ -769,14 +769,9 @@ app.get("/api/pair/status/:login", requireAuth, async (req: AuthenticatedRequest
 // 5. COUPLE DATA SYNC & CHAT
 // ==========================================
 
-app.post("/api/couple/sync", requireAuth, validateBody(coupleSyncSchema), async (req: AuthenticatedRequest, res) => {
+app.post("/api/couple/sync", requireAuth, requirePairOwnership, validateBody(coupleSyncSchema), async (req: AuthenticatedRequest, res) => {
   try {
     const { login1, login2, payload } = req.body;
-    const userLogin = req.user?.login;
-
-    if (login1 !== userLogin && login2 !== userLogin) {
-      return res.status(403).json({ error: "Нет доступа к синхронизации данных чужой пары" });
-    }
 
     const key = [login1, login2].sort().join("_");
     await saveCoupleData(key, payload);
@@ -796,15 +791,10 @@ app.post("/api/couple/sync", requireAuth, validateBody(coupleSyncSchema), async 
   }
 });
 
-app.get("/api/couple/data/:login1/:login2", requireAuth, async (req: AuthenticatedRequest, res) => {
+app.get("/api/couple/data/:login1/:login2", requireAuth, requirePairOwnership, async (req: AuthenticatedRequest, res) => {
   try {
     const l1 = String(req.params.login1 || "").toLowerCase().replace(/^@/, "");
     const l2 = String(req.params.login2 || "").toLowerCase().replace(/^@/, "");
-    const userLogin = req.user?.login;
-
-    if (l1 !== userLogin && l2 !== userLogin) {
-      return res.status(403).json({ error: "Нет доступа к данным чужой пары" });
-    }
 
     const key = [l1, l2].sort().join("_");
     const data = await getCoupleData(key);
@@ -816,14 +806,9 @@ app.get("/api/couple/data/:login1/:login2", requireAuth, async (req: Authenticat
   }
 });
 
-app.get("/api/chat/messages/:coupleId", requireAuth, async (req: AuthenticatedRequest, res) => {
+app.get("/api/chat/messages/:coupleId", requireAuth, requirePairOwnership, async (req: AuthenticatedRequest, res) => {
   try {
     const coupleId = String(req.params.coupleId || "");
-    const userLogin = req.user?.login;
-
-    if (!isUserInCouple(coupleId, userLogin)) {
-      return res.status(403).json({ error: "Нет доступа к чату этой пары" });
-    }
 
     if (isSqlConfigured() && db) {
       try {
@@ -852,14 +837,11 @@ app.get("/api/chat/messages/:coupleId", requireAuth, async (req: AuthenticatedRe
   }
 });
 
-app.post("/api/chat/messages", requireAuth, validateBody(chatMessageCreateSchema), async (req: AuthenticatedRequest, res) => {
+app.post("/api/chat/messages", requireAuth, requirePairOwnership, validateBody(chatMessageCreateSchema), async (req: AuthenticatedRequest, res) => {
   try {
     const { coupleId, senderLogin, text } = req.body;
     const userLogin = req.user?.login;
 
-    if (!isUserInCouple(coupleId, userLogin)) {
-      return res.status(403).json({ error: "Нет доступа к отправке сообщений в этот чат" });
-    }
     if (senderLogin !== userLogin) {
       return res.status(403).json({ error: "Нельзя отправлять сообщения от чужого имени" });
     }
@@ -896,14 +878,9 @@ app.post("/api/chat/messages", requireAuth, validateBody(chatMessageCreateSchema
   }
 });
 
-app.get("/api/ai/messages/:login", requireAuth, async (req: AuthenticatedRequest, res) => {
+app.get("/api/ai/messages/:login", requireAuth, requirePairOwnership, async (req: AuthenticatedRequest, res) => {
   try {
     const login = String(req.params.login || "").toLowerCase().replace(/^@/, "");
-    const userLogin = req.user?.login;
-
-    if (login !== userLogin) {
-      return res.status(403).json({ error: "Нет доступа к истории ИИ другого пользователя" });
-    }
 
     const aiCoupleId = `ai_${login}`;
     if (isSqlConfigured() && db) {
@@ -937,14 +914,9 @@ app.get("/api/ai/messages/:login", requireAuth, async (req: AuthenticatedRequest
 // 6. ANALYTICS & INSIGHTS
 // ==========================================
 
-app.get("/api/analytics/trends/:coupleId", requireAuth, async (req: AuthenticatedRequest, res) => {
+app.get("/api/analytics/trends/:coupleId", requireAuth, requirePairOwnership, async (req: AuthenticatedRequest, res) => {
   try {
     const { coupleId } = req.params;
-    const userLogin = req.user?.login;
-
-    if (!isUserInCouple(coupleId, userLogin)) {
-      return res.status(403).json({ error: "Нет доступа к аналитике этой пары" });
-    }
 
     const days = parseInt(req.query.days as string, 10) || 30;
     const trends = await getTrends(coupleId, days);
@@ -955,14 +927,9 @@ app.get("/api/analytics/trends/:coupleId", requireAuth, async (req: Authenticate
   }
 });
 
-app.get("/api/analytics/insights/:coupleId", requireAuth, async (req: AuthenticatedRequest, res) => {
+app.get("/api/analytics/insights/:coupleId", requireAuth, requirePairOwnership, async (req: AuthenticatedRequest, res) => {
   try {
     const { coupleId } = req.params;
-    const userLogin = req.user?.login;
-
-    if (!isUserInCouple(coupleId, userLogin)) {
-      return res.status(403).json({ error: "Нет доступа к инсайтам этой пары" });
-    }
 
     if (!isSqlConfigured() || !db) {
       return res.json({ insights: [] });
@@ -982,14 +949,9 @@ app.get("/api/analytics/insights/:coupleId", requireAuth, async (req: Authentica
   }
 });
 
-app.post("/api/analytics/insights/generate", requireAuth, async (req: AuthenticatedRequest, res) => {
+app.post("/api/analytics/insights/generate", requireAuth, requirePairOwnership, async (req: AuthenticatedRequest, res) => {
   try {
     const { coupleId } = req.body;
-    const userLogin = req.user?.login;
-
-    if (!isUserInCouple(coupleId, userLogin)) {
-      return res.status(403).json({ error: "Нет доступа к генерации инсайтов этой пары" });
-    }
 
     const insight = await generateWeeklyInsight(coupleId, req.body.contextData || {});
     return res.json({ insight });

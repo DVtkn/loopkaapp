@@ -417,6 +417,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           loveLanguage: userInDb.loveLanguage || currentUser.loveLanguage || 'Пройдите тест',
           attachmentStyle: userInDb.attachmentStyle || currentUser.attachmentStyle || 'Пройдите тест',
           currentMood: userInDb.currentMood || currentUser.currentMood || prev.partner1.currentMood,
+          lastActiveAt: userInDb.lastActiveAt || currentUser.lastActiveAt,
         },
         partner2: partnerInDb
           ? {
@@ -429,6 +430,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               loveLanguage: partnerInDb.loveLanguage || 'Пройдите тест',
               attachmentStyle: partnerInDb.attachmentStyle || 'Пройдите тест',
               currentMood: partnerInDb.currentMood || prev.partner2.currentMood,
+              lastActiveAt: partnerInDb.lastActiveAt,
             }
           : partnerLogin
           ? {

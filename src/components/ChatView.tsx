@@ -18,6 +18,32 @@ import {
 import { useCouple } from '../context/CoupleContext';
 import { LoopLogo } from './LoopLogo';
 import { triggerHaptic } from '../utils/haptics';
+import { UserPartner } from '../types';
+
+const isOnline = (lastActiveAt?: string) => {
+  if (!lastActiveAt) return false;
+  const time = new Date(lastActiveAt).getTime();
+  return Date.now() - time < 5 * 60 * 1000; // 5 minutes
+};
+
+const getOnlineStatusText = (partner: UserPartner) => {
+  if (!partner.lastActiveAt) {
+    return partner.gender === 'female' ? 'Была недавно' : 'Был недавно';
+  }
+  const date = new Date(partner.lastActiveAt);
+  const now = new Date();
+  
+  const isToday = date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+  const timeStr = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  const dateStr = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+  
+  const prefix = partner.gender === 'female' ? 'Была в сети:' : (partner.gender === 'male' ? 'Был в сети:' : 'Был(а) в сети:');
+  
+  if (isToday) {
+    return `${prefix} ${timeStr}`;
+  }
+  return `${prefix} ${dateStr} в ${timeStr}`;
+};
 
 export const ChatView: React.FC = () => {
   const {
@@ -131,19 +157,26 @@ export const ChatView: React.FC = () => {
                 <span className="text-base font-semibold text-[var(--text)] truncate">
                   {owlMode === 'solo' ? 'Сова' : otherPartner.name}
                 </span>
-                {owlMode === 'solo' ? (
+                {owlMode === 'solo' && (
                   <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-[var(--accent-light)] text-[var(--accent)] border border-[var(--accent)]/20 shrink-0">
                     ИИ-психолог
                   </span>
+                )}
+              </div>
+              <div className="text-xs truncate font-normal mt-0.5 flex items-center gap-1">
+                {owlMode === 'solo' ? (
+                  <span className="text-[var(--text-2)]">Сеанс для {currentPartner.name}</span>
+                ) : isOnline(otherPartner.lastActiveAt) ? (
+                  <span className="text-emerald-500 font-medium flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    В сети
+                  </span>
                 ) : (
-                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 shrink-0">
-                    Онлайн
+                  <span className="text-[var(--text-2)]">
+                    {getOnlineStatusText(otherPartner)}
                   </span>
                 )}
               </div>
-              <p className="text-xs text-[var(--text-2)] truncate font-normal mt-0.5">
-                {owlMode === 'solo' ? `Сеанс для ${currentPartner.name}` : 'Общий чат пары'}
-              </p>
             </div>
           </div>
           

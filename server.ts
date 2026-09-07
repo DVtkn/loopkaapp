@@ -1157,6 +1157,15 @@ app.get("/api/pair/status/:login", async (req, res) => {
       }
     }
 
+    if (user) {
+      const now = new Date().toISOString();
+      user.lastActiveAt = now;
+      saveUserToFile(user);
+      if (isSqlConfigured()) {
+        await db.update(users).set({ lastActiveAt: now }).where(eq(users.login, login)).catch(() => {});
+      }
+    }
+
     const store = readDbFile();
     const allReqs = store.pairRequests || [];
 

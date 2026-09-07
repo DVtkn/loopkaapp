@@ -17,6 +17,7 @@ export interface UserPartner {
     note: string;
     updatedAt: string;
   };
+  lastActiveAt?: string;
 }
 
 export interface CoupleProfile {
@@ -224,6 +225,7 @@ export interface UserAccount {
     note: string;
     updatedAt: string;
   };
+  lastActiveAt?: string;
   createdAt: string;
 }
 

@@ -14,6 +14,7 @@ export const users = pgTable('users', {
   loveLanguage: text('love_language'),
   attachmentStyle: text('attachment_style'),
   currentMood: jsonb('current_mood'), // { emoji, label, note, updatedAt }
+  lastActiveAt: text('last_active_at'),
   createdAt: text('created_at').notNull(),
 });
 

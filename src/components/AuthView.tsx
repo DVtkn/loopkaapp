@@ -100,12 +100,13 @@ export const AuthView: React.FC = () => {
         {mode !== 'reset' ? (
           <div className="grid grid-cols-2 p-1 bg-[var(--surface-2)] rounded-2xl border border-[var(--divider)] mb-5">
             <button
+              id="auth-tab-login"
               type="button"
               onClick={() => {
                 setMode('login');
                 setError(null);
               }}
-              className={`py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+              className={`min-h-[44px] py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
                 mode === 'login'
                   ? 'bg-[var(--surface)] text-[var(--accent)] shadow-sm'
                   : 'text-[var(--text-2)] hover:text-[var(--text)]'
@@ -114,12 +115,13 @@ export const AuthView: React.FC = () => {
               Вход
             </button>
             <button
+              id="auth-tab-register"
               type="button"
               onClick={() => {
                 setMode('register');
                 setError(null);
               }}
-              className={`py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+              className={`min-h-[44px] py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
                 mode === 'register'
                   ? 'bg-[var(--surface)] text-[var(--accent)] shadow-sm'
                   : 'text-[var(--text-2)] hover:text-[var(--text)]'
@@ -135,12 +137,13 @@ export const AuthView: React.FC = () => {
               <span>Восстановление / Сброс пароля</span>
             </div>
             <button
+              id="auth-back-to-login-btn"
               type="button"
               onClick={() => {
                 setMode('login');
                 setError(null);
               }}
-              className="text-xs text-[var(--accent)] font-bold px-2 py-1 hover:underline"
+              className="min-h-[44px] text-xs text-[var(--accent)] font-bold px-3 py-1 flex items-center hover:underline"
             >
               Назад
             </button>
@@ -159,10 +162,11 @@ export const AuthView: React.FC = () => {
             {(error.includes('не найден') || error.includes('Не найден')) && mode === 'login' && (
               <div className="pt-2 border-t border-red-500/20 flex flex-col gap-1.5">
                 <button
+                  id="auth-quick-register-btn"
                   type="button"
                   onClick={handleQuickRegister}
                   disabled={isLoading || !cleanLogin || !password}
-                  className="w-full py-2 px-3 rounded-xl bg-red-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm hover:opacity-90 transition-all disabled:opacity-50"
+                  className="w-full min-h-[44px] py-2 px-3 rounded-xl bg-red-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm hover:opacity-90 transition-all disabled:opacity-50"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>Создать аккаунт @{cleanLogin || 'логин'} прямо сейчас</span>
@@ -173,12 +177,13 @@ export const AuthView: React.FC = () => {
             {/* If Wrong Password: offer reset */}
             {error.includes('парол') && mode === 'login' && (
               <button
+                id="auth-error-reset-password-btn"
                 type="button"
                 onClick={() => {
                   setMode('reset');
                   setError(null);
                 }}
-                className="self-start text-[11px] font-bold text-[var(--accent)] underline hover:opacity-80 mt-0.5"
+                className="self-start text-[11px] font-bold text-[var(--accent)] underline hover:opacity-80 mt-0.5 min-h-[44px] flex items-center"
               >
                 Забыли пароль? Нажмите здесь, чтобы задать новый пароль →
               </button>
@@ -187,12 +192,13 @@ export const AuthView: React.FC = () => {
             {/* If Already Exists in register mode */}
             {(error.includes('занят') || error.includes('зарегистрирован') || error.includes('существует')) && mode === 'register' && (
               <button
+                id="auth-error-switch-to-login-btn"
                 type="button"
                 onClick={() => {
                   setMode('login');
                   setError(null);
                 }}
-                className="self-start text-[11px] font-bold text-[var(--accent)] underline hover:opacity-80 mt-0.5"
+                className="self-start text-[11px] font-bold text-[var(--accent)] underline hover:opacity-80 mt-0.5 min-h-[44px] flex items-center"
               >
                 Перейти ко входу с логином @{cleanLogin} →
               </button>
@@ -204,7 +210,10 @@ export const AuthView: React.FC = () => {
         <form onSubmit={handleSubmit} className="space-y-3.5">
           {/* Login Field */}
           <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-[var(--text-2)] mb-1">
+            <label
+              htmlFor="auth-login-input"
+              className="block text-[11px] font-bold uppercase tracking-wider text-[var(--text-2)] mb-1.5"
+            >
               Логин
             </label>
             <div className="relative">
@@ -212,28 +221,35 @@ export const AuthView: React.FC = () => {
                 <span className="font-bold text-sm">@</span>
               </div>
               <input
+                id="auth-login-input"
                 type="text"
                 required
-                placeholder="Логин"
+                autoComplete="username"
                 value={login}
                 onChange={(e) => setLogin(e.target.value)}
-                className="w-full pl-8 pr-4 py-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-sm font-semibold text-[var(--text)] focus:outline-none focus:border-[var(--accent)] transition-colors"
+                className="w-full min-h-[44px] pl-8 pr-4 py-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-sm font-semibold text-[var(--text)] focus:outline-none focus:border-[var(--accent)] transition-colors"
               />
             </div>
-            <p className="text-[10px] text-[var(--text-2)] mt-1">
-              {mode === 'register'
-                ? 'По этому логину ваш партнёр сможет найти и добавить вас в пару'
-                : mode === 'reset'
-                ? 'Укажите ваш логин для обновления пароля'
-                : 'Ваш уникальный логин в системе'}
-            </p>
+            {mode === 'register' && (
+              <p className="text-[10px] text-[var(--text-2)] mt-1.5">
+                По этому логину ваш партнёр сможет найти и добавить вас в пару
+              </p>
+            )}
+            {mode === 'reset' && (
+              <p className="text-[10px] text-[var(--text-2)] mt-1.5">
+                Укажите ваш логин для обновления пароля
+              </p>
+            )}
           </div>
 
           {/* Optional Name & Gender in Register Mode */}
           {mode === 'register' && (
             <div className="space-y-3 pt-1 border-t border-[var(--divider)]">
               <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-[var(--text-2)] mb-1">
+                <label
+                  htmlFor="auth-name-input"
+                  className="block text-[11px] font-bold uppercase tracking-wider text-[var(--text-2)] mb-1.5"
+                >
                   Как к вам обращаться (Имя)
                 </label>
                 <div className="relative">
@@ -241,11 +257,12 @@ export const AuthView: React.FC = () => {
                     <User className="w-4 h-4" />
                   </div>
                   <input
+                    id="auth-name-input"
                     type="text"
-                    placeholder="Ваше имя"
+                    autoComplete="name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-sm font-semibold text-[var(--text)] focus:outline-none focus:border-[var(--accent)] transition-colors"
+                    className="w-full min-h-[44px] pl-9 pr-4 py-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-sm font-semibold text-[var(--text)] focus:outline-none focus:border-[var(--accent)] transition-colors"
                   />
                 </div>
               </div>
@@ -257,9 +274,10 @@ export const AuthView: React.FC = () => {
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
+                    id="auth-gender-male-btn"
                     type="button"
                     onClick={() => setGender('male')}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                    className={`min-h-[44px] py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
                       gender === 'male'
                         ? 'bg-[var(--accent-blue)]/15 border-[var(--accent-blue)] text-[var(--accent-blue)] ring-1 ring-[var(--accent-blue)]/30'
                         : 'bg-[var(--surface-2)] border-[var(--divider)] text-[var(--text-2)] hover:text-[var(--text)]'
@@ -270,9 +288,10 @@ export const AuthView: React.FC = () => {
                   </button>
 
                   <button
+                    id="auth-gender-female-btn"
                     type="button"
                     onClick={() => setGender('female')}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                    className={`min-h-[44px] py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
                       gender === 'female'
                         ? 'bg-[var(--accent)]/15 border-[var(--accent)] text-[var(--accent)] ring-1 ring-[var(--accent)]/30'
                         : 'bg-[var(--surface-2)] border-[var(--divider)] text-[var(--text-2)] hover:text-[var(--text)]'
@@ -282,7 +301,7 @@ export const AuthView: React.FC = () => {
                     <span>Женский (Она)</span>
                   </button>
                 </div>
-                <p className="text-[10px] text-[var(--text-2)] mt-1">
+                <p className="text-[10px] text-[var(--text-2)] mt-1.5">
                   Позволяет Сове и радару персонализировать рекомендации и динамику пары
                 </p>
               </div>
@@ -291,18 +310,22 @@ export const AuthView: React.FC = () => {
 
           {/* Password Field */}
           <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-[var(--text-2)]">
+            <div className="flex items-center justify-between mb-1.5">
+              <label
+                htmlFor="auth-password-input"
+                className="block text-[11px] font-bold uppercase tracking-wider text-[var(--text-2)]"
+              >
                 {mode === 'reset' ? 'Новый пароль' : 'Пароль'}
               </label>
               {mode === 'login' && (
                 <button
+                  id="auth-forgot-password-btn"
                   type="button"
                   onClick={() => {
                     setMode('reset');
                     setError(null);
                   }}
-                  className="text-[10px] font-bold text-[var(--accent)] hover:underline"
+                  className="min-h-[36px] px-1 text-[10px] font-bold text-[var(--accent)] hover:underline flex items-center"
                 >
                   Забыли пароль?
                 </button>
@@ -313,17 +336,20 @@ export const AuthView: React.FC = () => {
                 <Lock className="w-4 h-4" />
               </div>
               <input
+                id="auth-password-input"
                 type={showPassword ? 'text' : 'password'}
                 required
-                placeholder={mode === 'reset' ? 'Введите новый пароль' : 'Ваш пароль'}
+                autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-9 pr-10 py-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-sm font-semibold text-[var(--text)] focus:outline-none focus:border-[var(--accent)] transition-colors"
+                className="w-full min-h-[44px] pl-9 pr-11 py-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-sm font-semibold text-[var(--text)] focus:outline-none focus:border-[var(--accent)] transition-colors"
               />
               <button
+                id="auth-toggle-password-btn"
                 type="button"
+                aria-label={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-[var(--text-2)] hover:text-[var(--text)]"
+                className="absolute inset-y-0 right-0 w-11 h-full min-h-[44px] flex items-center justify-center text-[var(--text-2)] hover:text-[var(--text)] transition-colors cursor-pointer"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -332,9 +358,10 @@ export const AuthView: React.FC = () => {
 
           {/* Submit Button */}
           <button
+            id="auth-submit-btn"
             type="submit"
             disabled={isLoading}
-            className="w-full mt-3 py-3 px-4 rounded-xl apple-btn-primary text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+            className="w-full min-h-[48px] mt-3 py-3 px-4 rounded-xl apple-btn-primary text-sm flex items-center justify-center gap-2 disabled:opacity-50"
           >
             <span>
               {mode === 'register'
@@ -353,12 +380,13 @@ export const AuthView: React.FC = () => {
             <p className="text-xs text-[var(--text-2)]">
               Уже есть аккаунт?{' '}
               <button
+                id="auth-switch-to-login-btn"
                 type="button"
                 onClick={() => {
                   setMode('login');
                   setError(null);
                 }}
-                className="font-bold text-[var(--accent)] hover:underline ml-1"
+                className="font-bold text-[var(--accent)] hover:underline ml-1 min-h-[44px] inline-flex items-center"
               >
                 Войти
               </button>
@@ -367,12 +395,13 @@ export const AuthView: React.FC = () => {
             <p className="text-xs text-[var(--text-2)]">
               Вспомнили пароль?{' '}
               <button
+                id="auth-switch-back-to-login-btn"
                 type="button"
                 onClick={() => {
                   setMode('login');
                   setError(null);
                 }}
-                className="font-bold text-[var(--accent)] hover:underline ml-1"
+                className="font-bold text-[var(--accent)] hover:underline ml-1 min-h-[44px] inline-flex items-center"
               >
                 Вернуться ко входу
               </button>
@@ -381,12 +410,13 @@ export const AuthView: React.FC = () => {
             <p className="text-xs text-[var(--text-2)]">
               Впервые в Loop?{' '}
               <button
+                id="auth-switch-to-register-btn"
                 type="button"
                 onClick={() => {
                   setMode('register');
                   setError(null);
                 }}
-                className="font-bold text-[var(--accent)] hover:underline ml-1"
+                className="font-bold text-[var(--accent)] hover:underline ml-1 min-h-[44px] inline-flex items-center"
               >
                 Создать аккаунт
               </button>

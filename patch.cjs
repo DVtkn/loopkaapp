@@ -1,60 +1,49 @@
 const fs = require('fs');
-const file = 'src/components/RelationshipRadar.tsx';
-let content = fs.readFileSync(file, 'utf8');
+let code = fs.readFileSync('src/App.tsx', 'utf8');
 
-const target = `                  {/* Dual Comparison Progress Bar */}
-                  <div className="space-y-1.5 my-2.5">
-                    <div className="flex items-center justify-between text-[10px] font-semibold text-[var(--text-2)]">
-                      <span className="text-[var(--accent-blue)] font-bold">{p1Label}: {m.p1Score}%</span>
-                      <span className="text-[var(--accent)] font-bold">{p2Label}: {m.p2Score}%</span>
-                    </div>
-                    <div className="h-2 w-full rounded-full bg-[var(--divider)] overflow-hidden flex">
-                      <div
-                        className="h-full rounded-l-full bg-[var(--accent-blue)] transition-all duration-500"
-                        style={{ width: \`\${m.p1Score / 2}%\` }}
-                      />
-                      <div
-                        className="h-full rounded-r-full bg-[var(--accent)] ml-0.5 transition-all duration-500"
-                        style={{ width: \`\${m.p2Score / 2}%\` }}
-                      />
-                    </div>
-                  </div>`;
+const replacement = `  const isChatTab = activeTab === 'chat' || activeTab === 'owl';
 
-const replacement = `                  {/* Bridge of 20 Steps Metaphor */}
-                  <div className="space-y-2 my-3">
-                    <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[var(--text-2)]">
-                      <span className="text-[var(--accent-blue)] truncate max-w-[120px]">{p1Label}: {m.p1Steps} {m.p1Steps === 1 ? 'шаг' : (m.p1Steps >= 2 && m.p1Steps <= 4 ? 'шага' : 'шагов')}</span>
-                      {m.gapSteps === 0 ? (
-                        <span className="text-emerald-500 font-extrabold px-2 bg-emerald-500/10 rounded-full border border-emerald-500/20 shadow-2xs">Встретились!</span>
-                      ) : (
-                        <span className="text-[var(--text-2)]">{m.gapSteps} {m.gapSteps === 1 ? 'шаг' : (m.gapSteps >= 2 && m.gapSteps <= 4 ? 'шага' : 'шагов')} разрыв</span>
-                      )}
-                      <span className="text-[var(--accent)] truncate max-w-[120px] text-right">{m.p2Steps} {m.p2Steps === 1 ? 'шаг' : (m.p2Steps >= 2 && m.p2Steps <= 4 ? 'шага' : 'шагов')} :{p2Label}</span>
-                    </div>
-                    
-                    <div className="w-full flex items-center justify-between gap-[2px] h-3.5 p-0.5 rounded-full overflow-hidden bg-[var(--surface-2)] border border-[var(--divider)] shadow-inner">
-                      {Array.from({ length: 20 }).map((_, i) => {
-                        const isP1 = i < m.p1Steps;
-                        const isP2 = i >= 20 - m.p2Steps;
-                        
-                        let bgColor = 'bg-transparent';
-                        if (isP1) bgColor = 'bg-[var(--accent-blue)] shadow-[0_0_8px_rgba(59,130,246,0.6)] rounded-sm';
-                        else if (isP2) bgColor = 'bg-[var(--accent)] shadow-[0_0_8px_rgba(239,68,68,0.6)] rounded-sm';
+  return (
+    <div className="h-full w-full text-[var(--text)] flex font-sans selection:bg-[var(--accent)]/20 selection:text-[var(--accent)] transition-colors overflow-hidden relative">
+      {/* Dynamic Apple Ambient Aurora Mesh Background */}
+      <AmbientBackground />
+      
+      {/* Sidebar Navigation for Desktop */}
+      <div className="hidden md:flex shrink-0">
+        <Navigation activeTab={activeTab} setActiveTab={setActiveTab} />
+      </div>
 
-                        return (
-                          <div 
-                            key={i} 
-                            className={\`flex-1 h-full transition-all duration-700 \${bgColor}\`} 
-                          />
-                        );
-                      })}
-                    </div>
-                  </div>`;
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative z-0">
+        {!isChatTab && (
+          <div className="shrink-0 z-10">
+            <Header />
+          </div>
+        )}
 
-if (content.includes(target)) {
-  content = content.replace(target, replacement);
-  fs.writeFileSync(file, content, 'utf8');
-  console.log('Replaced successfully');
-} else {
-  console.log('Target not found');
-}
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={isChatTab ? 'chat' : activeTab}
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.1, ease: 'easeOut' }}
+            className="flex-1 flex flex-col min-h-0 h-full w-full"
+          >
+            {renderActiveView()}
+          </motion.div>
+        </AnimatePresence>
+        
+        {/* Mobile Navigation Tab Bar */}
+        <div className="md:hidden shrink-0 z-10">
+          <Navigation activeTab={activeTab} setActiveTab={setActiveTab} />
+        </div>
+      </div>
+      
+      {/* iOS Home Screen Install Helper Banner */}
+      <IOSInstallPrompt />
+    </div>
+  );
+};`;
+
+code = code.replace(/const isChatTab = activeTab === 'chat' \|\| activeTab === 'owl';[\s\S]*?IOSInstallPrompt \/>\s*<\/div>\s*\);\s*};/, replacement);
+fs.writeFileSync('src/App.tsx', code);

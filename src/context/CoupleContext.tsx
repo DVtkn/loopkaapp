@@ -1,3 +1,4 @@
+import { apiFetch } from "../utils/api";
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   PartnerId,
@@ -500,7 +501,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => {
     const fetchAllUsers = async () => {
       try {
-        const res = await fetch('/api/auth/users');
+        const res = await apiFetch('/api/auth/users');
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data.users)) {
@@ -541,7 +542,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const cleanLogin = currentUser.login.toLowerCase();
 
         // 1. Fetch pair status and requests
-        const statusRes = await fetch(`/api/pair/status/${cleanLogin}`);
+        const statusRes = await apiFetch(`/api/pair/status/${cleanLogin}`);
         if (statusRes.ok) {
           const statusData = await statusRes.json();
           if (statusData.user) {
@@ -604,7 +605,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const l1 = String(statusData.user.login).toLowerCase().replace(/^@/, "");
             const l2 = String(statusData.user.partnerLogin).toLowerCase().replace(/^@/, "");
             const coupleId = [l1, l2].sort().join("_");
-            const msgsRes = await fetch(`/api/chat/messages/${coupleId}`);
+            const msgsRes = await apiFetch(`/api/chat/messages/${coupleId}`);
             if (msgsRes.ok) {
               const msgsData = await msgsRes.json();
               setPartnerMessages(prev => {
@@ -631,7 +632,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         // 1.6 Fetch AI messages for currentUser from server
         if (cleanLogin) {
           try {
-            const aiRes = await fetch(`/api/ai/messages/${cleanLogin}`);
+            const aiRes = await apiFetch(`/api/ai/messages/${cleanLogin}`);
             if (aiRes.ok) {
               const aiData = await aiRes.json();
               if (Array.isArray(aiData.messages) && aiData.messages.length > 0) {
@@ -653,7 +654,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
 
         // 2. Fetch all users periodically to keep local registry fresh
-        const usersRes = await fetch('/api/auth/users');
+        const usersRes = await apiFetch('/api/auth/users');
         if (usersRes.ok) {
           const usersData = await usersRes.json();
           if (Array.isArray(usersData.users)) {
@@ -706,7 +707,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     try {
-      const res = await fetch('/api/auth/register', {
+      const res = await apiFetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -761,7 +762,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         ]);
       } else {
         // Fetch pair status immediately for existing account
-        fetch(`/api/pair/status/${cleanLogin}`)
+        apiFetch(`/api/pair/status/${cleanLogin}`)
           .then((r) => r.json())
           .then((statusData) => {
             if (statusData.incomingRequests) {
@@ -794,7 +795,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await apiFetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ login: cleanLogin, password: cleanPass }),
@@ -821,7 +822,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       triggerConfetti();
 
       // Fetch pair status immediately
-      fetch(`/api/pair/status/${cleanLogin}`)
+      apiFetch(`/api/pair/status/${cleanLogin}`)
         .then((r) => r.json())
         .then((statusData) => {
           if (statusData.incomingRequests) {
@@ -855,7 +856,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     try {
-      const res = await fetch('/api/auth/reset-password', {
+      const res = await apiFetch('/api/auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ login: cleanLogin, newPassword: cleanNewPass }),
@@ -919,13 +920,13 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     safeSetStorage('together_accounts_registry', updatedDb);
 
     try {
-      await fetch('/api/auth/update-profile', {
+      await apiFetch('/api/auth/update-profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ login: cleanLogin, startDate: date }),
       });
       if (existing.partnerLogin) {
-        await fetch('/api/auth/update-profile', {
+        await apiFetch('/api/auth/update-profile', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ login: existing.partnerLogin, startDate: date }),
@@ -958,7 +959,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // Call server
     try {
-      fetch('/api/auth/update-profile', {
+      apiFetch('/api/auth/update-profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -980,7 +981,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!user) return { success: false, error: 'Аккаунт не найден' };
 
     try {
-      const res = await fetch('/api/auth/change-password', {
+      const res = await apiFetch('/api/auth/change-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1024,7 +1025,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     try {
-      const res = await fetch('/api/pair/request', {
+      const res = await apiFetch('/api/pair/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fromLogin: myLogin, toLogin: cleanTarget }),
@@ -1102,7 +1103,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const cleanPartner = partnerLogin.trim().toLowerCase().replace(/^@/, '');
 
     try {
-      const res = await fetch('/api/pair/accept', {
+      const res = await apiFetch('/api/pair/accept', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ myLogin, partnerLogin: cleanPartner }),
@@ -1173,7 +1174,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     safeSetStorage('together_pair_requests', updatedRequests);
 
     try {
-      fetch('/api/pair/reject', {
+      apiFetch('/api/pair/reject', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ myLogin, partnerLogin: cleanPartner }),
@@ -1205,7 +1206,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setCurrentUser(safeMe);
 
     try {
-      fetch('/api/pair/disconnect', {
+      apiFetch('/api/pair/disconnect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ login: myLogin }),
@@ -1496,7 +1497,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       
       setPartnerMessages(prev => [...prev, msg as ChatMessage]);
       
-      await fetch('/api/chat/messages', {
+      await apiFetch('/api/chat/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(msg)
@@ -1995,7 +1996,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         userLogin: currentUser?.login,
       };
 
-      const res = await fetch('/api/ai/chat', {
+      const res = await apiFetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

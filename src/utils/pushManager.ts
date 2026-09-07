@@ -1,3 +1,4 @@
+import { apiFetch } from './api';
 // Loop Web Push Notifications, Service Worker, and iOS Notification Manager
 import { safeGetStorage, safeSetStorage } from './safeStorage';
 
@@ -221,7 +222,7 @@ export async function requestPushPermission(partnerId?: string, coupleId?: strin
           
           // Send to backend
           if (subscription || partnerId) {
-            await fetch('/api/push/subscribe', {
+            await apiFetch('/api/push/subscribe', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -254,7 +255,7 @@ export async function triggerLocalTestPush(title?: string, body?: string): Promi
   const pushBody = body || 'Партнёр оставил(а) тёплую реакцию в вашем общем пространстве Loop';
 
   // 1. Call backend test endpoint
-  fetch('/api/push/send-test', {
+  apiFetch('/api/push/send-test', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ title: pushTitle, body: pushBody }),

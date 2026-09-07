@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, jsonb, integer, real, unique, index } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
   id: text('id').primaryKey(),
@@ -16,7 +16,9 @@ export const users = pgTable('users', {
   currentMood: jsonb('current_mood'), // { emoji, label, note, updatedAt }
   lastActiveAt: text('last_active_at'),
   createdAt: text('created_at').notNull(),
-});
+}, (t) => ({
+  partnerLoginIdx: index('users_partner_login_idx').on(t.partnerLogin),
+}));
 
 export const pairRequests = pgTable('pair_requests', {
   id: text('id').primaryKey(),
@@ -26,7 +28,11 @@ export const pairRequests = pgTable('pair_requests', {
   toLogin: text('to_login').notNull(),
   status: text('status').notNull(), // 'PENDING' | 'ACCEPTED' | 'REJECTED'
   createdAt: text('created_at').notNull(),
-});
+}, (t) => ({
+  fromToIdx: index('pair_requests_from_to_idx').on(t.fromLogin, t.toLogin),
+  toLoginIdx: index('pair_requests_to_login_idx').on(t.toLogin),
+  statusIdx: index('pair_requests_status_idx').on(t.status),
+}));
 
 export const coupleData = pgTable('couple_data', {
   id: text('id').primaryKey(), // using the 'login1_login2' sorted key
@@ -42,4 +48,34 @@ export const chatMessages = pgTable('chat_messages', {
   content: text('content').notNull(),
   isRead: boolean('is_read').default(false),
   createdAt: text('created_at').notNull(),
-});
+}, (t) => ({
+  coupleCreatedIdx: index('chat_messages_couple_created_idx').on(t.coupleId, t.createdAt),
+  senderIdx: index('chat_messages_sender_login_idx').on(t.senderLogin),
+}));
+
+export const relationshipMetrics = pgTable('relationship_metrics', {
+  id: text('id').primaryKey(),
+  coupleId: text('couple_id').notNull(),
+  metricDate: text('metric_date').notNull(), // YYYY-MM-DD
+  radarScores: jsonb('radar_scores').notNull(), // { trust, communication, passion, sharedValues, care, dailyLife }
+  moodAverage: real('mood_average'),
+  moodEntriesCount: integer('mood_entries_count').default(0),
+  interactionCount: integer('interaction_count').default(0),
+  quizCompleted: boolean('quiz_completed').default(false),
+  streakDays: integer('streak_days').default(0),
+  createdAt: text('created_at').notNull(),
+}, (t) => ({
+  unq: unique().on(t.coupleId, t.metricDate)
+}));
+
+export const aiInsights = pgTable('ai_insights', {
+  id: text('id').primaryKey(),
+  coupleId: text('couple_id').notNull(),
+  type: text('type').notNull(), // 'weekly' | 'risk_alert'
+  content: jsonb('content').notNull(),
+  periodStart: text('period_start').notNull(),
+  periodEnd: text('period_end').notNull(),
+  createdAt: text('created_at').notNull(),
+}, (t) => ({
+  coupleCreatedIdx: index('ai_insights_couple_created_idx').on(t.coupleId, t.createdAt),
+}));

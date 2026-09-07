@@ -1,3 +1,4 @@
+import { apiFetch } from "../utils/api";
 import React, { useState, useMemo } from 'react';
 import {
   Sparkles,
@@ -24,6 +25,7 @@ import {
   DeepCoupleAnalysis,
 } from '../utils/psychologyEngine';
 import { RelationshipRadar } from './RelationshipRadar';
+import { RelationshipDynamics } from './RelationshipDynamics';
 import { CoupleRatingWidget } from './CoupleRatingWidget';
 import { PageLayout } from './ui/PageLayout';
 
@@ -40,7 +42,7 @@ export const ReportView: React.FC<{
     setActiveTab,
   } = useCouple();
 
-  const [activeSegment, setActiveSegment] = useState<'radar' | 'overview' | 'rating' | 'comparison' | 'roadmap'>('radar');
+  const [activeSegment, setActiveSegment] = useState<'radar' | 'trends' | 'overview' | 'rating' | 'comparison' | 'roadmap'>('radar');
   const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
   const [isGeneratingAI, setIsGeneratingAI] = useState<boolean>(false);
   const [copiedShare, setCopiedShare] = useState<boolean>(false);
@@ -72,7 +74,7 @@ export const ReportView: React.FC<{
   const handleRegenerateAIReport = async () => {
     setIsGeneratingAI(true);
     try {
-      const res = await fetch('/api/ai/generate-report', {
+      const res = await apiFetch('/api/ai/generate-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -265,6 +267,18 @@ export const ReportView: React.FC<{
           </button>
           <button
             type="button"
+            onClick={() => setActiveSegment('trends')}
+            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              activeSegment === 'trends'
+                ? 'bg-[var(--accent)] text-white shadow-xs'
+                : 'text-[var(--text-2)] hover:text-[var(--text)]'
+            }`}
+          >
+            Динамика (Тренды)
+          </button>
+  
+          <button
+            type="button"
             onClick={() => setActiveSegment('overview')}
             className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
               activeSegment === 'overview'
@@ -316,6 +330,12 @@ export const ReportView: React.FC<{
           <RelationshipRadar onStartTest={handleStartTest} />
         )}
 
+        
+        {/* SEGMENT 1.5: DYNAMICS */}
+        {activeSegment === 'trends' && (
+          <RelationshipDynamics coupleId={coupleProfile.id} />
+        )}
+  
         {/* SEGMENT 2: OVERVIEW & STRENGTHS */}
         {activeSegment === 'overview' && (
           <div className="space-y-4 animate-fadeIn">

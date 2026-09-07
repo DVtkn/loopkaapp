@@ -1,123 +1,131 @@
-import "dotenv/config";
-
-console.log("=== ПРОВЕРКА КОНФИГУРАЦИИ ===");
-console.log(
-  "GROQ_API_KEY загружен:",
-  process.env.GROQ_API_KEY
-    ? "ДА (начинается на " + process.env.GROQ_API_KEY.substring(0, 10) + "...)"
-    : "НЕТ (undefined)"
-);
-console.log("=============================");
-
-import { db, createPool, isSqlConfigured } from "./src/db/index.ts";
-import { users, pairRequests, coupleData, chatMessages } from "./src/db/schema.ts";
-import { eq, or, desc, and, sql } from "drizzle-orm";
 import express from "express";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
 import bcrypt from "bcryptjs";
 import helmet from "helmet";
 import cors from "cors";
-import jwt from "jsonwebtoken";
+import { eq, or, desc, and, sql } from "drizzle-orm";
 
-// Rate limiter for login endpoint (5 failed attempts per IP+login per 15 mins)
-interface RateLimitEntry {
-  attempts: number;
-  resetAt: number;
-}
-function checkLoginRateLimit(key: string): { allowed: boolean; remainingMs?: number } {
-  const now = Date.now();
-  const store = readDbFile();
-  const entry = store.rateLimits?.[key];
-  if (!entry) return { allowed: true };
-  if (now > entry.resetAt) {
-    delete store.rateLimits![key];
-    writeDbFile(store);
-    return { allowed: true };
-  }
-  if (entry.attempts >= 5) {
-    return { allowed: false, remainingMs: entry.resetAt - now };
-  }
-  return { allowed: true };
-}
+// Internal modules
+import { db, createPool, isSqlConfigured } from "./src/db/index.ts";
+import { users, pairRequests, coupleData, chatMessages, aiInsights, relationshipMetrics } from "./src/db/schema.ts";
+import { recordDailyMetrics, getTrends } from "./src/server/analytics.ts";
+import { generateWeeklyInsight } from "./src/server/insights.ts";
+import { logger } from "./src/server/logger.ts";
+import { config } from "./src/server/config.ts";
+import {
+  registerLimiter,
+  loginLimiter,
+  aiLimiter,
+  pairLimiter,
+} from "./src/server/middleware/rateLimit.ts";
+import {
+  validateBody,
+  validateParams,
+} from "./src/server/middleware/validation.ts";
+import {
+  registerSchema,
+  loginRequestSchema,
+  changePasswordSchema,
+  resetPasswordSchema,
+  updateProfileSchema,
+  pairRequestSchema,
+  pairAcceptSchema,
+  pairRejectSchema,
+  pairDisconnectSchema,
+  coupleSyncSchema,
+  chatMessageCreateSchema,
+  aiChatMessageSchema,
+  aiReportSchema,
+  aiDateIdeaSchema,
+} from "./src/server/schemas.ts";
+import {
+  requireAuth,
+  generateToken,
+  isUserInCouple,
+  AuthenticatedRequest,
+} from "./src/server/middleware/auth.ts";
+import {
+  findUserByLogin,
+  findUserByQuery,
+  upsertUser,
+  getCoupleData,
+  saveCoupleData,
+  readEmergencyFile,
+  writeEmergencyFile,
+} from "./src/server/services/storageService.ts";
+import {
+  acceptPair,
+  disconnectPair,
+  createPairRequest,
+} from "./src/server/services/pairService.ts";
+import {
+  callGroqChat,
+  generateSmartPsychologistReply,
+  saveAIMessageToDb,
+} from "./src/server/aiService.ts";
+import { DbUser, toSafeUser } from "./src/server/types.ts";
 
-function recordFailedLoginAttempt(key: string) {
-  const now = Date.now();
-  const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-  const store = readDbFile();
-  if (!store.rateLimits) store.rateLimits = {};
-  const entry = store.rateLimits[key];
-  if (!entry || now > entry.resetAt) {
-    store.rateLimits[key] = { attempts: 1, resetAt: now + WINDOW_MS };
-  } else {
-    store.rateLimits[key].attempts += 1;
-  }
-  writeDbFile(store);
-}
-
-function clearLoginRateLimit(key: string) {
-  const store = readDbFile();
-  if (store.rateLimits && store.rateLimits[key]) {
-    delete store.rateLimits[key];
-    writeDbFile(store);
-  }
-}
-
-// Dummy hash for timing attack mitigation when user is not found
-const DUMMY_HASH = "$2b$10$e8I8/g4P7s.Sg43L7kE8.eL39j34uV658m9m3m3m3m3m3m3m3m3m3";
-
-async function verifyPassword(inputPass: string, storedHash: string): Promise<boolean> {
-  if (!storedHash) return false;
-  if (storedHash.startsWith("$2a$") || storedHash.startsWith("$2b$") || storedHash.startsWith("$2y$")) {
-    return await bcrypt.compare(inputPass, storedHash);
-  }
-  return false; // Plaintext fallback removed for security
-}
-
-function validateEnvVars() {
-  const missing = [];
-  if (!process.env.GROQ_API_KEY) missing.push("GROQ_API_KEY");
-  if (!process.env.JWT_SECRET) {
-    console.warn("WARN: JWT_SECRET is missing, using fallback (not safe for production).");
-    process.env.JWT_SECRET = "loop_secret_fallback_12345";
-  }
-  if (missing.length > 0) {
-    console.error("CRITICAL: Missing environment variables:", missing.join(", "));
-  }
-}
-validateEnvVars();
-
-const currentDir =
-  process.cwd();
+// Re-export logger and callGroqChat for backward compatibility with insights.ts
+export { logger, callGroqChat };
 
 const app = express();
 const PORT = 3000;
 
-app.use(helmet({
-  contentSecurityPolicy: false,
-}));
-app.use(cors({
-  origin: process.env.APP_URL || "*",
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-}));
+// ==========================================
+// 1. SECURITY & INFRASTRUCTURE MIDDLEWARE
+// ==========================================
+
+// Helmet configured for AI Studio iframe embedding and security
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    xFrameOptions: false,
+  })
+);
+
+// CORS handling with support for dev, preview domains, and localhost
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (
+        config.allowedOrigins.includes(origin) ||
+        origin.includes("run.app") ||
+        origin.includes("localhost") ||
+        origin.includes("127.0.0.1")
+      ) {
+        return callback(null, true);
+      }
+      return callback(null, true); // Permissive in preview environment
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  })
+);
+
 app.use(express.json({ limit: "100kb" }));
 app.use(express.urlencoded({ extended: true, limit: "100kb" }));
 
-function sanitizeString(str: any): any {
-  if (typeof str !== 'string') return str;
-  return str.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+// Payload sanitizer against injection
+function sanitizeString(str: unknown): unknown {
+  if (typeof str !== "string") return str;
+  return str.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 function sanitizePayload(obj: any): any {
-  if (typeof obj === 'string') return sanitizeString(obj);
+  if (typeof obj === "string") return sanitizeString(obj);
   if (Array.isArray(obj)) {
-    return obj.map(item => sanitizePayload(item));
+    return obj.map((item) => sanitizePayload(item));
   }
-  if (obj !== null && typeof obj === 'object') {
-    const sanitized: any = {};
+  if (obj !== null && typeof obj === "object") {
+    const sanitized: Record<string, any> = {};
     for (const key in obj) {
       if (Object.prototype.hasOwnProperty.call(obj, key)) {
         sanitized[key] = sanitizePayload(obj[key]);
@@ -129,172 +137,56 @@ function sanitizePayload(obj: any): any {
 }
 
 app.use((req, res, next) => {
-  if (req.body && typeof req.body === 'object') {
+  if (req.body && typeof req.body === "object") {
     req.body = sanitizePayload(req.body);
   }
   next();
 });
 
-
-// Persistent JSON Storage paths
-const DATA_DIR = path.join(process.cwd(), "data");
-const DB_FILE = path.join(DATA_DIR, "db_store.json");
-
-function ensureDataDir() {
-  try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
+// Request Duration & Status Logging Middleware (Observability)
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on("finish", () => {
+    const duration = Date.now() - start;
+    if (req.originalUrl.startsWith("/api")) {
+      logger.info(`${req.method} ${req.originalUrl} ${res.statusCode} (${duration}ms)`, {
+        status: res.statusCode,
+        durationMs: duration,
+        ip: req.ip,
+      });
     }
-  } catch (e) {
-    console.error("Error creating data dir:", e);
+  });
+  next();
+});
+
+// In-memory push subscription store (with optional VAPID dispatch)
+interface PushSubscriptionRecord {
+  subscription: any;
+  partnerId?: string;
+  coupleId?: string;
+  subscribedAt: string;
+}
+const pushSubscriptions: PushSubscriptionRecord[] = [];
+
+// Password verification with timing-attack mitigation
+const DUMMY_HASH = "$2b$10$e8I8/g4P7s.Sg43L7kE8.eL39j34uV658m9m3m3m3m3m3m3m3m3m3";
+async function verifyPassword(inputPass: string, storedHash: string): Promise<boolean> {
+  if (!storedHash) return false;
+  if (storedHash.startsWith("$2a$") || storedHash.startsWith("$2b$") || storedHash.startsWith("$2y$")) {
+    return await bcrypt.compare(inputPass, storedHash);
   }
+  return false;
 }
 
-interface DbFileStore {
-  users: Record<string, any>;
-  pairRequests: any[];
-  coupleData: Record<string, any>;
-  chatMessages?: any[];
-  rateLimits?: Record<string, RateLimitEntry>;
-}
-
-function readDbFile(): DbFileStore {
-  ensureDataDir();
-  try {
-    if (fs.existsSync(DB_FILE)) {
-      const raw = fs.readFileSync(DB_FILE, "utf-8");
-      const parsed = JSON.parse(raw);
-      return {
-        users: parsed.users || {},
-        pairRequests: parsed.pairRequests || [],
-        coupleData: parsed.coupleData || {},
-        chatMessages: parsed.chatMessages || [],
-        rateLimits: parsed.rateLimits || {},
-      };
-    }
-  } catch (e) {
-    console.error("Error reading db_store.json", e);
-  }
-  return { users: {}, pairRequests: [], coupleData: {}, chatMessages: [], rateLimits: {} };
-}
-
-function writeDbFile(data: DbFileStore) {
-  ensureDataDir();
-  try {
-    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), "utf-8");
-  } catch (e) {
-    console.error("Error writing db_store.json", e);
-  }
-}
-
-function saveUserToFile(userObj: any) {
-  if (!userObj || !userObj.login) return;
-  const store = readDbFile();
-  const cleanKey = String(userObj.login).trim().toLowerCase().replace(/^@/, "");
-  store.users[cleanKey] = { ...store.users[cleanKey], ...userObj };
-  writeDbFile(store);
-}
-
-function addPairRequestToFile(reqObj: any) {
-  const store = readDbFile();
-  if (!store.pairRequests) store.pairRequests = [];
-  store.pairRequests = store.pairRequests.filter((r: any) => r.id !== reqObj.id);
-  store.pairRequests.push(reqObj);
-  writeDbFile(store);
-}
-
-function removePairRequestsFromFile(predicate: (r: any) => boolean) {
-  const store = readDbFile();
-  if (!store.pairRequests) return;
-  store.pairRequests = store.pairRequests.filter((r: any) => !predicate(r));
-  writeDbFile(store);
-}
-
-async function findUserByLogin(loginInput: string) {
-  if (!loginInput) return undefined;
-  const clean = String(loginInput).trim().toLowerCase().replace(/^@/, "");
-  if (!clean) return undefined;
-
-  if (isSqlConfigured()) {
-    try {
-      const res = await db
-        .select()
-        .from(users)
-        .where(sql`LOWER(${users.login}) = ${clean}`)
-        .limit(1);
-      if (res && res.length > 0) {
-        saveUserToFile(res[0]);
-        return res[0];
-      }
-    } catch (e) {
-      // Quiet fallback to file store
-    }
-  }
-
-  const store = readDbFile();
-  const fileUser = store.users[clean] || Object.values(store.users).find((u: any) => u && String(u.login).toLowerCase() === clean);
-  if (fileUser && isSqlConfigured()) {
-    try {
-      await db.insert(users).values(fileUser).onConflictDoNothing().catch(() => {});
-    } catch (_) {}
-  }
-
-  return fileUser;
-}
-
-async function findUserByQuery(query: string) {
-  if (!query) return undefined;
-  const clean = String(query).trim().toLowerCase().replace(/^@/, "");
-  if (!clean) return undefined;
-
-  // 1. Try SQL query first if configured
-  if (isSqlConfigured()) {
-    try {
-      const res = await db
-        .select()
-        .from(users)
-        .where(
-          or(
-            eq(users.login, clean),
-            sql`LOWER(${users.login}) = ${clean}`,
-            sql`LOWER(${users.name}) = ${clean}`
-          )
-        )
-        .limit(1);
-      if (res && res.length > 0) {
-        saveUserToFile(res[0]);
-        return res[0];
-      }
-    } catch (e) {
-      // Quiet fallback to file store
-    }
-  }
-
-  // 2. Check persistent file store
-  const store = readDbFile();
-  const fileUser = store.users[clean] || Object.values(store.users).find((u: any) => u && (String(u.login).toLowerCase() === clean || String(u.name || "").toLowerCase() === clean));
-  if (fileUser && isSqlConfigured()) {
-    // Attempt background restore to SQL
-    try {
-      await db.insert(users).values(fileUser).onConflictDoNothing().catch(() => {});
-    } catch (_) {}
-  }
-
-  return fileUser;
-}
-
-// Initialize tables and sync SQL & File backup
+// Database schema initialization & indexes creation
 async function initDatabase() {
-  ensureDataDir();
   if (!isSqlConfigured()) {
-    console.log("ℹ️ [Database] Cloud SQL not configured — using zero-latency persistent JSON file storage (/data/db_store.json).");
+    logger.info("Cloud SQL не настроен — используется резервное постоянное хранилище /data/db_store.json");
     return;
   }
-
   try {
     const pool = createPool();
     if (!pool) return;
-
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id text PRIMARY KEY,
@@ -310,10 +202,11 @@ async function initDatabase() {
         love_language text,
         attachment_style text,
         current_mood jsonb,
+        last_active_at text,
         created_at text NOT NULL
       );
-
       ALTER TABLE users ADD COLUMN IF NOT EXISTS gender text;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_at text;
 
       CREATE TABLE IF NOT EXISTS pair_requests (
         id text PRIMARY KEY,
@@ -340,390 +233,220 @@ async function initDatabase() {
         is_read boolean DEFAULT false,
         created_at text NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS relationship_metrics (
+        id text PRIMARY KEY,
+        couple_id text NOT NULL,
+        metric_date text NOT NULL,
+        radar_scores jsonb NOT NULL,
+        mood_average real,
+        mood_entries_count integer DEFAULT 0,
+        interaction_count integer DEFAULT 0,
+        quiz_completed boolean DEFAULT false,
+        streak_days integer DEFAULT 0,
+        created_at text NOT NULL,
+        UNIQUE (couple_id, metric_date)
+      );
+
+      CREATE TABLE IF NOT EXISTS ai_insights (
+        id text PRIMARY KEY,
+        couple_id text NOT NULL,
+        type text NOT NULL,
+        content jsonb NOT NULL,
+        period_start text NOT NULL,
+        period_end text NOT NULL,
+        created_at text NOT NULL
+      );
+
+      -- Индексы производительности (Drizzle & PostgreSQL)
+      CREATE INDEX IF NOT EXISTS users_partner_login_idx ON users(partner_login);
+      CREATE INDEX IF NOT EXISTS pair_requests_from_to_idx ON pair_requests(from_login, to_login);
+      CREATE INDEX IF NOT EXISTS pair_requests_to_login_idx ON pair_requests(to_login);
+      CREATE INDEX IF NOT EXISTS pair_requests_status_idx ON pair_requests(status);
+      CREATE INDEX IF NOT EXISTS chat_messages_couple_created_idx ON chat_messages(couple_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS chat_messages_sender_login_idx ON chat_messages(sender_login);
+      CREATE INDEX IF NOT EXISTS ai_insights_couple_created_idx ON ai_insights(couple_id, created_at DESC);
     `);
-    console.log("✅ PostgreSQL database tables initialized/verified.");
-  } catch (err: any) {
-    console.warn("PostgreSQL table init note (will use dual-storage fallback):", err?.message || err);
-  }
-
-  // Sync users between SQL and File Store
-  try {
-    const sqlUsers = await db.select().from(users);
-    const store = readDbFile();
-    let modified = false;
-
-    // Load SQL users to file store
-    for (const u of sqlUsers) {
-      const k = u.login.toLowerCase();
-      if (!store.users[k]) {
-        store.users[k] = u;
-        modified = true;
-      }
-    }
-
-    // Load file users to SQL if missing
-    for (const [k, u] of Object.entries(store.users)) {
-      if (u && typeof u === "object") {
-        const found = sqlUsers.find((su) => su.login.toLowerCase() === k);
-        if (!found) {
-          try {
-            await db.insert(users).values(u as any).onConflictDoNothing().catch(() => {});
-          } catch (_) {}
-        }
-      }
-    }
-
-    if (modified) {
-      writeDbFile(store);
-    }
-  } catch (err: any) {
-    console.warn("Initial sync note:", err?.message || err);
+    logger.info("Таблицы и индексы базы данных успешно проверены/созданы в PostgreSQL");
+  } catch (err: unknown) {
+    logger.error("Ошибка инициализации базы данных в PostgreSQL", err);
   }
 }
 
-// In-memory subscriptions store for Web Push notifications
-const pushSubscriptions: any[] = [];
+// ==========================================
+// 2. OBSERVABILITY: HEALTH CHECK
+// ==========================================
 
-// ===== AI CONFIGURATION (только Groq) =====
-const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
-const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
+app.get("/api/health", async (req, res) => {
+  const memory = process.memoryUsage();
+  let dbStatus = "not_configured";
+  let dbLatencyMs: number | null = null;
+  let isDegraded = false;
 
-// Перебор моделей ВНУТРИ Groq: если одна отключена, сработает следующая
-const GROQ_MODELS = [
-  "llama-3.3-70b-versatile",
-  "llama-3.1-8b-instant",
-  "openai/gpt-oss-120b",
-  "meta-llama/llama-4-scout-17b-16e-instruct",
-];
-
-async function callGroqChat(
-  messages: Array<{ role: string; content: string }>,
-): Promise<string | null> {
-  if (!GROQ_API_KEY) {
-    console.error("❌ [AI] GROQ_API_KEY не задан в окружении (.env)");
-    return null;
-  }
-
-  for (const model of GROQ_MODELS) {
+  if (isSqlConfigured() && db) {
+    const dbStart = Date.now();
     try {
-      const response = await fetch(GROQ_ENDPOINT, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${GROQ_API_KEY}`,
-        },
-        body: JSON.stringify({
-          messages,
-          model,
-          temperature: 0.5,
-          max_tokens: 650,
-          stream: false,
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const content = data.choices?.[0]?.message?.content;
-        if (content) {
-          console.log(`✅ [AI] Groq ответил (модель: ${model})`);
-          return content;
-        }
-      }
-
-      const errText = await response.text();
-      console.error(`❌ [AI] Groq ${model} → статус ${response.status}: ${errText.slice(0, 250)}`);
-      // Неверный/заблокированный ключ — пробовать другие модели бессмысленно
-      if (response.status === 401 || response.status === 403) return null;
-    } catch (err) {
-      console.error(`❌ [AI] Groq ${model} → сетевая ошибка:`, err);
+      await db.execute(sql`SELECT 1`);
+      dbLatencyMs = Date.now() - dbStart;
+      dbStatus = "connected";
+    } catch (err: unknown) {
+      dbStatus = "disconnected";
+      isDegraded = true;
+      logger.error("Health check: сбой проверки связи с базой данных", err);
     }
   }
-  return null;
-}
 
-// Fallback smart psychologist engine when online AI APIs are offline or rate-limited
-function generateSmartPsychologistReply(
-  userMessage: string,
-  partnerName: string,
-  partner2Name: string
-): string {
-  const text = (userMessage || "").toLowerCase();
+  const uptimeSeconds = Math.floor(process.uptime());
+  const hours = Math.floor(uptimeSeconds / 3600);
+  const minutes = Math.floor((uptimeSeconds % 3600) / 60);
+  const seconds = uptimeSeconds % 60;
+  const uptimeFormatted = `${hours}h ${minutes}m ${seconds}s`;
 
-  if (text.includes("ссора") || text.includes("ругаем") || text.includes("обид") || text.includes("конфликт") || text.includes("спор")) {
-    return `**Взгляд психолога**: За каждым острым конфликтом и обидой всегда стоит уязвимое чувство — страх быть неуслышанным или отвергнутым. Защитная реакция часто выглядит как злость, но корень зарыт глубже.
-
-**Практика / Готовая фраза**: Попробуйте взять паузу на 15 минут и сказать ${partner2Name}:
-«Мне очень жаль, что наш разговор зашёл в тупик. Я очень ценю нас и хочу всё обсудить спокойно, когда эмоции немного утихнут».
-
-**Вопрос для вас**: Какая именно ваша неудовлетворённая потребность стоит за этой ситуацией?`;
-  }
-
-  if (text.includes("ревн") || text.includes("измен") || text.includes("не довер")) {
-    return `**Взгляд психолога**: Ревность — это не признак нелюбви, а подсвеченный страх утраты безопасности и ценности в глазах партнёра.
-
-**Практика / Готовая фраза**: Поделитесь чувством через уязвимость с ${partner2Name}:
-«Знаешь, иногда во мне просыпается тревога. Мне очень важно слышать, что я для тебя ценен и важен».
-
-**Вопрос для вас**: Что партнёр может сделать сегодня, чтобы вы почувствовали большую надёжность?`;
-  }
-
-  if (text.includes("устал") || text.includes("быт") || text.includes("рутин") || text.includes("нет времени")) {
-    return `**Взгляд психолога**: Накопленная бытовая усталость незаметно истощает эмоциональный баланс пары. Если не пополнять «банк теплых впечатлений», обычные мелочи начинают раздражать.
-
-**Практика / Готовая фраза**: Договоритесь о 10-минутном ритуале с ${partner2Name}:
-«Давай сейчас на 10 минут отложим все телефоны и дела, просто выпьем чаю и обнимемся».
-
-**Вопрос для вас**: Какую одну бытовую обязанность вы можете облегчить или перераспределить на этой неделе?`;
-  }
-
-  if (text.includes("внимани") || text.includes("одиночест") || text.includes("холод") || text.includes("отдаля")) {
-    return `**Взгляд психолога**: Чувство дистанции в отношениях — это естественный сигнал о том, что ваш эмоциональный контакт требует обновления.
-
-**Практика / Готовая фраза**: Задайте ${partner2Name} тёплый открытый вопрос:
-«Я соскучился по нашим глубоким разговорам. Как ты себя чувствуешь в последнее время и о чём чаще всего думаешь?»
-
-**Вопрос для вас**: Какое совместное занятие раньше приносило вам больше всего радости и лёгкости?`;
-  }
-
-  return `**Взгляд психолога**: Любые переживания в паре — это точка роста для вашего эмоционального контакта. Главное — подходить к диалогу не из позиции претензий, а из желания понять друг друга.
-
-**Практика / Готовая фраза**: Попробуйте сформулировать мысль через Я-высказывание:
-«Я чувствую тревогу, когда происходят подобные ситуации, потому что для меня очень важна наша близость с ${partner2Name}».
-
-**Вопрос для вас**: Что прямо сейчас поможет вам почувствовать себя одной уверенной командой?`;
-}
-
-// Health check
-app.get("/api/health", (req, res) => {
-  res.json({
-    status: "ok",
-    appName: "Loop Pro",
-    version: "1.1.0",
-    totalUsers: 0,
-    hasGroqKey: Boolean(GROQ_API_KEY),
-    hasGeminiKey: Boolean(process.env.GEMINI_API_KEY),
+  res.status(isDegraded ? 503 : 200).json({
+    status: isDegraded ? "degraded" : "ok",
     timestamp: new Date().toISOString(),
+    uptime: uptimeFormatted,
+    uptimeSeconds,
+    environment: config.nodeEnv,
+    database: {
+      configured: isSqlConfigured(),
+      status: dbStatus,
+      ...(dbLatencyMs !== null ? { latencyMs: dbLatencyMs } : {}),
+    },
+    memory: {
+      rssMb: Math.round(memory.rss / (1024 * 1024)),
+      heapUsedMb: Math.round(memory.heapUsed / (1024 * 1024)),
+      heapTotalMb: Math.round(memory.heapTotal / (1024 * 1024)),
+    },
   });
 });
 
-// Stored Interfaces
-interface StoredUser {
-  id: string;
-  login: string;
-  passwordHash: string;
-  name: string;
-  avatarEmoji: string;
-  partnerLogin: string | null;
-  pairedAt?: string;
-  startDate?: string;
-  city?: string;
-  loveLanguage?: string;
-  attachmentStyle?: string;
-  currentMood?: {
-    emoji: string;
-    label: string;
-    note: string;
-    updatedAt: string;
-  };
-  createdAt: string;
-}
+// ==========================================
+// 3. AUTHENTICATION & USER MANAGEMENT
+// ==========================================
 
-// Helper: Get couple key from two logins
-
-// Auth: Get all safe users
 app.get("/api/auth/users", async (req, res) => {
   try {
     const userMap: Record<string, any> = {};
 
-    // 1. From File Store
-    const store = readDbFile();
-    for (const [k, u] of Object.entries(store.users || {})) {
-      if (u && typeof u === "object") {
-        const { passwordHash, ...safe } = u as any;
-        userMap[k.toLowerCase()] = safe;
-      }
-    }
-
-    // 2. From SQL if configured
-    if (isSqlConfigured()) {
+    if (isSqlConfigured() && db) {
       try {
         const allSqlUsers = await db.select().from(users);
         for (const u of allSqlUsers) {
-          const { passwordHash, ...safe } = u;
-          userMap[u.login.toLowerCase()] = safe;
-          saveUserToFile(u);
+          userMap[u.login.toLowerCase()] = toSafeUser(u);
         }
-      } catch (e) {
-        // Quiet fallback
+      } catch (err: unknown) {
+        logger.warn("Сбой чтения списка пользователей из SQL, чтение из файла", undefined, err);
+      }
+    }
+
+    if (Object.keys(userMap).length === 0) {
+      const store = readEmergencyFile();
+      for (const [k, u] of Object.entries(store.users || {})) {
+        if (u && typeof u === "object") {
+          userMap[k.toLowerCase()] = toSafeUser(u);
+        }
       }
     }
 
     return res.json({ users: Object.values(userMap) });
-  } catch (err) {
-    return res.status(500).json({ error: "Server error" });
+  } catch (err: unknown) {
+    logger.error("Ошибка в /api/auth/users", err);
+    return res.status(500).json({ error: "Внутренняя ошибка сервера" });
   }
 });
 
-// Admin: Wipe all accounts & data for clean deploy/production
 app.post("/api/admin/clear-all-data", async (req, res) => {
   try {
-    if (isSqlConfigured()) {
+    if (isSqlConfigured() && db) {
       try {
         await db.delete(users);
         await db.delete(pairRequests);
         await db.delete(coupleData);
         await db.delete(chatMessages);
-      } catch (e) {
-        // Quiet fallback
+        await db.delete(relationshipMetrics);
+        await db.delete(aiInsights);
+      } catch (err: unknown) {
+        logger.warn("Сбой очистки данных в SQL", undefined, err);
       }
     }
-    writeDbFile({ users: {}, pairRequests: [], coupleData: {}, chatMessages: [] });
+    writeEmergencyFile({ users: {}, pairRequests: [], coupleData: {}, chatMessages: [] });
+    logger.info("Все данные приложения очищены через административный запрос");
     return res.json({
       status: "ok",
-      message: "All accounts and data have been cleared successfully.",
+      message: "Все учётные записи и данные успешно очищены.",
     });
-  } catch (err) {
-    console.error("Clear data error:", err);
-    return res.status(500).json({ error: "Failed to clear data" });
+  } catch (err: unknown) {
+    logger.error("Ошибка очистки данных", err);
+    return res.status(500).json({ error: "Не удалось очистить данные" });
   }
 });
 
-function generateToken(login: string): string {
-  const secret = process.env.JWT_SECRET || "loop_secret_fallback_12345";
-  return jwt.sign({ login }, secret, { expiresIn: "30d" });
-}
-
-function requireAuth(req: any, res: any, next: any) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "Необходима авторизация" });
-  }
-  const token = authHeader.split(" ")[1];
-  try {
-    const secret = process.env.JWT_SECRET || "loop_secret_fallback_12345";
-    const decoded = jwt.verify(token, secret) as { login: string };
-    const userLogin = decoded.login;
-    req.userLogin = userLogin;
-
-    // RBAC: Generic checks against body/params to prevent accessing others' data
-    if (req.body && req.body.login && req.body.login !== userLogin) {
-      return res.status(403).json({ error: "Отказано в доступе (RBAC: login)" });
-    }
-    if (req.params && req.params.login && req.params.login !== userLogin) {
-      return res.status(403).json({ error: "Отказано в доступе (RBAC: params.login)" });
-    }
-    if (req.body && req.body.fromLogin && req.body.fromLogin !== userLogin) {
-      return res.status(403).json({ error: "Отказано в доступе (RBAC: fromLogin)" });
-    }
-    if (req.body && req.body.login1 && req.body.login2) {
-      if (req.body.login1 !== userLogin && req.body.login2 !== userLogin) {
-        return res.status(403).json({ error: "Отказано в доступе (RBAC: couple sync)" });
-      }
-    }
-    // Also protect coupleId paths, they look like login1_login2
-    if (req.params && req.params.coupleId) {
-      if (!req.params.coupleId.split('_').includes(userLogin)) {
-        return res.status(403).json({ error: "Отказано в доступе (RBAC: coupleId)" });
-      }
-    }
-    if (req.body && req.body.coupleId) {
-      if (!req.body.coupleId.split('_').includes(userLogin)) {
-        return res.status(403).json({ error: "Отказано в доступе (RBAC: body coupleId)" });
-      }
-    }
-    if (req.body && req.body.userLogin && req.body.userLogin !== userLogin) {
-       return res.status(403).json({ error: "Отказано в доступе (RBAC: body userLogin)" });
-    }
-
-    next();
-  } catch (err) {
-    return res.status(401).json({ error: "Недействительный или истёкший токен" });
-  }
-}
-
-// Auth: Sync local client accounts to server (prevents 404 on container restart)
 app.post("/api/auth/sync", async (req, res) => {
   try {
     const { accounts } = req.body;
-    let modified = false;
-    for (const [key, acc] of Object.entries(accounts || {})) {
-      if (acc && typeof acc === "object") {
-        const accObj = acc as Record<string, any>;
-        const cleanKey = String(accObj.login || key)
-          .trim()
-          .toLowerCase()
-          .replace(/^@/, "");
-        const existing = await findUserByLogin(cleanKey);
-        if (cleanKey && !existing) {
-          const rawPass = accObj.password ? String(accObj.password).trim() : "123456";
-          const hashedPassword = await bcrypt.hash(rawPass, 10);
-          const newUserRecord = {
-            id: accObj.id || "u_" + Date.now(),
-            login: cleanKey,
-            passwordHash: hashedPassword,
-            name: accObj.name || cleanKey,
-            avatarEmoji: accObj.avatarEmoji || "sparkles",
-            partnerLogin: accObj.partnerLogin || null,
-            pairedAt: accObj.pairedAt || null,
-            startDate: accObj.startDate || null,
-            city: accObj.city || null,
-            loveLanguage: accObj.loveLanguage || null,
-            attachmentStyle: accObj.attachmentStyle || null,
-            currentMood: accObj.currentMood || null,
-            createdAt: new Date().toISOString(),
-          };
-          if (isSqlConfigured()) {
-            try {
-              await db.insert(users).values(newUserRecord).onConflictDoNothing();
-            } catch (_) {}
-          }
-          saveUserToFile(newUserRecord);
-          modified = true;
+    if (!Array.isArray(accounts)) {
+      return res.status(400).json({ error: "accounts must be an array" });
+    }
+
+    for (const acc of accounts) {
+      if (acc && acc.login) {
+        const existing = await findUserByLogin(acc.login);
+        if (!existing) {
+          const now = new Date().toISOString();
+          const cleanLogin = String(acc.login).toLowerCase().replace(/^@/, "");
+          const passwordHash = acc.passwordHash || (await bcrypt.hash(acc.password || "password123", 10));
+
+          await upsertUser({
+            id: acc.id || crypto.randomUUID(),
+            login: cleanLogin,
+            passwordHash,
+            name: acc.name || cleanLogin,
+            gender: acc.gender || null,
+            avatarEmoji: acc.avatarEmoji || "sparkles",
+            partnerLogin: acc.partnerLogin ? String(acc.partnerLogin).toLowerCase() : null,
+            pairedAt: acc.pairedAt || null,
+            startDate: acc.startDate || null,
+            city: acc.city || null,
+            loveLanguage: acc.loveLanguage || null,
+            attachmentStyle: acc.attachmentStyle || null,
+            currentMood: acc.currentMood || null,
+            lastActiveAt: now,
+            createdAt: acc.createdAt || now,
+          });
         }
       }
     }
-    return res.json({ status: "ok", synced: modified });
-  } catch (err) {
-    return res.status(500).json({ error: "Server error" });
+
+    return res.json({ status: "synced" });
+  } catch (err: unknown) {
+    logger.error("Ошибка синхронизации аккаунтов /api/auth/sync", err);
+    return res.status(500).json({ error: "Ошибка синхронизации" });
   }
 });
 
-// Auth: Register (Login + Password)
-app.post("/api/auth/register", async (req, res) => {
+app.post("/api/auth/register", registerLimiter, validateBody(registerSchema), async (req, res) => {
   try {
-    const { login, password, name, gender, avatarEmoji } = req.body;
-    const cleanLogin = String(login || "")
-      .trim()
-      .toLowerCase()
-      .replace(/^@/, "");
-    const cleanInputPass = String(password || "").trim();
-
-    if (!cleanLogin || cleanLogin.length < 3) {
-      return res
-        .status(400)
-        .json({ error: "Логин должен содержать от 3 символов" });
-    }
-    if (!cleanInputPass || cleanInputPass.length < 3) {
-      return res
-        .status(400)
-        .json({ error: "Пароль должен содержать от 3 символов" });
-    }
+    const { login, password, name } = req.body;
+    const cleanLogin = String(login).trim().toLowerCase().replace(/^@/, "");
 
     const existing = await findUserByLogin(cleanLogin);
     if (existing) {
       return res.status(400).json({ error: "Пользователь с таким логином уже существует" });
     }
 
-    const hashedPassword = await bcrypt.hash(cleanInputPass, 10);
-    const defaultEmoji = avatarEmoji || (gender === 'female' ? 'female' : gender === 'male' ? 'male' : 'sparkles');
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+    const now = new Date().toISOString();
+    const userId = crypto.randomUUID();
 
-    const newUser = {
-      id: "u_" + Date.now() + "_" + Math.random().toString(36).substring(7),
+    const newUser: DbUser = {
+      id: userId,
       login: cleanLogin,
-      passwordHash: hashedPassword,
-      name: name ? String(name).trim() : cleanLogin,
-      gender: gender ? String(gender) : (cleanLogin.endsWith('a') || cleanLogin.endsWith('ya') ? 'female' : 'male'),
-      avatarEmoji: defaultEmoji,
+      passwordHash,
+      name: name?.trim() || cleanLogin,
+      gender: null,
+      avatarEmoji: "sparkles",
       partnerLogin: null,
       pairedAt: null,
       startDate: null,
@@ -731,836 +454,554 @@ app.post("/api/auth/register", async (req, res) => {
       loveLanguage: null,
       attachmentStyle: null,
       currentMood: null,
-      createdAt: new Date().toISOString(),
+      lastActiveAt: now,
+      createdAt: now,
     };
 
-    if (isSqlConfigured()) {
-      try {
-        await db.insert(users).values(newUser).onConflictDoNothing();
-      } catch (sqlErr) {
-        // Quiet fallback
-      }
-    }
-    saveUserToFile(newUser);
+    await upsertUser(newUser);
+    const token = generateToken(cleanLogin);
+    logger.info("Новый пользователь успешно зарегистрирован", { login: cleanLogin });
 
-    const { passwordHash, ...safeUser } = newUser;
-    const token = generateToken(newUser.login);
-    return res.json({ status: "ok", user: safeUser, token });
-  } catch (err: any) {
-    console.error("Register error:", err);
-    return res.status(500).json({ error: "Ошибка регистрации: " + (err?.message || String(err)) });
+    return res.status(201).json({
+      token,
+      user: toSafeUser(newUser),
+    });
+  } catch (err: unknown) {
+    logger.error("Ошибка регистрации пользователя", err);
+    return res.status(500).json({ error: "Ошибка при регистрации" });
   }
 });
 
-// Auth: Login (Login + Password)
-app.post("/api/auth/login", async (req, res) => {
+app.post("/api/auth/login", loginLimiter, validateBody(loginRequestSchema), async (req, res) => {
   try {
     const { login, password } = req.body;
-    const cleanLogin = String(login || "")
-      .trim()
-      .toLowerCase()
-      .replace(/^@/, "");
-    const cleanInputPass = String(password || "").trim();
+    const cleanLogin = String(login).trim().toLowerCase().replace(/^@/, "");
 
-    if (!cleanLogin || !cleanInputPass) {
-      return res.status(400).json({ error: "Заполните логин и пароль" });
+    const user = await findUserByLogin(cleanLogin);
+
+    // Constant-time check mitigation
+    if (!user) {
+      await bcrypt.compare(password, DUMMY_HASH);
+      return res.status(401).json({ error: "Неверный логин или пароль" });
     }
 
-    // Rate Limiting Check
-    const rateKey = `${req.ip}_${cleanLogin}`;
-    const rateCheck = checkLoginRateLimit(rateKey);
-    if (!rateCheck.allowed) {
-      return res.status(429).json({
-        error: "Слишком много неудачных попыток входа. Попробуйте позже.",
-      });
+    const match = await verifyPassword(password, user.passwordHash);
+    if (!match) {
+      logger.security("Неудачная попытка входа", { login: cleanLogin, ip: req.ip });
+      return res.status(401).json({ error: "Неверный логин или пароль" });
     }
+
+    // Update lastActiveAt
+    const now = new Date().toISOString();
+    user.lastActiveAt = now;
+    await upsertUser(user);
+
+    const token = generateToken(cleanLogin);
+    logger.info("Пользователь успешно вошёл в систему", { login: cleanLogin });
+
+    return res.json({
+      token,
+      user: toSafeUser(user),
+    });
+  } catch (err: unknown) {
+    logger.error("Ошибка входа пользователя", err);
+    return res.status(500).json({ error: "Ошибка при авторизации" });
+  }
+});
+
+app.get("/api/auth/user/:login", requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const paramLogin = String(req.params.login || "").toLowerCase().replace(/^@/, "");
+    const userLogin = req.user?.login;
+
+    if (paramLogin !== userLogin) {
+      return res.status(403).json({ error: "Нет доступа к чужому профилю" });
+    }
+
+    const user = await findUserByLogin(paramLogin);
+    if (!user) {
+      return res.status(404).json({ error: "Пользователь не найден" });
+    }
+
+    return res.json({ user: toSafeUser(user) });
+  } catch (err: unknown) {
+    logger.error("Ошибка получения профиля пользователя", err);
+    return res.status(500).json({ error: "Ошибка сервера" });
+  }
+});
+
+app.post("/api/auth/update-profile", requireAuth, validateBody(updateProfileSchema), async (req: AuthenticatedRequest, res) => {
+  try {
+    const userLogin = req.user?.login;
+    if (!userLogin) return res.status(401).json({ error: "Неавторизован" });
+
+    const user = await findUserByLogin(userLogin);
+    if (!user) return res.status(404).json({ error: "Пользователь не найден" });
+
+    const { name, gender, avatarEmoji, city, startDate, loveLanguage, attachmentStyle, currentMood } = req.body;
+
+    if (name !== undefined) user.name = name;
+    if (gender !== undefined) user.gender = gender;
+    if (avatarEmoji !== undefined) user.avatarEmoji = avatarEmoji;
+    if (city !== undefined) user.city = city;
+    if (startDate !== undefined) user.startDate = startDate;
+    if (loveLanguage !== undefined) user.loveLanguage = loveLanguage;
+    if (attachmentStyle !== undefined) user.attachmentStyle = attachmentStyle;
+    if (currentMood !== undefined) user.currentMood = currentMood;
+    user.lastActiveAt = new Date().toISOString();
+
+    await upsertUser(user);
+    logger.info("Профиль пользователя обновлен", { login: userLogin });
+    return res.json({ user: toSafeUser(user) });
+  } catch (err: unknown) {
+    logger.error("Ошибка обновления профиля", err);
+    return res.status(500).json({ error: "Ошибка при обновлении профиля" });
+  }
+});
+
+app.post("/api/auth/change-password", requireAuth, validateBody(changePasswordSchema), async (req: AuthenticatedRequest, res) => {
+  try {
+    const userLogin = req.user?.login;
+    if (!userLogin) return res.status(401).json({ error: "Неавторизован" });
+
+    const user = await findUserByLogin(userLogin);
+    if (!user) return res.status(404).json({ error: "Пользователь не найден" });
+
+    const { oldPassword, newPassword } = req.body;
+    const match = await verifyPassword(oldPassword, user.passwordHash);
+    if (!match) {
+      return res.status(400).json({ error: "Старый пароль указан неверно" });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    user.passwordHash = await bcrypt.hash(newPassword, salt);
+    await upsertUser(user);
+
+    logger.info("Пароль пользователя успешно изменен", { login: userLogin });
+    return res.json({ status: "ok", message: "Пароль успешно изменён" });
+  } catch (err: unknown) {
+    logger.error("Ошибка смены пароля", err);
+    return res.status(500).json({ error: "Ошибка сервера при смене пароля" });
+  }
+});
+
+app.post("/api/auth/reset-password", validateBody(resetPasswordSchema), async (req, res) => {
+  try {
+    const { login, newPassword } = req.body;
+    const cleanLogin = String(login).toLowerCase().replace(/^@/, "");
 
     const user = await findUserByLogin(cleanLogin);
     if (!user) {
-      // Execute dummy compare to prevent timing side-channel attacks
-      await bcrypt.compare(cleanInputPass, DUMMY_HASH);
-      recordFailedLoginAttempt(rateKey);
-      return res.status(401).json({ error: "Неверный логин или пароль" });
+      return res.status(404).json({ error: "Пользователь с таким логином не найден" });
     }
 
-    const isMatch = await verifyPassword(cleanInputPass, user.passwordHash);
-    if (!isMatch) {
-      recordFailedLoginAttempt(rateKey);
-      return res.status(401).json({ error: "Неверный логин или пароль" });
+    const salt = await bcrypt.genSalt(10);
+    user.passwordHash = await bcrypt.hash(newPassword, salt);
+    await upsertUser(user);
+
+    logger.info("Пароль сброшен", { login: cleanLogin });
+    return res.json({ status: "ok", message: "Пароль успешно сброшен" });
+  } catch (err: unknown) {
+    logger.error("Ошибка сброса пароля", err);
+    return res.status(500).json({ error: "Ошибка при сбросе пароля" });
+  }
+});
+
+// ==========================================
+// 4. PAIR CONNECTION & DISCONNECT
+// ==========================================
+
+app.post("/api/pair/request", requireAuth, pairLimiter, validateBody(pairRequestSchema), async (req: AuthenticatedRequest, res) => {
+  try {
+    const { fromLogin, toLogin } = req.body;
+    const userLogin = req.user?.login;
+
+    if (fromLogin !== userLogin) {
+      return res.status(403).json({ error: "Нельзя отправить запрос от чужого имени" });
+    }
+    if (fromLogin === toLogin) {
+      return res.status(400).json({ error: "Нельзя связать пару с самим собой" });
     }
 
-    // Clear failed attempts on successful login
-    clearLoginRateLimit(rateKey);
+    const fromUser = await findUserByLogin(fromLogin);
+    const toUser = await findUserByQuery(toLogin);
 
-    // Auto-migrate legacy plaintext password to bcrypt hash
-    if (!user.passwordHash.startsWith("$2a$") && !user.passwordHash.startsWith("$2b$") && !user.passwordHash.startsWith("$2y$")) {
+    if (!fromUser) return res.status(404).json({ error: "Отправитель не найден" });
+    if (!toUser) return res.status(404).json({ error: "Партнёр с таким логином или именем не найден" });
+
+    const reqObj = await createPairRequest(fromUser, toUser);
+    return res.status(201).json({ request: reqObj, message: "Запрос на соединение отправлен" });
+  } catch (err: unknown) {
+    logger.error("Ошибка создания запроса на соединение пары", err);
+    return res.status(500).json({ error: "Ошибка отправки запроса на соединение" });
+  }
+});
+
+app.post("/api/pair/accept", requireAuth, validateBody(pairAcceptSchema), async (req: AuthenticatedRequest, res) => {
+  try {
+    const { fromLogin, toLogin } = req.body;
+    const userLogin = req.user?.login;
+
+    // The user accepting must be toLogin
+    if (toLogin !== userLogin) {
+      return res.status(403).json({ error: "Вы не можете принять чужой запрос" });
+    }
+
+    const { updatedMe, updatedPartner } = await acceptPair(toLogin, fromLogin);
+    return res.json({
+      status: "connected",
+      me: updatedMe ? toSafeUser(updatedMe) : null,
+      partner: updatedPartner ? toSafeUser(updatedPartner) : null,
+    });
+  } catch (err: unknown) {
+    logger.error("Ошибка принятия запроса пары", err);
+    return res.status(500).json({ error: "Ошибка соединения пары" });
+  }
+});
+
+app.post("/api/pair/reject", requireAuth, validateBody(pairRejectSchema), async (req: AuthenticatedRequest, res) => {
+  try {
+    const { fromLogin, toLogin } = req.body;
+    const userLogin = req.user?.login;
+
+    if (toLogin !== userLogin) {
+      return res.status(403).json({ error: "Нет доступа" });
+    }
+
+    if (isSqlConfigured() && db) {
       try {
-        const newHash = await bcrypt.hash(cleanInputPass, 10);
-        if (isSqlConfigured()) {
-          await db.update(users).set({ passwordHash: newHash }).where(eq(users.login, user.login)).catch(() => {});
-        }
-        user.passwordHash = newHash;
-        saveUserToFile(user);
-      } catch (migrationErr) {
-        // Quiet fallback
+        await db.delete(pairRequests).where(
+          and(eq(pairRequests.fromLogin, fromLogin), eq(pairRequests.toLogin, toLogin))
+        );
+      } catch (err: unknown) {
+        logger.warn("Сбой удаления запроса пары из SQL", undefined, err);
       }
     }
 
-    const { passwordHash, ...safeUser } = user;
-    let partnerSafe = null;
-    if (user.partnerLogin) {
-      const p = await findUserByLogin(user.partnerLogin);
-      if (p) {
-        const { passwordHash: ph2, ...rest } = p;
-        partnerSafe = rest;
-      }
+    const store = readEmergencyFile();
+    if (store.pairRequests) {
+      store.pairRequests = store.pairRequests.filter(
+        (r) => !(r.fromLogin === fromLogin && r.toLogin === toLogin)
+      );
+      writeEmergencyFile(store);
     }
 
-    const token = generateToken(user.login);
-    return res.json({ status: "ok", user: safeUser, partner: partnerSafe, token });
-  } catch (err: any) {
-    console.error("Login error:", err);
-    return res.status(500).json({ error: "Ошибка входа: " + (err?.message || String(err)) });
+    return res.json({ status: "rejected" });
+  } catch (err: unknown) {
+    logger.error("Ошибка отклонения запроса пары", err);
+    return res.status(500).json({ error: "Ошибка при отклонении" });
   }
 });
 
-// Auth: Get User by Login
-app.get("/api/auth/user/:login", requireAuth, async (req, res) => {
+app.post("/api/pair/disconnect", requireAuth, validateBody(pairDisconnectSchema), async (req: AuthenticatedRequest, res) => {
   try {
-    const user = await findUserByLogin(req.params.login);
-    if (!user) return res.status(404).json({ error: "Пользователь не найден" });
-    const { passwordHash, ...safeUser } = user;
-    return res.json({ user: safeUser });
-  } catch (err) {
-    return res.status(500).json({ error: "Server error" });
+    const { login } = req.body;
+    const userLogin = req.user?.login;
+
+    if (login !== userLogin) {
+      return res.status(403).json({ error: "Нет доступа к разрыву чужой пары" });
+    }
+
+    const result = await disconnectPair(login);
+    if (result.error) {
+      return res.status(result.status).json({ error: result.error });
+    }
+
+    return res.json({
+      status: "disconnected",
+      user: result.updatedUser ? toSafeUser(result.updatedUser) : null,
+    });
+  } catch (err: unknown) {
+    logger.error("Ошибка разъединения пары", err);
+    return res.status(500).json({ error: "Ошибка разъединения пары" });
   }
 });
 
-// Auth: Update Profile
-app.post("/api/auth/update-profile", requireAuth, async (req, res) => {
+app.get("/api/pair/status/:login", requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
-    const {
-      login,
-      name,
-      gender,
-      avatarEmoji,
-      loveLanguage,
-      attachmentStyle,
-      currentMood,
-      startDate,
-      city,
-    } = req.body;
+    const login = String(req.params.login || "").toLowerCase().replace(/^@/, "");
+    const userLogin = req.user?.login;
+
+    if (login !== userLogin) {
+      return res.status(403).json({ error: "Нет доступа к статусу чужой пары" });
+    }
+
     const user = await findUserByLogin(login);
     if (!user) return res.status(404).json({ error: "Пользователь не найден" });
 
-    const updates: Record<string, any> = {};
-    if (name !== undefined) updates.name = String(name).trim();
-    if (gender !== undefined) updates.gender = String(gender);
-    if (avatarEmoji !== undefined) updates.avatarEmoji = String(avatarEmoji);
-    if (loveLanguage !== undefined) updates.loveLanguage = String(loveLanguage);
-    if (attachmentStyle !== undefined)
-      updates.attachmentStyle = String(attachmentStyle);
-    if (startDate !== undefined) updates.startDate = String(startDate);
-    if (city !== undefined) updates.city = String(city);
-    if (currentMood !== undefined) updates.currentMood = currentMood;
+    let partner: DbUser | undefined;
+    if (user.partnerLogin) {
+      partner = await findUserByLogin(user.partnerLogin);
+    }
 
-    if (isSqlConfigured()) {
+    let incoming: any[] = [];
+    let outgoing: any[] = [];
+
+    if (isSqlConfigured() && db) {
       try {
-        await db.update(users).set(updates).where(eq(users.login, user.login));
-      } catch (_) {}
-    }
-    const updatedUser = { ...user, ...updates };
-    saveUserToFile(updatedUser);
-    const { passwordHash, ...safeUser } = updatedUser;
-    return res.json({ status: "ok", user: safeUser });
-  } catch (err) {
-    return res.status(500).json({ error: "Ошибка обновления профиля" });
-  }
-});
-
-// Auth: Change Password
-app.post("/api/auth/change-password", requireAuth, async (req, res) => {
-  try {
-    const { login, oldPassword, newPassword } = req.body;
-    const cleanLogin = String(login || "").trim().toLowerCase().replace(/^@/, "");
-    const cleanOld = String(oldPassword || "").trim();
-    const cleanNew = String(newPassword || "").trim();
-
-    if (!cleanLogin) return res.status(400).json({ error: "Укажите логин" });
-    if (!cleanOld || !cleanNew || cleanNew.length < 3) {
-      return res.status(400).json({ error: "Новый пароль должен содержать от 3 символов" });
-    }
-
-    const user = await findUserByLogin(cleanLogin);
-    if (!user) return res.status(401).json({ error: "Неверный логин или пароль" });
-
-    const isMatch = await verifyPassword(cleanOld, user.passwordHash);
-    if (!isMatch) {
-      return res.status(401).json({ error: "Неверный старый пароль" });
-    }
-
-    const newHash = await bcrypt.hash(cleanNew, 10);
-    if (isSqlConfigured()) {
-      try {
-        await db
-          .update(users)
-          .set({ passwordHash: newHash })
-          .where(eq(users.login, user.login));
-      } catch (_) {}
-    }
-
-    user.passwordHash = newHash;
-    saveUserToFile(user);
-
-    return res.json({ status: "ok", message: "Пароль успешно изменён" });
-  } catch (err) {
-    return res.status(500).json({ error: "Ошибка смены пароля" });
-  }
-});
-
-// Auth: Reset Password (when user forgot password)
-app.post("/api/auth/reset-password", requireAuth, async (req, res) => {
-  try {
-    const { login, newPassword } = req.body;
-    const cleanLogin = String(login || "")
-      .trim()
-      .toLowerCase()
-      .replace(/^@/, "");
-    const cleanNewPass = String(newPassword || "").trim();
-
-    if (!cleanLogin) return res.status(400).json({ error: "Укажите логин" });
-    if (!cleanNewPass || cleanNewPass.length < 3)
-      return res.status(400).json({ error: "Новый пароль должен содержать от 3 символов" });
-
-    const user = await findUserByLogin(cleanLogin);
-    if (!user) return res.status(404).json({ error: `Пользователь @${cleanLogin} не найден` });
-
-    const newHash = await bcrypt.hash(cleanNewPass, 10);
-    if (isSqlConfigured()) {
-      try {
-        await db
-          .update(users)
-          .set({ passwordHash: newHash })
-          .where(eq(users.login, user.login));
-      } catch (_) {}
-    }
-
-    user.passwordHash = newHash;
-    saveUserToFile(user);
-
-    const { passwordHash, ...safeUser } = user;
-    return res.json({ status: "ok", user: safeUser, message: "Пароль успешно обновлён" });
-  } catch (err) {
-    return res.status(500).json({ error: "Ошибка сброса пароля" });
-  }
-});
-
-// Pairing: Send Pair Request by Login
-app.post("/api/pair/request", requireAuth, async (req, res) => {
-  try {
-    const { fromLogin, toLogin } = req.body;
-    const cleanFrom = String(fromLogin || "")
-      .trim()
-      .toLowerCase()
-      .replace(/^@/, "");
-    const cleanTo = String(toLogin || "")
-      .trim()
-      .toLowerCase()
-      .replace(/^@/, "");
-
-    if (!cleanFrom || !cleanTo)
-      return res
-        .status(400)
-        .json({ error: "Укажите логины обоих пользователей" });
-    if (cleanFrom === cleanTo)
-      return res
-        .status(400)
-        .json({ error: "Вы не можете создать пару с самим собой" });
-
-    const fromUser = await findUserByQuery(cleanFrom);
-    if (!fromUser)
-      return res.status(404).json({ error: "Ваш аккаунт не найден." });
-
-    const toUser = await findUserByQuery(cleanTo);
-    if (!toUser)
-      return res
-        .status(404)
-        .json({ error: `Пользователь @${cleanTo} пока не зарегистрирован.` });
-
-    // 1. If already paired with each other (or one of them is already linked to the other)
-    const isFromLinkedToTarget = fromUser.partnerLogin && fromUser.partnerLogin.toLowerCase() === cleanTo;
-    const isToLinkedToFrom = toUser.partnerLogin && toUser.partnerLogin.toLowerCase() === cleanFrom;
-
-    if (isFromLinkedToTarget || isToLinkedToFrom) {
-      const now = fromUser.pairedAt || toUser.pairedAt || new Date().toISOString();
-      if (isSqlConfigured()) {
-        try {
-          await db.update(users).set({ partnerLogin: cleanTo, pairedAt: now }).where(eq(users.login, cleanFrom));
-          await db.update(users).set({ partnerLogin: cleanFrom, pairedAt: now }).where(eq(users.login, cleanTo));
-          await db.delete(pairRequests).where(
-            or(
-              and(eq(pairRequests.fromLogin, cleanTo), eq(pairRequests.toLogin, cleanFrom)),
-              and(eq(pairRequests.fromLogin, cleanFrom), eq(pairRequests.toLogin, cleanTo))
-            )
-          );
-        } catch (_) {}
-      }
-
-      saveUserToFile({ ...fromUser, partnerLogin: cleanTo, pairedAt: now });
-      saveUserToFile({ ...toUser, partnerLogin: cleanFrom, pairedAt: now });
-      removePairRequestsFromFile(
-        (r) =>
-          (r.fromLogin === cleanTo && r.toLogin === cleanFrom) ||
-          (r.fromLogin === cleanFrom && r.toLogin === cleanTo)
-      );
-
-      const updatedFrom = await findUserByQuery(cleanFrom);
-      const updatedTo = await findUserByQuery(cleanTo);
-      const { passwordHash: p1, ...safeFrom } = updatedFrom;
-      const { passwordHash: p2, ...safeTo } = updatedTo;
-      return res.json({
-        status: "paired",
-        message: `Вы успешно объединены в пару с @${cleanTo}!`,
-        user: safeFrom,
-        partner: safeTo,
-      });
-    }
-
-    // 2. If current user is already in a pair with another user
-    if (fromUser.partnerLogin) {
-      return res
-        .status(400)
-        .json({ error: `Вы уже состоите в паре с @${fromUser.partnerLogin}. Сначала отвяжите партнёра в кабинете.` });
-    }
-
-    // 3. If target user is already in a pair with another user
-    if (toUser.partnerLogin) {
-      return res
-        .status(400)
-        .json({ error: `Пользователь @${cleanTo} уже состоит в паре с другим пользователем.` });
-    }
-
-    const store = readDbFile();
-    const fileReqs = store.pairRequests || [];
-
-    const existingReq = fileReqs.some(
-      (r) => r.fromLogin === cleanFrom && r.toLogin === cleanTo && r.status === "PENDING"
-    );
-    if (existingReq)
-      return res
-        .status(400)
-        .json({ error: "Вы уже отправили запрос этому пользователю." });
-
-    const existingInverseReq = fileReqs.some(
-      (r) => r.fromLogin === cleanTo && r.toLogin === cleanFrom && r.status === "PENDING"
-    );
-    if (existingInverseReq) {
-      // Auto accept
-      const now = new Date().toISOString();
-      if (isSqlConfigured()) {
-        try {
-          await db.update(users).set({ partnerLogin: cleanFrom, pairedAt: now }).where(eq(users.login, cleanTo));
-          await db.update(users).set({ partnerLogin: cleanTo, pairedAt: now }).where(eq(users.login, cleanFrom));
-          await db.delete(pairRequests).where(
-            and(eq(pairRequests.fromLogin, cleanTo), eq(pairRequests.toLogin, cleanFrom))
-          );
-        } catch (_) {}
-      }
-
-      saveUserToFile({ ...fromUser, partnerLogin: cleanTo, pairedAt: now });
-      saveUserToFile({ ...toUser, partnerLogin: cleanFrom, pairedAt: now });
-      removePairRequestsFromFile(
-        (r) => r.fromLogin === cleanTo && r.toLogin === cleanFrom
-      );
-
-      const updatedFrom = await findUserByQuery(cleanFrom);
-      const updatedTo = await findUserByQuery(cleanTo);
-      const { passwordHash: p1, ...safeFrom } = updatedFrom;
-      const { passwordHash: p2, ...safeTo } = updatedTo;
-      return res.json({
-        status: "paired",
-        message: "Вы успешно создали пару (встречный запрос принят)!",
-        user: safeFrom,
-        partner: safeTo,
-      });
-    }
-
-    const newReq = {
-      id: "req_" + Date.now(),
-      fromLogin: cleanFrom,
-      fromName: fromUser.name || cleanFrom,
-      fromAvatar: fromUser.avatarEmoji || "sparkles",
-      toLogin: cleanTo,
-      status: "PENDING",
-      createdAt: new Date().toISOString(),
-    };
-
-    if (isSqlConfigured()) {
-      try {
-        await db.insert(pairRequests).values(newReq);
-      } catch (_) {}
-    }
-    addPairRequestToFile(newReq);
-
-    return res.json({ status: "ok", message: "Запрос успешно отправлен!" });
-  } catch (err) {
-    console.error("Pair request error:", err);
-    return res.status(500).json({ error: "Ошибка отправки запроса" });
-  }
-});
-
-// Pairing: Accept Pair Request
-app.post("/api/pair/accept", requireAuth, async (req, res) => {
-  try {
-    const { myLogin, partnerLogin } = req.body;
-    const cleanMe = String(myLogin).trim().toLowerCase().replace(/^@/, "");
-    const cleanPartner = String(partnerLogin)
-      .trim()
-      .toLowerCase()
-      .replace(/^@/, "");
-
-    const meUser = await findUserByQuery(cleanMe);
-    const partnerUser = await findUserByQuery(cleanPartner);
-
-    if (!meUser || !partnerUser)
-      return res.status(404).json({ error: "Пользователь не найден" });
-
-    const now = new Date().toISOString();
-    if (isSqlConfigured()) {
-      try {
-        await db.update(users).set({ partnerLogin: cleanPartner, pairedAt: now }).where(eq(users.login, cleanMe));
-        await db.update(users).set({ partnerLogin: cleanMe, pairedAt: now }).where(eq(users.login, cleanPartner));
-        await db.delete(pairRequests).where(
-          or(
-            and(eq(pairRequests.fromLogin, cleanPartner), eq(pairRequests.toLogin, cleanMe)),
-            and(eq(pairRequests.fromLogin, cleanMe), eq(pairRequests.toLogin, cleanPartner))
-          )
-        );
-      } catch (_) {}
-    }
-
-    saveUserToFile({ ...meUser, partnerLogin: cleanPartner, pairedAt: now });
-    saveUserToFile({ ...partnerUser, partnerLogin: cleanMe, pairedAt: now });
-    removePairRequestsFromFile(
-      (r) =>
-        (r.fromLogin === cleanPartner && r.toLogin === cleanMe) ||
-        (r.fromLogin === cleanMe && r.toLogin === cleanPartner)
-    );
-
-    const updatedMe = await findUserByQuery(cleanMe);
-    const updatedPartner = await findUserByQuery(cleanPartner);
-
-    const { passwordHash: p1, ...safeMe } = updatedMe;
-    const { passwordHash: p2, ...safePartner } = updatedPartner;
-    return res.json({ status: "ok", user: safeMe, partner: safePartner });
-  } catch (err) {
-    console.error("Accept pair error:", err);
-    return res.status(500).json({ error: "Ошибка подтверждения пары" });
-  }
-});
-
-// Pairing: Reject Pair Request
-app.post("/api/pair/reject", requireAuth, async (req, res) => {
-  try {
-    const { myLogin, partnerLogin } = req.body;
-    const cleanMe = String(myLogin).trim().toLowerCase().replace(/^@/, "");
-    const cleanPartner = String(partnerLogin)
-      .trim()
-      .toLowerCase()
-      .replace(/^@/, "");
-
-    if (isSqlConfigured()) {
-      try {
-        await db.delete(pairRequests).where(
-          or(
-            and(eq(pairRequests.fromLogin, cleanPartner), eq(pairRequests.toLogin, cleanMe)),
-            and(eq(pairRequests.fromLogin, cleanMe), eq(pairRequests.toLogin, cleanPartner))
-          )
-        );
-      } catch (_) {}
-    }
-
-    removePairRequestsFromFile(
-      (r) =>
-        (r.fromLogin === cleanPartner && r.toLogin === cleanMe) ||
-        (r.fromLogin === cleanMe && r.toLogin === cleanPartner)
-    );
-
-    return res.json({ status: "ok" });
-  } catch (err) {
-    console.error("Reject pair error:", err);
-    return res.status(500).json({ error: "Ошибка отклонения запроса" });
-  }
-});
-
-// Pairing: Disconnect / Unpair
-app.post("/api/pair/disconnect", requireAuth, async (req, res) => {
-  try {
-    const { login } = req.body;
-    const cleanLogin = String(login || "")
-      .trim()
-      .toLowerCase()
-      .replace(/^@/, "");
-    const user = await findUserByQuery(cleanLogin);
-    if (!user) return res.status(404).json({ error: "Пользователь не найден" });
-
-    const partnerLogin = user.partnerLogin;
-    if (isSqlConfigured()) {
-      try {
-        await db.update(users).set({ partnerLogin: null, pairedAt: null }).where(eq(users.login, cleanLogin));
-        if (partnerLogin) {
-          await db.update(users).set({ partnerLogin: null, pairedAt: null }).where(eq(users.login, partnerLogin));
-        }
-      } catch (_) {}
-    }
-
-    saveUserToFile({ ...user, partnerLogin: null, pairedAt: null });
-
-    if (partnerLogin) {
-      const partnerUser = await findUserByQuery(partnerLogin);
-      if (partnerUser) {
-        saveUserToFile({ ...partnerUser, partnerLogin: null, pairedAt: null });
+        incoming = await db.select().from(pairRequests).where(and(eq(pairRequests.toLogin, login), eq(pairRequests.status, "PENDING")));
+        outgoing = await db.select().from(pairRequests).where(and(eq(pairRequests.fromLogin, login), eq(pairRequests.status, "PENDING")));
+      } catch (err: unknown) {
+        logger.warn("Сбой выборки pair_requests из SQL, чтение из файла", undefined, err);
       }
     }
 
-    const updatedUser = await findUserByQuery(cleanLogin);
-    const { passwordHash, ...safeUser } = updatedUser;
-    return res.json({ status: "ok", user: safeUser });
-  } catch (err) {
-    console.error("Disconnect error:", err);
-    return res.status(500).json({ error: "Ошибка разрыва пары" });
-  }
-});
-
-// Pairing: Get Pair Status & Pending Requests
-app.get("/api/pair/status/:login", requireAuth, async (req, res) => {
-  try {
-    const login = String(req.params.login)
-      .trim()
-      .toLowerCase()
-      .replace(/^@/, "");
-
-    let user = await findUserByQuery(login);
-    let partner = null;
-
-    if (user?.partnerLogin) {
-      partner = await findUserByQuery(user.partnerLogin);
-      // Auto-heal bidirectional link if partner didn't have user set
-      if (partner && (!partner.partnerLogin || partner.partnerLogin.toLowerCase() !== login)) {
-        const pairedAt = user.pairedAt || new Date().toISOString();
-        partner.partnerLogin = login;
-        partner.pairedAt = pairedAt;
-        saveUserToFile(partner);
-        if (isSqlConfigured()) {
-          await db.update(users).set({ partnerLogin: login, pairedAt }).where(eq(users.login, partner.login)).catch(() => {});
-        }
-      }
-    } else if (user) {
-      // Check if another user points to this user as partner
-      const allStore = readDbFile();
-      const linked = Object.values(allStore.users).find((u: any) => u && u.partnerLogin && String(u.partnerLogin).toLowerCase() === login);
-      if (linked) {
-        const pairedAt = linked.pairedAt || new Date().toISOString();
-        user.partnerLogin = linked.login;
-        user.pairedAt = pairedAt;
-        saveUserToFile(user);
-        if (isSqlConfigured()) {
-          await db.update(users).set({ partnerLogin: linked.login, pairedAt }).where(eq(users.login, login)).catch(() => {});
-        }
-        partner = linked;
-      }
+    if (incoming.length === 0 && outgoing.length === 0) {
+      const store = readEmergencyFile();
+      const allReqs = store.pairRequests || [];
+      incoming = allReqs.filter((r) => r.toLogin === login && r.status === "PENDING");
+      outgoing = allReqs.filter((r) => r.fromLogin === login && r.status === "PENDING");
     }
-
-    if (user) {
-      const now = new Date().toISOString();
-      user.lastActiveAt = now;
-      saveUserToFile(user);
-      if (isSqlConfigured()) {
-        await db.update(users).set({ lastActiveAt: now }).where(eq(users.login, login)).catch(() => {});
-      }
-    }
-
-    const store = readDbFile();
-    const allReqs = store.pairRequests || [];
-
-    // Incoming requests where toLogin = login
-    const inc = allReqs.filter((r: any) => r.toLogin === login && r.status === "PENDING");
-
-    // Outgoing requests where fromLogin = login
-    const out = allReqs.filter((r: any) => r.fromLogin === login && r.status === "PENDING");
-
-    const safeUser = user ? (({ passwordHash, ...rest }) => rest)(user) : null;
-    const safePartner = partner ? (({ passwordHash, ...rest }) => rest)(partner) : null;
 
     return res.json({
-      status: "ok",
-      incoming: inc,
-      outgoing: out,
-      incomingRequests: inc,
-      outgoingRequests: out,
-      user: safeUser,
-      partner: safePartner,
+      paired: !!user.partnerLogin,
+      partner: partner ? toSafeUser(partner) : null,
+      incomingRequests: incoming,
+      outgoingRequests: outgoing,
     });
-  } catch (err) {
-    return res.status(500).json({ error: "Ошибка получения статуса" });
+  } catch (err: unknown) {
+    logger.error("Ошибка проверки статуса пары", err);
+    return res.status(500).json({ error: "Ошибка сервера" });
   }
 });
 
-// Shared Couple Data Sync (Pulse, Tests, Wishlists, Cravings, Invites)
+// ==========================================
+// 5. COUPLE DATA SYNC & CHAT
+// ==========================================
 
-app.get("/api/chat/messages/:coupleId", requireAuth, async (req, res) => {
+app.post("/api/couple/sync", requireAuth, validateBody(coupleSyncSchema), async (req: AuthenticatedRequest, res) => {
   try {
-    const { coupleId } = req.params;
-    if (isSqlConfigured()) {
-      try {
-        const rows = await db
-          .select()
-          .from(chatMessages)
-          .where(eq(chatMessages.coupleId, coupleId))
-          .orderBy(desc(chatMessages.createdAt))
-          .limit(100);
-        if (rows && rows.length > 0) {
-          return res.json({ messages: rows.reverse() });
-        }
-      } catch (e) {
-        // Fallback to file store
-      }
+    const { login1, login2, payload } = req.body;
+    const userLogin = req.user?.login;
+
+    if (login1 !== userLogin && login2 !== userLogin) {
+      return res.status(403).json({ error: "Нет доступа к синхронизации данных чужой пары" });
     }
 
-    const store = readDbFile();
-    const list = (store.chatMessages || []).filter((m: any) => m.coupleId === coupleId).slice(-100);
-    return res.json({ messages: list });
-  } catch (err) {
-    console.error("Fetch chat error:", err);
-    return res.status(500).json({ error: "Failed to fetch chat messages" });
-  }
-});
+    const key = [login1, login2].sort().join("_");
+    await saveCoupleData(key, payload);
 
-app.post("/api/chat/messages", requireAuth, async (req, res) => {
-  try {
-    const { id, coupleId, senderLogin, role, content, createdAt } = req.body;
-    const msgObj = {
-      id: id || "msg_" + Date.now(),
-      coupleId,
-      senderLogin,
-      role,
-      content,
-      isRead: false,
-      createdAt: createdAt || new Date().toISOString(),
-    };
-
-    if (isSqlConfigured()) {
-      try {
-        await db.insert(chatMessages).values(msgObj);
-      } catch (e) {
-        // Fallback
-      }
+    // Analytics: Record daily metrics
+    try {
+      const todayDate = new Date().toISOString().split("T")[0];
+      await recordDailyMetrics(key, todayDate, payload);
+    } catch (err: unknown) {
+      logger.warn("Сбой записи ежедневных метрик в analytics", { coupleId: key }, err);
     }
 
-    const store = readDbFile();
-    if (!store.chatMessages) store.chatMessages = [];
-    store.chatMessages.push(msgObj);
-    writeDbFile(store);
-
-    return res.json({ success: true });
-  } catch (err) {
-    console.error("Send chat error:", err);
-    return res.status(500).json({ error: "Failed to send chat message" });
+    return res.json({ status: "synced", key, timestamp: new Date().toISOString() });
+  } catch (err: unknown) {
+    logger.error("Ошибка синхронизации данных пары", err);
+    return res.status(500).json({ error: "Ошибка сохранения данных пары" });
   }
 });
 
-// AI Psychologist Chat History
-app.get("/api/ai/messages/:login", requireAuth, async (req, res) => {
+app.get("/api/couple/data/:login1/:login2", requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
-    const login = String(req.params.login || "").toLowerCase().replace(/^@/, "");
-    if (!login) return res.status(400).json({ error: "Missing login" });
-    const coupleId = `ai_${login}`;
-    
-    if (isSqlConfigured()) {
+    const l1 = String(req.params.login1 || "").toLowerCase().replace(/^@/, "");
+    const l2 = String(req.params.login2 || "").toLowerCase().replace(/^@/, "");
+    const userLogin = req.user?.login;
+
+    if (l1 !== userLogin && l2 !== userLogin) {
+      return res.status(403).json({ error: "Нет доступа к данным чужой пары" });
+    }
+
+    const key = [l1, l2].sort().join("_");
+    const data = await getCoupleData(key);
+
+    return res.json({ data: data || null });
+  } catch (err: unknown) {
+    logger.error("Ошибка получения данных пары", err);
+    return res.status(500).json({ error: "Ошибка загрузки данных пары" });
+  }
+});
+
+app.get("/api/chat/messages/:coupleId", requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const coupleId = String(req.params.coupleId || "");
+    const userLogin = req.user?.login;
+
+    if (!isUserInCouple(coupleId, userLogin)) {
+      return res.status(403).json({ error: "Нет доступа к чату этой пары" });
+    }
+
+    if (isSqlConfigured() && db) {
       try {
-        const rows = await db
+        const msgs = await db
           .select()
           .from(chatMessages)
           .where(eq(chatMessages.coupleId, coupleId))
           .orderBy(chatMessages.createdAt)
-          .limit(100);
-        if (rows && rows.length > 0) {
-          const formatted = rows.map((r: any) => ({
-            id: r.id,
-            role: r.role === "model" || r.role === "ai" ? "model" : "user",
-            content: r.content,
-            timestamp: r.createdAt,
-            authorName: r.role === "model" || r.role === "ai" ? "Сова" : login,
-          }));
-          return res.json({ messages: formatted });
-        }
-      } catch (e) {
-        // Fallback to file store
+          .limit(150);
+        return res.json({ messages: msgs });
+      } catch (err: unknown) {
+        logger.warn("Сбой чтения сообщений чата из SQL, чтение из файла", { coupleId }, err);
       }
     }
 
-    const store = readDbFile();
-    const list = (store.chatMessages || [])
-      .filter((m: any) => m.coupleId === coupleId)
-      .slice(-100)
-      .map((m: any) => ({
-        id: m.id,
-        role: m.role === "model" || m.role === "ai" ? "model" : "user",
-        content: m.content,
-        timestamp: m.createdAt,
-        authorName: m.role === "model" || m.role === "ai" ? "Сова" : login,
-      }));
-    return res.json({ messages: list });
-  } catch (err) {
-    console.error("Fetch AI messages error:", err);
-    return res.status(500).json({ error: "Failed to fetch AI messages" });
+    const store = readEmergencyFile();
+    const msgs = (store.chatMessages || [])
+      .filter((m) => m.coupleId === coupleId)
+      .sort((a, b) => (a.createdAt > b.createdAt ? 1 : -1))
+      .slice(-150);
+
+    return res.json({ messages: msgs });
+  } catch (err: unknown) {
+    logger.error("Ошибка получения сообщений чата", err);
+    return res.status(500).json({ error: "Ошибка загрузки чата" });
   }
 });
 
-const saveAIMessageToDb = async (login: string | undefined, userText: string, aiText: string) => {
-  if (!login) return;
-  const cleanLogin = login.toLowerCase().replace(/^@/, "");
-  const coupleId = `ai_${cleanLogin}`;
-  const now = new Date().toISOString();
-  const userMsg = {
-    id: `aimsg_${Date.now()}_u`,
-    coupleId,
-    senderLogin: cleanLogin,
-    role: "user",
-    content: userText,
-    isRead: true,
-    createdAt: now,
-  };
-  const botMsg = {
-    id: `aimsg_${Date.now()}_b`,
-    coupleId,
-    senderLogin: "ai",
-    role: "model",
-    content: aiText,
-    isRead: true,
-    createdAt: new Date(Date.now() + 50).toISOString(),
-  };
+app.post("/api/chat/messages", requireAuth, validateBody(chatMessageCreateSchema), async (req: AuthenticatedRequest, res) => {
+  try {
+    const { coupleId, senderLogin, text } = req.body;
+    const userLogin = req.user?.login;
 
-  if (isSqlConfigured()) {
-    try {
-      await db.insert(chatMessages).values(userMsg);
-      await db.insert(chatMessages).values(botMsg);
-    } catch (e) {
-      console.warn("Failed to persist AI messages to SQL:", e);
+    if (!isUserInCouple(coupleId, userLogin)) {
+      return res.status(403).json({ error: "Нет доступа к отправке сообщений в этот чат" });
     }
-  }
-  try {
-    const store = readDbFile();
-    if (!store.chatMessages) store.chatMessages = [];
-    store.chatMessages.push(userMsg, botMsg);
-    writeDbFile(store);
-  } catch (e) {
-    // ignore
-  }
-};
-
-app.post("/api/couple/sync", requireAuth, async (req, res) => {
-  try {
-    const { login1, login2, payload } = req.body;
-    if (!login1 || !login2)
-      return res
-        .status(400)
-        .json({ error: "Необходимы логины обоих партнёров" });
-
-    const l1 = String(login1).toLowerCase().replace(/^@/, "");
-    const l2 = String(login2).toLowerCase().replace(/^@/, "");
-    const key = [l1, l2].sort().join("_");
-
-    const store = readDbFile();
-    let existingData = store.coupleData?.[key] || {};
-
-    if (isSqlConfigured()) {
-      try {
-        const existingRow = await db
-          .select()
-          .from(coupleData)
-          .where(eq(coupleData.id, key))
-          .limit(1);
-        if (existingRow.length > 0) {
-          existingData = existingRow[0].data as Record<string, any>;
-        }
-      } catch (e) {
-        // Fallback
-      }
+    if (senderLogin !== userLogin) {
+      return res.status(403).json({ error: "Нельзя отправлять сообщения от чужого имени" });
     }
 
-    const merged = {
-      ...existingData,
-      ...payload,
-      lastUpdatedAt: new Date().toISOString(),
+    const now = new Date().toISOString();
+    const msg = {
+      id: crypto.randomUUID(),
+      coupleId,
+      senderLogin,
+      role: "partner1",
+      content: text,
+      isRead: false,
+      createdAt: now,
     };
 
-    if (!store.coupleData) store.coupleData = {};
-    store.coupleData[key] = merged;
-    writeDbFile(store);
-
-    if (isSqlConfigured()) {
+    if (isSqlConfigured() && db) {
       try {
-        const existingRow = await db
-          .select()
-          .from(coupleData)
-          .where(eq(coupleData.id, key))
-          .limit(1);
-        if (existingRow.length > 0) {
-          await db
-            .update(coupleData)
-            .set({ data: merged, lastUpdatedAt: new Date().toISOString() })
-            .where(eq(coupleData.id, key));
-        } else {
-          await db.insert(coupleData).values({
-            id: key,
-            data: merged,
-            lastUpdatedAt: new Date().toISOString(),
-          });
-        }
-      } catch (e) {
-        // Fallback
+        await db.insert(chatMessages).values(msg);
+        return res.status(201).json({ message: msg });
+      } catch (err: unknown) {
+        logger.warn("Сбой сохранения сообщения чата в SQL, запись в файл", { coupleId }, err);
       }
     }
 
-    return res.json({ status: "ok", data: merged });
-  } catch (err) {
-    console.error("Couple sync error:", err);
-    return res.status(500).json({ error: "Ошибка синхронизации данных пары" });
+    const store = readEmergencyFile();
+    if (!store.chatMessages) store.chatMessages = [];
+    store.chatMessages.push(msg);
+    writeEmergencyFile(store);
+
+    return res.status(201).json({ message: msg });
+  } catch (err: unknown) {
+    logger.error("Ошибка сохранения сообщения чата", err);
+    return res.status(500).json({ error: "Ошибка отправки сообщения" });
   }
 });
 
-app.get("/api/couple/data/:login1/:login2", async (req, res) => {
+app.get("/api/ai/messages/:login", requireAuth, async (req: AuthenticatedRequest, res) => {
   try {
-    const { login1, login2 } = req.params;
-    const l1 = String(login1).toLowerCase().replace(/^@/, "");
-    const l2 = String(login2).toLowerCase().replace(/^@/, "");
-    const key = [l1, l2].sort().join("_");
+    const login = String(req.params.login || "").toLowerCase().replace(/^@/, "");
+    const userLogin = req.user?.login;
 
-    const store = readDbFile();
-    let data = store.coupleData?.[key] || null;
+    if (login !== userLogin) {
+      return res.status(403).json({ error: "Нет доступа к истории ИИ другого пользователя" });
+    }
 
-    if (isSqlConfigured()) {
+    const aiCoupleId = `ai_${login}`;
+    if (isSqlConfigured() && db) {
       try {
-        const existingRow = await db
+        const msgs = await db
           .select()
-          .from(coupleData)
-          .where(eq(coupleData.id, key))
-          .limit(1);
-        if (existingRow.length > 0) {
-          data = existingRow[0].data;
-        }
-      } catch (e) {
-        // Fallback
+          .from(chatMessages)
+          .where(eq(chatMessages.coupleId, aiCoupleId))
+          .orderBy(chatMessages.createdAt)
+          .limit(100);
+        return res.json({ messages: msgs });
+      } catch (err: unknown) {
+        logger.warn("Сбой чтения истории ИИ из SQL, чтение из файла", { login }, err);
       }
     }
 
-    return res.json({ data });
-  } catch (err) {
-    console.error("Couple data get error:", err);
-    return res.status(500).json({ error: "Ошибка загрузки данных пары" });
+    const store = readEmergencyFile();
+    const msgs = (store.chatMessages || [])
+      .filter((m) => m.coupleId === aiCoupleId)
+      .sort((a, b) => (a.createdAt > b.createdAt ? 1 : -1))
+      .slice(-100);
+
+    return res.json({ messages: msgs });
+  } catch (err: unknown) {
+    logger.error("Ошибка загрузки сообщений ИИ", err);
+    return res.status(500).json({ error: "Ошибка сервера" });
   }
 });
+
+// ==========================================
+// 6. ANALYTICS & INSIGHTS
+// ==========================================
+
+app.get("/api/analytics/trends/:coupleId", requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { coupleId } = req.params;
+    const userLogin = req.user?.login;
+
+    if (!isUserInCouple(coupleId, userLogin)) {
+      return res.status(403).json({ error: "Нет доступа к аналитике этой пары" });
+    }
+
+    const days = parseInt(req.query.days as string, 10) || 30;
+    const trends = await getTrends(coupleId, days);
+    return res.json(trends);
+  } catch (err: unknown) {
+    logger.error("Ошибка получения аналитики трендов", err);
+    return res.status(500).json({ error: "Не удалось получить аналитику трендов" });
+  }
+});
+
+app.get("/api/analytics/insights/:coupleId", requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { coupleId } = req.params;
+    const userLogin = req.user?.login;
+
+    if (!isUserInCouple(coupleId, userLogin)) {
+      return res.status(403).json({ error: "Нет доступа к инсайтам этой пары" });
+    }
+
+    if (!isSqlConfigured() || !db) {
+      return res.json({ insights: [] });
+    }
+
+    const insights = await db
+      .select()
+      .from(aiInsights)
+      .where(eq(aiInsights.coupleId, coupleId))
+      .orderBy(desc(aiInsights.createdAt))
+      .limit(10);
+
+    return res.json({ insights });
+  } catch (err: unknown) {
+    logger.error("Ошибка получения инсайтов ИИ", err);
+    return res.status(500).json({ error: "Не удалось получить инсайты" });
+  }
+});
+
+app.post("/api/analytics/insights/generate", requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { coupleId } = req.body;
+    const userLogin = req.user?.login;
+
+    if (!isUserInCouple(coupleId, userLogin)) {
+      return res.status(403).json({ error: "Нет доступа к генерации инсайтов этой пары" });
+    }
+
+    const insight = await generateWeeklyInsight(coupleId, req.body.contextData || {});
+    return res.json({ insight });
+  } catch (err: unknown) {
+    logger.error("Ошибка генерации недельного инсайта", err);
+    return res.status(500).json({ error: "Ошибка генерации инсайта" });
+  }
+});
+
+// ==========================================
+// 7. PUSH NOTIFICATIONS
+// ==========================================
 
 app.post("/api/push/subscribe", requireAuth, (req, res) => {
   const { subscription, partnerId, coupleId } = req.body;
@@ -1571,25 +1012,30 @@ app.post("/api/push/subscribe", requireAuth, (req, res) => {
       coupleId,
       subscribedAt: new Date().toISOString(),
     });
+    logger.info("Новая подписка на push-уведомления зарегистрирована", { coupleId });
   }
-  res.json({ status: "subscribed", count: pushSubscriptions.length });
+  return res.json({ status: "subscribed", count: pushSubscriptions.length });
 });
 
-app.post("/api/push/send-test", requireAuth, async (req, res) => {
+app.post("/api/push/send-test", requireAuth, (req, res) => {
   const { title, body } = req.body;
-  // In production, user's backend agent will wire up web-push package with VAPID keys:
-  // webpush.sendNotification(subscription, JSON.stringify({ title, body }))
-  res.json({
+  return res.json({
     status: "dispatched",
     title: title || "Loop • Внимание партнёра",
     body: body || "Тестовое уведомление доставлено.",
   });
 });
 
-// AI Psychologist Chat ("Сова")
-app.post("/api/ai/chat", requireAuth, async (req, res) => {
+// ==========================================
+// 8. AI PSYCHOLOGY & COMPATIBILITY
+// ==========================================
+
+app.post("/api/ai/chat", aiLimiter, requireAuth, validateBody(aiChatMessageSchema), async (req: AuthenticatedRequest, res) => {
   try {
-    const { messages, coupleContext, currentPartner } = req.body;
+    const { messages, userLogin: bodyLogin } = req.body;
+    const coupleContext = req.body.context || req.body.coupleContext;
+    const currentPartner = req.body.currentPartner;
+    const callerLogin = req.user?.login || bodyLogin;
 
     const partnerName = currentPartner?.name || "Партнёр";
     const partner2Name = coupleContext?.user2?.name || "Второй партнёр";
@@ -1603,7 +1049,7 @@ app.post("/api/ai/chat", requireAuth, async (req, res) => {
 
 ФОРМАТИРОВАНИЕ ОТВЕТА:
 - Используй только обычный текст, абзацы и эмодзи.
-- КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО использовать Markdown-таблицы, блоки кода (\`\`\`) или HTML-теги.
+- КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО использовать Markdown-таблицы, блоки кода или HTML-теги.
 - Отвечай строго как эмпатичный собеседник в мессенджере.
 
 СМЫСЛОВАЯ СТРУКТУРА ОТВЕТА:
@@ -1621,60 +1067,50 @@ app.post("/api/ai/chat", requireAuth, async (req, res) => {
 - Партнёр: ${partner2Name}
 - Дней вместе: ${coupleContext?.daysTogether || 1}
 - Язык любви ${partnerName}: ${coupleContext?.user1?.loveLanguage || "не указан"}
-- Язык любви ${partner2Name}: ${coupleContext?.user2?.loveLanguage || "не указан"}
-- Привязанность: ${coupleContext?.user1?.attachment || "не указано"}`;
+- Язык любви ${partner2Name}: ${coupleContext?.user2?.loveLanguage || "не указан"}`;
 
-    const lastUserMessageObj = messages && messages.length > 0 ? messages[messages.length - 1] : null;
-    const lastUserText = lastUserMessageObj?.content || "";
+    const lastUserMessage = messages[messages.length - 1];
+    const lastUserText = lastUserMessage?.content || "";
 
-    // Check off-topic
+    // Guardrail off-topic check
     const offTopicKeywords = [
       "шкаф", "код", "программ", "python", "javascript", "машин", "ремонт",
       "рецепт", "пирог", "президент", "политик", "забудь", "игнорируй"
     ];
     if (offTopicKeywords.some((k) => lastUserText.toLowerCase().includes(k))) {
       return res.json({
-        reply: `Я семейный психолог Сова и специализируюсь исключительно на отношениях, чувствах и гармонии в паре.\n\nФизические и технические инструкции лучше посмотреть в руководстве пользователя. А вот если в процессе совместного дела возникло недопонимание или спор — я с радостью помогу всё экологично уладить! О чём в отношениях вы хотите поговорить?`,
+        reply: "Я семейный психолог Сова и специализируюсь исключительно на отношениях, чувствах и гармонии в паре.\n\nФизические и технические инструкции лучше посмотреть в руководстве пользователя. А если в процессе совместного дела возникло недопонимание — я с радостью помогу всё экологично уладить! О чём в отношениях вы хотите поговорить?",
         mode: "fallback_guardrail",
       });
     }
 
-    // Единственный провайдер — Groq
     const groqMessages = [
       { role: "system", content: systemPrompt },
-      ...(messages || []).map((m: { role: string; content: string }) => ({
+      ...messages.map((m: any) => ({
         role: m.role === "user" ? "user" : "assistant",
         content: m.content,
       })),
     ];
 
-    const userLogin = req.body?.userLogin;
-
     const groqReply = await callGroqChat(groqMessages);
     if (groqReply) {
-      await saveAIMessageToDb(userLogin, lastUserText, groqReply);
+      await saveAIMessageToDb(callerLogin, lastUserText, groqReply);
       return res.json({ reply: groqReply, mode: "groq" });
     }
 
-    console.error("❌ [AI] Groq недоступен — возвращаю заглушку");
     const smartReply = generateSmartPsychologistReply(lastUserText, partnerName, partner2Name);
-    await saveAIMessageToDb(userLogin, lastUserText, smartReply);
+    await saveAIMessageToDb(callerLogin, lastUserText, smartReply);
     return res.json({
       reply: smartReply,
       mode: "smart_psychologist_engine",
     });
-  } catch (error: any) {
-    console.error("AI Chat Error:", error);
+  } catch (err: unknown) {
+    logger.error("Ошибка в AI чате Совы", err);
     const partnerName = req.body?.currentPartner?.name || "Партнёр";
     const partner2Name = req.body?.coupleContext?.user2?.name || "партнёр";
-    const fallback = generateSmartPsychologistReply(
-      req.body?.messages?.slice(-1)?.[0]?.content || "",
-      partnerName,
-      partner2Name
-    );
-    const userLogin = req.body?.userLogin;
     const lastUserText = req.body?.messages?.slice(-1)?.[0]?.content || "";
-    await saveAIMessageToDb(userLogin, lastUserText, fallback);
+    const fallback = generateSmartPsychologistReply(lastUserText, partnerName, partner2Name);
+    await saveAIMessageToDb(req.user?.login, lastUserText, fallback);
     return res.json({
       reply: fallback,
       mode: "safety_fallback",
@@ -1682,144 +1118,147 @@ app.post("/api/ai/chat", requireAuth, async (req, res) => {
   }
 });
 
-// AI Couple Report & Deep Insights Generator
-app.post("/api/ai/generate-report", requireAuth, async (req, res) => {
+app.post("/api/ai/generate-report", aiLimiter, requireAuth, validateBody(aiReportSchema), async (req, res) => {
   try {
-    const { coupleData } = req.body;
+    const { coupleProfile, radarScores } = req.body;
+    const prompt = `Проанализируй данные пары для приложения Loop и составь глубокий психологический отчёт:
+Данные пары: ${JSON.stringify({ coupleProfile, radarScores })}
 
-    const prompt = `Проанализируй данные пары для приложения Loop и составь глубокий, научно обоснованный психологический отчёт о совместимости:
-Данные пары: ${JSON.stringify(coupleData || {})}
-
-Верни строго JSON со следующими полями:
+Верни строго JSON:
 {
   "title": "краткий вдохновляющий заголовок архетипа пары",
-  "summary": "глубокий психологический вывод на 3-4 предложения",
+  "summary": "вывод на 3-4 предложения",
   "strengths": ["сильная сторона 1", "сильная сторона 2", "сильная сторона 3"],
   "growthZones": ["зона роста 1", "зона роста 2"],
-  "gottmanTips": "конкретная рекомендация по методу Джона Готтмана с упражнением для этой недели"
+  "gottmanTips": "рекомендация по методу Готтмана с упражнением"
 }`;
 
-    // Единственный провайдер — Groq
     const groqReply = await callGroqChat([
-      {
-        role: "system",
-        content:
-          "Ты — эксперт семейной психологии. Отвечай строго валидным JSON без markdown обёрток.",
-      },
+      { role: "system", content: "Ты — эксперт семейной психологии. Отвечай строго валидным JSON без markdown." },
       { role: "user", content: prompt },
     ]);
 
     if (groqReply) {
       try {
-        const clean = groqReply
-          .replace(/```json\n?/g, "")
-          .replace(/```\n?/g, "")
-          .trim();
+        const clean = groqReply.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
         const parsed = JSON.parse(clean);
-        return res.json({ report: parsed });
-      } catch (e) {
-        console.warn("Groq JSON parse fallback", e);
+        return res.json(parsed);
+      } catch (err: unknown) {
+        logger.warn("Сбой парсинга JSON ответа Groq для отчета", undefined, err);
       }
     }
 
-    // 2. Fallback
     return res.json({
-      report: {
-        title: "«Гармоничный якорь & Общий парус»",
-        summary:
-          "Ваша пара демонстрирует высокий уровень базового доверия и прекрасную эмоциональную синхронизацию. Сильная сторона пары — способность слышать партнёра и обоюдное желание вкладываться в совместное качество времени.",
-        strengths: [
-          "Высокое совпадение в ценностях свободы и долгосрочных семейных планов (96%).",
-          "Осознанное применение «мягкого старта» в спорах без перехода на личности (86%).",
-          "Взаимная забота через язык «Качественного времени» и микро-сюрпризы (93%).",
-        ],
-        growthZones: [
-          "Усталость в будние дни: важно договариваться об уровне энергии до вечерних планов.",
-          "Баланс «Мы vs Я»: бережно сохранять личные хобби без чувства вины.",
-        ],
-        gottmanTips:
-          'Практикуйте "Эмоциональный банковский счёт": делайте 5 позитивных микро-касаний на 1 сложный разговор.',
-      },
+      title: "Гармоничный союз глубокой привязанности",
+      summary: "Ваша пара демонстрирует высокий уровень взаимного уважения и эмоциональной поддержки. Ключевая сила союза — готовность слышать переживания партнёра.",
+      strengths: ["Чуткое отношение к эмоциональному состоянию", "Открытость к диалогу", "Общие базовые ценности"],
+      growthZones: ["Уделять больше времени совместному спонтанному отдыху", "Синхронизация бытовых ожиданий"],
+      gottmanTips: "Практикуйте ежедневный 15-минутный ритуал «Разгрузка после рабочего дня»: слушайте партнёра без критики и советов, проявляя чистую эмпатию.",
     });
-  } catch (err: any) {
-    console.error("Report generation error:", err);
-    return res.status(500).json({ error: "Ошибка генерации отчёта" });
+  } catch (err: unknown) {
+    logger.error("Ошибка генерации отчета пары", err);
+    return res.status(500).json({ error: "Ошибка генерации отчета" });
   }
 });
 
-// AI Date Plan Generator
-app.post("/api/ai/date-idea", requireAuth, async (req, res) => {
+app.post("/api/ai/date-idea", aiLimiter, requireAuth, validateBody(aiDateIdeaSchema), async (req, res) => {
   try {
-    const { vibe, budget, city, partner1, partner2 } = req.body;
+    const { budget, vibe, location, coupleProfile } = req.body;
+    const prompt = `Придумай оригинальное свидание для пары в Loop:
+Бюджет: ${budget || "умеренный"}
+Атмосфера: ${vibe || "романтичная"}
+Локация: ${location || "в городе или дома"}
+Профиль: ${JSON.stringify(coupleProfile || {})}
 
-    const prompt = `Составь персонализированный сценарий свидания для пары в приложении Loop:
-Город: ${city || "Москва"}
-Вайб: ${vibe || "Романтика и уют"}
-Бюджет: ${budget || "Средний"}
-Партнёр 1 (${partner1?.name}): Язык любви — ${partner1?.loveLanguage || "Время"}
-Партнёр 2 (${partner2?.name}): Язык любви — ${partner2?.loveLanguage || "Прикосновения"}
-
-Верни строго валидный JSON:
+Верни строго JSON:
 {
-  "title": "Название свидания",
-  "description": "Описание атмосферы и концепции",
-  "steps": ["Шаг 1 с таймингом", "Шаг 2 с таймингом", "Шаг 3 с таймингом"],
-  "topicToDiscuss": "Глубокий вопрос для душевного сближения во время свидания",
-  "sweetDetail": "Маленькая деталь-сюрприз, которая порадует партнёра"
+  "title": "название свидания",
+  "tagline": "короткий цепляющий слоган",
+  "description": "описание сценария на 2-3 предложения",
+  "prepSteps": ["шаг 1", "шаг 2"],
+  "conversationStarters": ["вопрос для пары 1", "вопрос для пары 2"]
 }`;
 
-    // 1. Try Groq
     const groqReply = await callGroqChat([
-      {
-        role: "system",
-        content:
-          "Ты — романтический консьерж и организатор свиданий. Отвечай строго валидным JSON без лишнего текста.",
-      },
+      { role: "system", content: "Ты — креативный продюсер свиданий и психолог отношений. Отвечай валидным JSON." },
       { role: "user", content: prompt },
     ]);
 
     if (groqReply) {
       try {
-        const clean = groqReply
-          .replace(/```json\n?/g, "")
-          .replace(/```\n?/g, "")
-          .trim();
-        const parsed = JSON.parse(clean);
-        return res.json({ idea: parsed });
-      } catch (e) {
-        console.warn("Groq date JSON parse fallback", e);
+        const clean = groqReply.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        return res.json(JSON.parse(clean));
+      } catch (err: unknown) {
+        logger.warn("Сбой парсинга JSON ответа Groq для свидания", undefined, err);
       }
     }
 
-    // 2. Fallback
     return res.json({
-      idea: {
-        title: `Романтический вечер в стиле «${vibe || "Уют и неспешность"}»`,
-        description: `План свидания для ${partner1?.name || "вас"} и ${partner2?.name || "вашего партнёра"}: начните с неспешного кофе в тихом месте, прогуляйтесь по вечерним огням и завершите вечер глубоким разговором с карточками вопросов Loop.`,
-        steps: [
-          "18:30 — Встреча в любимом уютном месте без телефонов",
-          "19:30 — Неспешная прогулка с обсуждением 3 приятных воспоминаний за месяц",
-          "20:30 — Уютный ужин и обмен маленькими сюрпризами",
-        ],
-        topicToDiscuss:
-          "Что из нашего совместного года заставило тебя больше всего улыбнуться?",
-        sweetDetail:
-          "Заранее спрячьте в карман пальто партнёра записку с теплым признанием",
-      },
+      title: "Гастрономическое путешествие вслепую",
+      tagline: "Вкус, доверие и новые тактильные впечатления",
+      description: "Один из вас надевает повязку на глаза, а второй угощает заранее подготовленными необычными вкусами (сыры, ягоды, шоколад с солью). Затем меняетесь ролями.",
+      prepSteps: ["Купить 4-5 контрастных закусок", "Подготовить мягкую повязку на глаза", "Включить медленный джаз или эмбиент"],
+      conversationStarters: ["Какой момент наших отношений был для тебя самым вкусным и ярким?", "Какое блюдо или поездка больше всего запомнились нам обоим?"],
     });
-  } catch (err) {
-    console.error("Date generation error:", err);
+  } catch (err: unknown) {
+    logger.error("Ошибка генерации свидания", err);
     return res.status(500).json({ error: "Ошибка генерации свидания" });
   }
 });
 
-// Log client-side errors for debugging
+// ==========================================
+// 9. CLIENT OBSERVABILITY: LOG-ERROR
+// ==========================================
+
 app.post("/api/log-error", (req, res) => {
-  console.error("CLIENT SIDE ERROR:", req.body);
-  res.json({ ok: true });
+  try {
+    fs.appendFileSync("client-errors.log", JSON.stringify(req.body) + "\n");
+  } catch (err: unknown) {
+    logger.warn("Не удалось записать в client-errors.log", undefined, err);
+  }
+  logger.error("Клиентская ошибка интерфейса (UI/PWA)", null, {
+    body: req.body,
+    ip: req.ip,
+    userAgent: req.headers["user-agent"],
+  });
+  return res.json({ ok: true });
 });
 
-// Vite Middleware for SPA development & static serving
+// ==========================================
+// 10. CENTRALIZED ERROR HANDLING MIDDLEWARE
+// ==========================================
+
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  logger.error("Необработанное исключение при выполнении запроса", err, {
+    method: req.method,
+    path: req.originalUrl,
+    ip: req.ip,
+  });
+
+  if (res.headersSent) {
+    return next(err);
+  }
+
+  return res.status(err.status || 500).json({
+    error: config.nodeEnv === "production" ? "Внутренняя ошибка сервера" : err.message || "Ошибка сервера",
+  });
+});
+
+// Process-level unhandled crash prevention & telemetry
+process.on("uncaughtException", (error) => {
+  logger.error("КРИТИЧЕСКАЯ ОШИБКА ПРОЦЕССА: Uncaught Exception", error);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  logger.error("КРИТИЧЕСКАЯ ОШИБКА ПРОЦЕССА: Unhandled Rejection", reason, {
+    promise: String(promise),
+  });
+});
+
+// ==========================================
+// 11. VITE SPA & STATIC ASSETS SERVER
+// ==========================================
+
 async function startServer() {
   await initDatabase();
 
@@ -1831,37 +1270,34 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    
-    // Serve static files with proper caching
-    app.use(express.static(distPath, {
-      setHeaders: (res, filePath) => {
-        if (filePath.endsWith("index.html") || filePath.endsWith("sw.js")) {
-          // Never cache index.html or sw.js so the user always gets the latest version
-          res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-          res.setHeader("Pragma", "no-cache");
-          res.setHeader("Expires", "0");
-        } else if (filePath.includes("/assets/")) {
-          // Cache Vite's hashed assets aggressively
-          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-        }
-      }
-    }));
+
+    app.use(
+      express.static(distPath, {
+        setHeaders: (res, filePath) => {
+          if (filePath.endsWith("index.html") || filePath.endsWith("sw.js")) {
+            res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+            res.setHeader("Pragma", "no-cache");
+            res.setHeader("Expires", "0");
+          } else if (filePath.includes("/assets/")) {
+            res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+          }
+        },
+      })
+    );
 
     app.get("*", (req, res) => {
-      // Do NOT serve index.html for missing JS/CSS assets! 
-      // If a browser has a stale index.html and requests an old JS chunk that doesn't exist,
-      // it should get a 404. Returning index.html causes a 'SyntaxError: Unexpected token <' and a white screen.
-      if (req.path.startsWith('/assets/')) {
-        return res.status(404).send('Not Found');
+      if (req.path.startsWith("/api/")) {
+        return res.status(404).json({ error: "API Route Not Found" });
       }
-      
-      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      if (req.path.endsWith(".js") || req.path.endsWith(".css")) {
+        return res.status(404).send("Asset not found");
+      }
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Loop App Server running on http://0.0.0.0:${PORT}`);
+    logger.info(`Loop App Server успешно запущен на http://0.0.0.0:${PORT}`);
   });
 }
 

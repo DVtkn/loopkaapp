@@ -323,3 +323,44 @@ export interface ChatMessage {
   isRead: boolean;
   createdAt: string;
 }
+
+// --- Analytics & Tracking ---
+export interface RadarScores {
+  trust: number;
+  communication: number;
+  passion: number;
+  sharedValues: number;
+  care: number;
+  dailyLife: number;
+}
+
+export interface RelationshipMetricsSnapshot {
+  id: string;
+  coupleId: string;
+  metricDate: string; // YYYY-MM-DD
+  radarScores: RadarScores;
+  moodAverage: number | null;
+  moodEntriesCount: number;
+  interactionCount: number;
+  quizCompleted: boolean;
+  streakDays: number;
+  createdAt: string;
+}
+
+export interface AiInsightContent {
+  weekSummary: string;
+  improvements: string[];
+  riskZones: string[];
+  recommendation: string;
+  conversationStarter: string;
+}
+
+export interface AiInsightRecord {
+  id: string;
+  coupleId: string;
+  type: 'weekly' | 'risk_alert';
+  content: AiInsightContent;
+  periodStart: string;
+  periodEnd: string;
+  createdAt: string;
+}

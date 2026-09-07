@@ -6,21 +6,7 @@ import './index.css';
 import { initServiceWorker } from './utils/pushManager';
 import { safeGetStorage } from './utils/safeStorage';
 
-// Global fetch override to inject Authorization token
-const originalFetch = window.fetch;
-window.fetch = async (...args) => {
-  let [resource, config] = args;
-  const token = safeGetStorage<string | null>('loop_auth_token', null);
-  if (token && typeof resource === 'string' && resource.startsWith('/api/')) {
-    config = config || {};
-    const headers = new Headers(config.headers || {});
-    if (!headers.has('Authorization')) {
-      headers.set('Authorization', `Bearer ${token}`);
-    }
-    config.headers = headers;
-  }
-  return originalFetch(resource, config);
-};
+
 
 // Auto-register service worker for Web Push & PWA
 initServiceWorker().catch(() => {});

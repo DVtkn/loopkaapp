@@ -44,23 +44,25 @@ export const AmbientBackground: React.FC = () => {
 
   const currentGlow = getTabGradient();
 
+  // HIGH PERFORMANCE RENDER: removed CSS blur filters and transition-all which cause huge paint lag on mobile.
+  // Using simple radial gradients that do not require GPU blur composites.
   return (
     <div
       id="app-ambient-background"
-      className="fixed inset-0 pointer-events-none overflow-hidden select-none z-0 transition-colors duration-700"
+      className="fixed inset-0 pointer-events-none overflow-hidden select-none z-0"
       aria-hidden="true"
     >
       {/* 1. Base Solid Theme Canvas */}
       <div
-        className="absolute inset-0 transition-colors duration-700"
+        className="absolute inset-0"
         style={{
           backgroundColor: isDark ? '#070709' : '#F4F4F8',
         }}
       />
 
-      {/* 2. Seamless, Ultra-Wide Diffused Ambient Mesh (Zero harsh boundaries or hotspots) */}
+      {/* 2. Seamless, Ultra-Wide Diffused Ambient Mesh */}
       <div
-        className="absolute inset-0 transition-opacity duration-1000"
+        className="absolute inset-0"
         style={{
           background: isDark
             ? `
@@ -76,31 +78,9 @@ export const AmbientBackground: React.FC = () => {
         }}
       />
 
-      {/* 3. Extremely Soft, Slow-Breathing Ambient Velvet Aurora Layer */}
-      <div
-        className="absolute top-[-10%] left-[-10%] w-[120%] h-[80%] filter blur-[150px] pointer-events-none transition-all duration-1000"
-        style={{
-          background: isDark
-            ? 'radial-gradient(ellipse at 40% 30%, rgba(255, 59, 48, 0.06) 0%, rgba(255, 45, 85, 0.03) 50%, transparent 80%)'
-            : 'radial-gradient(ellipse at 40% 30%, rgba(255, 59, 48, 0.025) 0%, transparent 75%)',
-          opacity: isDark ? 0.9 : 0.6,
-        }}
-      />
-
-      {/* 4. Subtle Lower Glow */}
-      <div
-        className="absolute bottom-[-10%] right-[-10%] w-[100%] h-[60%] filter blur-[160px] pointer-events-none transition-all duration-1000"
-        style={{
-          background: isDark
-            ? 'radial-gradient(ellipse at 60% 70%, rgba(255, 45, 85, 0.05) 0%, rgba(255, 149, 0, 0.02) 45%, transparent 75%)'
-            : 'radial-gradient(ellipse at 60% 70%, rgba(255, 45, 85, 0.02) 0%, transparent 70%)',
-          opacity: isDark ? 0.85 : 0.5,
-        }}
-      />
-
       {/* 5. Minimal Apple Dot Grid Texture Overlay (Very subtle, soft tactile texture) */}
       <div
-        className={`absolute inset-0 apple-bg-grid pointer-events-none transition-opacity duration-700 ${
+        className={`absolute inset-0 apple-bg-grid pointer-events-none ${
           isDark ? 'opacity-15 mix-blend-screen' : 'opacity-10 mix-blend-soft-light'
         }`}
       />

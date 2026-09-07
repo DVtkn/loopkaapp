@@ -1,6 +1,22 @@
 <!doctype html>
 <html lang="ru">
   <head>
+    <script>
+      window.addEventListener('error', function(e) {
+        fetch('/api/log-error', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: e.message, filename: e.filename, lineno: e.lineno, colno: e.colno, error: e.error ? e.error.stack : null })
+        }).catch(function(){});
+      });
+      window.addEventListener('unhandledrejection', function(e) {
+        fetch('/api/log-error', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: e.reason ? e.reason.toString() : 'Promise Rejection', stack: e.reason && e.reason.stack })
+        }).catch(function(){});
+      });
+    </script>
     <meta charset="UTF-8" />
     <meta
       name="viewport"

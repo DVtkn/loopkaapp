@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import { CoupleProvider, useCouple } from './context/CoupleContext';
 import { Header } from './components/Header';
 import { Navigation } from './components/Navigation';
-import { LandingView } from './components/LandingView';
 import { AuthView } from './components/AuthView';
 import { DashboardView } from './components/DashboardView';
 import { UsView } from './components/UsView';
@@ -13,10 +12,10 @@ import { SettingsView } from './components/SettingsView';
 import { TestsView } from './components/TestsView';
 import { ReportView } from './components/ReportView';
 import { CareBaseView } from './components/CareBaseView';
-import { AchievementsModal } from './components/AchievementsModal';
 import { IOSInstallPrompt } from './components/IOSInstallPrompt';
 import { AmbientBackground } from './components/AmbientBackground';
 import { NavigationTab } from './types';
+import { LoopLogo } from './components/LoopLogo';
 
 const MainLayout: React.FC = () => {
   const { isOnboarded, currentUser, activeTab, setActiveTab } = useCouple();
@@ -38,7 +37,6 @@ const MainLayout: React.FC = () => {
         const isKeyboard =
           window.innerHeight - vv.height > 100 ||
           (typeof window.screen !== 'undefined' && window.screen.height - vv.height > 200 && vv.height < window.innerHeight * 0.88);
-
         document.body.classList.toggle('keyboard-open', !!isKeyboard);
         document.body.classList.toggle('keyboard-visible', !!isKeyboard);
       } else {
@@ -109,10 +107,10 @@ const MainLayout: React.FC = () => {
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={isChatTab ? 'chat' : activeTab}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.1, ease: 'easeOut' }}
             className="flex-1 flex flex-col min-h-0 h-full w-full"
           >
             {renderActiveView()}

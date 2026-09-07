@@ -528,7 +528,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     fetchAllUsers();
-    const interval = setInterval(fetchAllUsers, 5000);
+    const interval = setInterval(fetchAllUsers, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -684,7 +684,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     syncWithServer();
 
     // Polling interval every 3.5 seconds
-    const interval = setInterval(syncWithServer, 3500);
+    const interval = setInterval(syncWithServer, 15000);
     return () => clearInterval(interval);
   }, [currentUser?.login, currentUser?.partnerLogin]);
 

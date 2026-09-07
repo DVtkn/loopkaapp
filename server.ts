@@ -1813,6 +1813,12 @@ app.post("/api/ai/date-idea", requireAuth, async (req, res) => {
   }
 });
 
+// Log client-side errors for debugging
+app.post("/api/log-error", (req, res) => {
+  console.error("CLIENT SIDE ERROR:", req.body);
+  res.json({ ok: true });
+});
+
 // Vite Middleware for SPA development & static serving
 async function startServer() {
   await initDatabase();
@@ -1825,8 +1831,31 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
+    
+    // Serve static files with proper caching
+    app.use(express.static(distPath, {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith("index.html") || filePath.endsWith("sw.js")) {
+          // Never cache index.html or sw.js so the user always gets the latest version
+          res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+          res.setHeader("Pragma", "no-cache");
+          res.setHeader("Expires", "0");
+        } else if (filePath.includes("/assets/")) {
+          // Cache Vite's hashed assets aggressively
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        }
+      }
+    }));
+
     app.get("*", (req, res) => {
+      // Do NOT serve index.html for missing JS/CSS assets! 
+      // If a browser has a stale index.html and requests an old JS chunk that doesn't exist,
+      // it should get a 404. Returning index.html causes a 'SyntaxError: Unexpected token <' and a white screen.
+      if (req.path.startsWith('/assets/')) {
+        return res.status(404).send('Not Found');
+      }
+      
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       res.sendFile(path.join(distPath, "index.html"));
     });
   }

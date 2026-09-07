@@ -218,7 +218,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={() => setActiveTab('chat')}
-          className="w-10 h-10 shrink-0 rounded-2xl bg-[var(--surface-2)] text-[var(--accent)] flex items-center justify-center border border-[var(--divider)] hover:opacity-85 transition-opacity shadow-xs"
+          className="w-11 h-11 shrink-0 rounded-2xl bg-[var(--surface-2)] text-[var(--accent)] flex items-center justify-center border border-[var(--divider)] hover:opacity-85 transition-opacity shadow-xs"
           title="Спросить ИИ-психолога"
         >
           <Sparkles className="w-5 h-5" />
@@ -432,7 +432,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
             ))
           ) : (
             <div className="p-6 text-center">
-              <div className="w-10 h-10 mx-auto mb-2 rounded-2xl bg-[var(--surface-2)] flex items-center justify-center text-[var(--text-2)] border border-[var(--divider)]">
+              <div className="w-11 h-11 mx-auto mb-2 rounded-2xl bg-[var(--surface-2)] flex items-center justify-center text-[var(--text-2)] border border-[var(--divider)]">
                 <Sparkles className="w-5 h-5 text-[var(--accent)] opacity-60" />
               </div>
               <p className="text-sm font-semibold text-[var(--text)]">Лента пары пока пуста</p>
@@ -477,7 +477,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => setActiveQuickAction('felt')}
-            className="flex-none flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-[var(--surface-2)] border border-[var(--divider)] shadow-xs text-xs sm:text-sm font-semibold text-[var(--text)] hover:bg-[var(--surface-3)] transition-all cursor-pointer"
+            className="flex-none flex items-center gap-1.5 px-4 py-2.5 whitespace-nowrap rounded-full bg-[var(--surface-2)] border border-[var(--divider)] shadow-xs text-xs sm:text-sm font-semibold text-[var(--text)] hover:bg-[var(--surface-3)] transition-all cursor-pointer"
           >
             <Heart className="w-3.5 h-3.5 text-[var(--accent-2)] fill-[var(--accent-2)]" />
             <span>Я почувствовал(а)</span>
@@ -486,7 +486,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => setActiveQuickAction('appreciated')}
-            className="flex-none flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-[var(--surface-2)] border border-[var(--divider)] shadow-xs text-xs sm:text-sm font-semibold text-[var(--text)] hover:bg-[var(--surface-3)] transition-all cursor-pointer"
+            className="flex-none flex items-center gap-1.5 px-4 py-2.5 whitespace-nowrap rounded-full bg-[var(--surface-2)] border border-[var(--divider)] shadow-xs text-xs sm:text-sm font-semibold text-[var(--text)] hover:bg-[var(--surface-3)] transition-all cursor-pointer"
           >
             <Sparkles className="w-3.5 h-3.5 text-[var(--accent)]" />
             <span>Я оценил(а)</span>
@@ -495,7 +495,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => setActiveQuickAction('tell')}
-            className="flex-none flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-[var(--surface-2)] border border-[var(--divider)] shadow-xs text-xs sm:text-sm font-semibold text-[var(--text)] hover:bg-[var(--surface-3)] transition-all cursor-pointer"
+            className="flex-none flex items-center gap-1.5 px-4 py-2.5 whitespace-nowrap rounded-full bg-[var(--surface-2)] border border-[var(--divider)] shadow-xs text-xs sm:text-sm font-semibold text-[var(--text)] hover:bg-[var(--surface-3)] transition-all cursor-pointer"
           >
             <Pin className="w-3.5 h-3.5 text-[var(--accent-3)]" />
             <span>Хочу рассказать</span>
@@ -507,7 +507,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
               setUsSubTab('book');
               setActiveTab('us');
             }}
-            className="flex-none flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-[var(--surface-2)] border border-[var(--divider)] shadow-xs text-xs sm:text-sm font-semibold text-[var(--text)] hover:bg-[var(--surface-3)] transition-all cursor-pointer"
+            className="flex-none flex items-center gap-1.5 px-4 py-2.5 whitespace-nowrap rounded-full bg-[var(--surface-2)] border border-[var(--divider)] shadow-xs text-xs sm:text-sm font-semibold text-[var(--text)] hover:bg-[var(--surface-3)] transition-all cursor-pointer"
           >
             <Gift className="w-3.5 h-3.5 text-amber-500" />
             <span>Книга заботы</span>
@@ -704,7 +704,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
             }}
             className="app-card-interactive p-3.5 flex flex-col items-center text-center gap-1.5 group"
           >
-            <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-500 flex items-center justify-center group-hover:rotate-12 transition-transform shadow-2xs">
+            <div className="w-11 h-11 rounded-xl bg-amber-500/15 text-amber-500 flex items-center justify-center group-hover:rotate-12 transition-transform shadow-2xs">
               <Sparkles className="w-5 h-5" />
             </div>
             <span className="text-sm font-semibold text-[var(--text)]">Свидания</span>
@@ -721,7 +721,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
             }}
             className="app-card-interactive p-3.5 flex flex-col items-center text-center gap-1.5 group"
           >
-            <div className="w-10 h-10 rounded-xl bg-[var(--accent-blue)]/15 text-[var(--accent-blue)] flex items-center justify-center group-hover:scale-115 transition-transform shadow-2xs">
+            <div className="w-11 h-11 rounded-xl bg-[var(--accent-blue)]/15 text-[var(--accent-blue)] flex items-center justify-center group-hover:scale-115 transition-transform shadow-2xs">
               <Smile className="w-5 h-5" />
             </div>
             <span className="text-sm font-semibold text-[var(--text)]">Игры</span>
@@ -738,7 +738,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
             }}
             className="app-card-interactive p-3.5 flex flex-col items-center text-center gap-1.5 group"
           >
-            <div className="w-10 h-10 rounded-xl bg-rose-500/15 text-rose-500 flex items-center justify-center group-hover:scale-115 transition-transform shadow-2xs">
+            <div className="w-11 h-11 rounded-xl bg-rose-500/15 text-rose-500 flex items-center justify-center group-hover:scale-115 transition-transform shadow-2xs">
               <Activity className="w-5 h-5" />
             </div>
             <span className="text-sm font-semibold text-[var(--text)]">Тесты пары</span>
@@ -755,7 +755,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
             }}
             className="app-card-interactive p-3.5 flex flex-col items-center text-center gap-1.5 group"
           >
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-500 flex items-center justify-center group-hover:scale-115 transition-transform shadow-2xs">
+            <div className="w-11 h-11 rounded-xl bg-emerald-500/15 text-emerald-500 flex items-center justify-center group-hover:scale-115 transition-transform shadow-2xs">
               <Trophy className="w-5 h-5" />
             </div>
             <span className="text-sm font-semibold text-[var(--text)]">Испытания недели</span>
@@ -870,7 +870,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
                   <button
                     type="button"
                     onClick={() => setShowMoodInfo((prev) => !prev)}
-                    className="w-5 h-5 rounded-full bg-[var(--surface-2)] border border-[var(--divider)] text-[var(--text-2)] hover:text-[var(--accent)] hover:border-[var(--accent)]/40 flex items-center justify-center transition-colors"
+                    className="w-5 h-5 whitespace-nowrap rounded-full bg-[var(--surface-2)] border border-[var(--divider)] text-[var(--text-2)] hover:text-[var(--accent)] hover:border-[var(--accent)]/40 flex items-center justify-center transition-colors"
                     title="О функции «Моё настроение»"
                     aria-label="Информация о настроении"
                   >
@@ -904,7 +904,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
                   setShowMoodPicker(false);
                   setShowMoodInfo(false);
                 }}
-                className="w-8 h-8 rounded-full bg-[var(--surface-2)] text-[var(--text-2)] hover:text-[var(--text)] flex items-center justify-center active:scale-95 transition-all shrink-0"
+                className="w-11 h-11 whitespace-nowrap rounded-full bg-[var(--surface-2)] text-[var(--text-2)] hover:text-[var(--text)] flex items-center justify-center active:scale-95 transition-all shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1030,7 +1030,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
               <button
                 type="button"
                 onClick={() => setActiveQuickAction(null)}
-                className="w-8 h-8 rounded-full bg-[var(--surface-2)] text-[var(--text-2)] hover:text-[var(--text)] flex items-center justify-center active:scale-95 transition-all shrink-0"
+                className="w-11 h-11 whitespace-nowrap rounded-full bg-[var(--surface-2)] text-[var(--text-2)] hover:text-[var(--text)] flex items-center justify-center active:scale-95 transition-all shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>

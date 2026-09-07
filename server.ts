@@ -19,20 +19,23 @@ import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
 import bcrypt from "bcryptjs";
+import helmet from "helmet";
+import cors from "cors";
+import jwt from "jsonwebtoken";
 
 // Rate limiter for login endpoint (5 failed attempts per IP+login per 15 mins)
 interface RateLimitEntry {
   attempts: number;
   resetAt: number;
 }
-const loginRateLimits = new Map<string, RateLimitEntry>();
-
 function checkLoginRateLimit(key: string): { allowed: boolean; remainingMs?: number } {
   const now = Date.now();
-  const entry = loginRateLimits.get(key);
+  const store = readDbFile();
+  const entry = store.rateLimits?.[key];
   if (!entry) return { allowed: true };
   if (now > entry.resetAt) {
-    loginRateLimits.delete(key);
+    delete store.rateLimits![key];
+    writeDbFile(store);
     return { allowed: true };
   }
   if (entry.attempts >= 5) {
@@ -44,16 +47,23 @@ function checkLoginRateLimit(key: string): { allowed: boolean; remainingMs?: num
 function recordFailedLoginAttempt(key: string) {
   const now = Date.now();
   const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-  const entry = loginRateLimits.get(key);
+  const store = readDbFile();
+  if (!store.rateLimits) store.rateLimits = {};
+  const entry = store.rateLimits[key];
   if (!entry || now > entry.resetAt) {
-    loginRateLimits.set(key, { attempts: 1, resetAt: now + WINDOW_MS });
+    store.rateLimits[key] = { attempts: 1, resetAt: now + WINDOW_MS };
   } else {
-    entry.attempts += 1;
+    store.rateLimits[key].attempts += 1;
   }
+  writeDbFile(store);
 }
 
 function clearLoginRateLimit(key: string) {
-  loginRateLimits.delete(key);
+  const store = readDbFile();
+  if (store.rateLimits && store.rateLimits[key]) {
+    delete store.rateLimits[key];
+    writeDbFile(store);
+  }
 }
 
 // Dummy hash for timing attack mitigation when user is not found
@@ -64,20 +74,67 @@ async function verifyPassword(inputPass: string, storedHash: string): Promise<bo
   if (storedHash.startsWith("$2a$") || storedHash.startsWith("$2b$") || storedHash.startsWith("$2y$")) {
     return await bcrypt.compare(inputPass, storedHash);
   }
-  // Legacy plaintext fallback
-  return inputPass === storedHash;
+  return false; // Plaintext fallback removed for security
 }
 
+function validateEnvVars() {
+  const missing = [];
+  if (!process.env.GROQ_API_KEY) missing.push("GROQ_API_KEY");
+  if (!process.env.JWT_SECRET) {
+    console.warn("WARN: JWT_SECRET is missing, using fallback (not safe for production).");
+    process.env.JWT_SECRET = "loop_secret_fallback_12345";
+  }
+  if (missing.length > 0) {
+    console.error("CRITICAL: Missing environment variables:", missing.join(", "));
+  }
+}
+validateEnvVars();
+
 const currentDir =
-  typeof __dirname !== "undefined"
-    ? __dirname
-    : path.dirname(fileURLToPath(import.meta.url));
+  process.cwd();
 
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(helmet({
+  contentSecurityPolicy: false,
+}));
+app.use(cors({
+  origin: process.env.APP_URL || "*",
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+}));
+app.use(express.json({ limit: "100kb" }));
+app.use(express.urlencoded({ extended: true, limit: "100kb" }));
+
+function sanitizeString(str: any): any {
+  if (typeof str !== 'string') return str;
+  return str.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function sanitizePayload(obj: any): any {
+  if (typeof obj === 'string') return sanitizeString(obj);
+  if (Array.isArray(obj)) {
+    return obj.map(item => sanitizePayload(item));
+  }
+  if (obj !== null && typeof obj === 'object') {
+    const sanitized: any = {};
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        sanitized[key] = sanitizePayload(obj[key]);
+      }
+    }
+    return sanitized;
+  }
+  return obj;
+}
+
+app.use((req, res, next) => {
+  if (req.body && typeof req.body === 'object') {
+    req.body = sanitizePayload(req.body);
+  }
+  next();
+});
+
 
 // Persistent JSON Storage paths
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -98,6 +155,7 @@ interface DbFileStore {
   pairRequests: any[];
   coupleData: Record<string, any>;
   chatMessages?: any[];
+  rateLimits?: Record<string, RateLimitEntry>;
 }
 
 function readDbFile(): DbFileStore {
@@ -111,12 +169,13 @@ function readDbFile(): DbFileStore {
         pairRequests: parsed.pairRequests || [],
         coupleData: parsed.coupleData || {},
         chatMessages: parsed.chatMessages || [],
+        rateLimits: parsed.rateLimits || {},
       };
     }
   } catch (e) {
     console.error("Error reading db_store.json", e);
   }
-  return { users: {}, pairRequests: [], coupleData: {}, chatMessages: [] };
+  return { users: {}, pairRequests: [], coupleData: {}, chatMessages: [], rateLimits: {} };
 }
 
 function writeDbFile(data: DbFileStore) {
@@ -529,6 +588,59 @@ app.post("/api/admin/clear-all-data", async (req, res) => {
   }
 });
 
+function generateToken(login: string): string {
+  const secret = process.env.JWT_SECRET || "loop_secret_fallback_12345";
+  return jwt.sign({ login }, secret, { expiresIn: "30d" });
+}
+
+function requireAuth(req: any, res: any, next: any) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Необходима авторизация" });
+  }
+  const token = authHeader.split(" ")[1];
+  try {
+    const secret = process.env.JWT_SECRET || "loop_secret_fallback_12345";
+    const decoded = jwt.verify(token, secret) as { login: string };
+    const userLogin = decoded.login;
+    req.userLogin = userLogin;
+
+    // RBAC: Generic checks against body/params to prevent accessing others' data
+    if (req.body && req.body.login && req.body.login !== userLogin) {
+      return res.status(403).json({ error: "Отказано в доступе (RBAC: login)" });
+    }
+    if (req.params && req.params.login && req.params.login !== userLogin) {
+      return res.status(403).json({ error: "Отказано в доступе (RBAC: params.login)" });
+    }
+    if (req.body && req.body.fromLogin && req.body.fromLogin !== userLogin) {
+      return res.status(403).json({ error: "Отказано в доступе (RBAC: fromLogin)" });
+    }
+    if (req.body && req.body.login1 && req.body.login2) {
+      if (req.body.login1 !== userLogin && req.body.login2 !== userLogin) {
+        return res.status(403).json({ error: "Отказано в доступе (RBAC: couple sync)" });
+      }
+    }
+    // Also protect coupleId paths, they look like login1_login2
+    if (req.params && req.params.coupleId) {
+      if (!req.params.coupleId.split('_').includes(userLogin)) {
+        return res.status(403).json({ error: "Отказано в доступе (RBAC: coupleId)" });
+      }
+    }
+    if (req.body && req.body.coupleId) {
+      if (!req.body.coupleId.split('_').includes(userLogin)) {
+        return res.status(403).json({ error: "Отказано в доступе (RBAC: body coupleId)" });
+      }
+    }
+    if (req.body && req.body.userLogin && req.body.userLogin !== userLogin) {
+       return res.status(403).json({ error: "Отказано в доступе (RBAC: body userLogin)" });
+    }
+
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: "Недействительный или истёкший токен" });
+  }
+}
+
 // Auth: Sync local client accounts to server (prevents 404 on container restart)
 app.post("/api/auth/sync", async (req, res) => {
   try {
@@ -632,7 +744,8 @@ app.post("/api/auth/register", async (req, res) => {
     saveUserToFile(newUser);
 
     const { passwordHash, ...safeUser } = newUser;
-    return res.json({ status: "ok", user: safeUser });
+    const token = generateToken(newUser.login);
+    return res.json({ status: "ok", user: safeUser, token });
   } catch (err: any) {
     console.error("Register error:", err);
     return res.status(500).json({ error: "Ошибка регистрации: " + (err?.message || String(err)) });
@@ -703,7 +816,8 @@ app.post("/api/auth/login", async (req, res) => {
       }
     }
 
-    return res.json({ status: "ok", user: safeUser, partner: partnerSafe });
+    const token = generateToken(user.login);
+    return res.json({ status: "ok", user: safeUser, partner: partnerSafe, token });
   } catch (err: any) {
     console.error("Login error:", err);
     return res.status(500).json({ error: "Ошибка входа: " + (err?.message || String(err)) });
@@ -711,7 +825,7 @@ app.post("/api/auth/login", async (req, res) => {
 });
 
 // Auth: Get User by Login
-app.get("/api/auth/user/:login", async (req, res) => {
+app.get("/api/auth/user/:login", requireAuth, async (req, res) => {
   try {
     const user = await findUserByLogin(req.params.login);
     if (!user) return res.status(404).json({ error: "Пользователь не найден" });
@@ -723,7 +837,7 @@ app.get("/api/auth/user/:login", async (req, res) => {
 });
 
 // Auth: Update Profile
-app.post("/api/auth/update-profile", async (req, res) => {
+app.post("/api/auth/update-profile", requireAuth, async (req, res) => {
   try {
     const {
       login,
@@ -765,7 +879,7 @@ app.post("/api/auth/update-profile", async (req, res) => {
 });
 
 // Auth: Change Password
-app.post("/api/auth/change-password", async (req, res) => {
+app.post("/api/auth/change-password", requireAuth, async (req, res) => {
   try {
     const { login, oldPassword, newPassword } = req.body;
     const cleanLogin = String(login || "").trim().toLowerCase().replace(/^@/, "");
@@ -805,7 +919,7 @@ app.post("/api/auth/change-password", async (req, res) => {
 });
 
 // Auth: Reset Password (when user forgot password)
-app.post("/api/auth/reset-password", async (req, res) => {
+app.post("/api/auth/reset-password", requireAuth, async (req, res) => {
   try {
     const { login, newPassword } = req.body;
     const cleanLogin = String(login || "")
@@ -842,7 +956,7 @@ app.post("/api/auth/reset-password", async (req, res) => {
 });
 
 // Pairing: Send Pair Request by Login
-app.post("/api/pair/request", async (req, res) => {
+app.post("/api/pair/request", requireAuth, async (req, res) => {
   try {
     const { fromLogin, toLogin } = req.body;
     const cleanFrom = String(fromLogin || "")
@@ -996,7 +1110,7 @@ app.post("/api/pair/request", async (req, res) => {
 });
 
 // Pairing: Accept Pair Request
-app.post("/api/pair/accept", async (req, res) => {
+app.post("/api/pair/accept", requireAuth, async (req, res) => {
   try {
     const { myLogin, partnerLogin } = req.body;
     const cleanMe = String(myLogin).trim().toLowerCase().replace(/^@/, "");
@@ -1046,7 +1160,7 @@ app.post("/api/pair/accept", async (req, res) => {
 });
 
 // Pairing: Reject Pair Request
-app.post("/api/pair/reject", async (req, res) => {
+app.post("/api/pair/reject", requireAuth, async (req, res) => {
   try {
     const { myLogin, partnerLogin } = req.body;
     const cleanMe = String(myLogin).trim().toLowerCase().replace(/^@/, "");
@@ -1080,7 +1194,7 @@ app.post("/api/pair/reject", async (req, res) => {
 });
 
 // Pairing: Disconnect / Unpair
-app.post("/api/pair/disconnect", async (req, res) => {
+app.post("/api/pair/disconnect", requireAuth, async (req, res) => {
   try {
     const { login } = req.body;
     const cleanLogin = String(login || "")
@@ -1119,7 +1233,7 @@ app.post("/api/pair/disconnect", async (req, res) => {
 });
 
 // Pairing: Get Pair Status & Pending Requests
-app.get("/api/pair/status/:login", async (req, res) => {
+app.get("/api/pair/status/:login", requireAuth, async (req, res) => {
   try {
     const login = String(req.params.login)
       .trim()
@@ -1194,7 +1308,7 @@ app.get("/api/pair/status/:login", async (req, res) => {
 
 // Shared Couple Data Sync (Pulse, Tests, Wishlists, Cravings, Invites)
 
-app.get("/api/chat/messages/:coupleId", async (req, res) => {
+app.get("/api/chat/messages/:coupleId", requireAuth, async (req, res) => {
   try {
     const { coupleId } = req.params;
     if (isSqlConfigured()) {
@@ -1222,7 +1336,7 @@ app.get("/api/chat/messages/:coupleId", async (req, res) => {
   }
 });
 
-app.post("/api/chat/messages", async (req, res) => {
+app.post("/api/chat/messages", requireAuth, async (req, res) => {
   try {
     const { id, coupleId, senderLogin, role, content, createdAt } = req.body;
     const msgObj = {
@@ -1256,7 +1370,7 @@ app.post("/api/chat/messages", async (req, res) => {
 });
 
 // AI Psychologist Chat History
-app.get("/api/ai/messages/:login", async (req, res) => {
+app.get("/api/ai/messages/:login", requireAuth, async (req, res) => {
   try {
     const login = String(req.params.login || "").toLowerCase().replace(/^@/, "");
     if (!login) return res.status(400).json({ error: "Missing login" });
@@ -1345,7 +1459,7 @@ const saveAIMessageToDb = async (login: string | undefined, userText: string, ai
   }
 };
 
-app.post("/api/couple/sync", async (req, res) => {
+app.post("/api/couple/sync", requireAuth, async (req, res) => {
   try {
     const { login1, login2, payload } = req.body;
     if (!login1 || !login2)
@@ -1448,7 +1562,7 @@ app.get("/api/couple/data/:login1/:login2", async (req, res) => {
   }
 });
 
-app.post("/api/push/subscribe", (req, res) => {
+app.post("/api/push/subscribe", requireAuth, (req, res) => {
   const { subscription, partnerId, coupleId } = req.body;
   if (subscription) {
     pushSubscriptions.push({
@@ -1461,7 +1575,7 @@ app.post("/api/push/subscribe", (req, res) => {
   res.json({ status: "subscribed", count: pushSubscriptions.length });
 });
 
-app.post("/api/push/send-test", async (req, res) => {
+app.post("/api/push/send-test", requireAuth, async (req, res) => {
   const { title, body } = req.body;
   // In production, user's backend agent will wire up web-push package with VAPID keys:
   // webpush.sendNotification(subscription, JSON.stringify({ title, body }))
@@ -1473,7 +1587,7 @@ app.post("/api/push/send-test", async (req, res) => {
 });
 
 // AI Psychologist Chat ("Сова")
-app.post("/api/ai/chat", async (req, res) => {
+app.post("/api/ai/chat", requireAuth, async (req, res) => {
   try {
     const { messages, coupleContext, currentPartner } = req.body;
 
@@ -1569,7 +1683,7 @@ app.post("/api/ai/chat", async (req, res) => {
 });
 
 // AI Couple Report & Deep Insights Generator
-app.post("/api/ai/generate-report", async (req, res) => {
+app.post("/api/ai/generate-report", requireAuth, async (req, res) => {
   try {
     const { coupleData } = req.body;
 
@@ -1634,7 +1748,7 @@ app.post("/api/ai/generate-report", async (req, res) => {
 });
 
 // AI Date Plan Generator
-app.post("/api/ai/date-idea", async (req, res) => {
+app.post("/api/ai/date-idea", requireAuth, async (req, res) => {
   try {
     const { vibe, budget, city, partner1, partner2 } = req.body;
 

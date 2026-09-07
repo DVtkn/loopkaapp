@@ -11,3 +11,13 @@ services:
         value: production
       - key: DATABASE_URL
         sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: APP_URL
+        sync: false

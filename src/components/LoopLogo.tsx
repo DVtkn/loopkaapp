@@ -14,7 +14,7 @@ export const LoopLogo: React.FC<LoopLogoProps> = ({
   const sizeClasses = {
     xs: 'w-6 h-6 rounded-[7px]',
     sm: 'w-8 h-8 rounded-xl',
-    md: 'w-10 h-10 rounded-2xl',
+    md: 'w-11 h-11 rounded-2xl',
     lg: 'w-12 h-12 rounded-[18px]',
     xl: 'w-16 h-16 rounded-[22px]',
   };

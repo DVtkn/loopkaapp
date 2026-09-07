@@ -47,7 +47,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAchievements, onOpenSettin
             {currentUser && onOpenSettings && (
               <button
                 onClick={onOpenSettings}
-                className="px-2.5 py-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] hover:border-[var(--accent)] text-left flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="px-3 py-2 min-h-[44px] rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] hover:border-[var(--accent)] text-left flex items-center gap-2 transition-colors cursor-pointer"
                 title="Перейти в личный кабинет"
               >
                 <div className="w-6 h-6 rounded-lg bg-[var(--accent)] text-white flex items-center justify-center font-bold text-xs shrink-0">
@@ -66,7 +66,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAchievements, onOpenSettin
             <button
               id="header-theme-btn"
               onClick={() => setTheme(theme === 'night' ? 'aurora' : 'night')}
-              className="p-2 sm:px-3 sm:py-1.5 rounded-full bg-[var(--surface-2)] text-[var(--text)] text-xs font-semibold border border-[var(--divider)] hover:opacity-90 active:scale-95 transition-all flex items-center gap-1.5"
+              className="p-2 sm:px-3 sm:py-1.5 min-w-[44px] min-h-[44px] sm:min-h-0 whitespace-nowrap rounded-full bg-[var(--surface-2)] text-[var(--text)] text-xs font-semibold border border-[var(--divider)] hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-1.5"
             >
               {theme === 'night' ? (
                 <>

@@ -236,7 +236,7 @@ export const UserProfileCabinet: React.FC = () => {
         
         <button onClick={() => setShowPasswordChange(true)} className="w-full flex items-center justify-between p-4 rounded-2xl bg-[var(--surface-2)] border border-[var(--divider)] hover:bg-[var(--surface-3)] transition-colors active:scale-[0.98]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[var(--surface)] flex items-center justify-center border border-[var(--divider)] shadow-xs">
+            <div className="w-11 h-11 rounded-xl bg-[var(--surface)] flex items-center justify-center border border-[var(--divider)] shadow-xs">
               <Lock className="w-5 h-5 text-[var(--text)]" />
             </div>
             <div className="text-sm font-semibold text-[var(--text)]">Изменить пароль</div>
@@ -246,7 +246,7 @@ export const UserProfileCabinet: React.FC = () => {
 
         <button onClick={authLogout} className="w-full flex items-center justify-between p-4 rounded-2xl bg-[var(--surface-2)] border border-[var(--divider)] hover:bg-[var(--surface-3)] transition-colors active:scale-[0.98]">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center border border-red-500/20 shadow-xs">
+            <div className="w-11 h-11 rounded-xl bg-red-500/10 flex items-center justify-center border border-red-500/20 shadow-xs">
               <LogOut className="w-5 h-5 text-red-500" />
             </div>
             <div className="text-sm font-semibold text-red-500">Выйти из аккаунта</div>

@@ -478,7 +478,7 @@ export const RelationshipRadar: React.FC<RelationshipRadarProps> = ({
       {!hasAnyData && (
         <div className="mt-4 p-4 rounded-2xl bg-gradient-to-r from-[var(--accent)]/10 via-[var(--accent-2)]/10 to-[var(--accent-blue)]/10 border border-[var(--accent)]/25 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[var(--accent)] text-white flex items-center justify-center font-black text-lg shrink-0">
+            <div className="w-11 h-11 rounded-xl bg-[var(--accent)] text-white flex items-center justify-center font-black text-lg shrink-0">
               <Compass className="w-5 h-5 text-white" />
             </div>
             <div>

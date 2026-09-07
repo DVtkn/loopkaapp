@@ -346,7 +346,7 @@ export interface ColoredIconProps {
 const SIZE_MAP = {
   xs: { box: 'w-6 h-6 rounded-lg', icon: 'w-3.5 h-3.5' },
   sm: { box: 'w-8 h-8 rounded-xl', icon: 'w-4 h-4' },
-  md: { box: 'w-10 h-10 rounded-2xl', icon: 'w-5 h-5' },
+  md: { box: 'w-11 h-11 rounded-2xl', icon: 'w-5 h-5' },
   lg: { box: 'w-12 h-12 rounded-2xl', icon: 'w-6 h-6' },
   xl: { box: 'w-16 h-16 rounded-3xl', icon: 'w-8 h-8' },
 };
@@ -483,7 +483,7 @@ export const ColoredAvatar: React.FC<{
       ? 'w-5 h-5'
       : size === 'lg'
       ? 'w-7 h-7'
-      : 'w-10 h-10';
+      : 'w-11 h-11';
 
   // If avatar is an external image URL, render image
   if (avatar && (avatar.startsWith('http') || avatar.startsWith('/'))) {

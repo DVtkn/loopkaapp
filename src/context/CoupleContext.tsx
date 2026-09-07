@@ -724,6 +724,9 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
 
       const safeUser: UserAccount = data.user;
+      if (data.token) {
+        safeSetStorage('loop_auth_token', data.token);
+      }
       let updatedDb = { ...accountsDb, [cleanLogin]: safeUser };
       if (data.partner) {
         updatedDb[data.partner.login.toLowerCase()] = data.partner;
@@ -803,6 +806,9 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
 
       const safeUser: UserAccount = data.user;
+      if (data.token) {
+        safeSetStorage('loop_auth_token', data.token);
+      }
       let updatedDb = { ...accountsDb, [cleanLogin]: safeUser };
       if (data.partner) {
         updatedDb[data.partner.login.toLowerCase()] = data.partner;
@@ -877,6 +883,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const authLogout = () => {
     setCurrentUserState(null);
     safeSetStorage('together_current_user', null);
+    safeSetStorage('loop_auth_token', null);
     setIsOnboarded(false);
   };
 
@@ -1639,7 +1646,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         months += 12;
       }
 
-      const pluralize = (n, forms) => {
+      const pluralize = (n: number, forms: [string, string, string]) => {
         const m10 = n % 10;
         const m100 = n % 100;
         if (m10 === 1 && m100 !== 11) return forms[0];

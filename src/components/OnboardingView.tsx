@@ -83,7 +83,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ onComplete }) =>
         
         {/* Brand Header */}
         <div className="flex items-center justify-center gap-2 mb-6">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-rose-500 to-pink-500 text-white flex items-center justify-center shadow-md">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-rose-500 to-pink-500 text-white flex items-center justify-center shadow-md">
             <Heart className="w-5 h-5 fill-white" />
           </div>
           <span className="text-2xl font-black tracking-tight text-[var(--text)]">Loop</span>
@@ -328,12 +328,12 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ onComplete }) =>
             <div>
               <h2 className="text-2xl font-black text-[var(--text)]">Пара создана!</h2>
               <div className="flex items-center justify-center gap-2 mt-2">
-                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[var(--surface-2)] border border-[var(--divider)]">
+                <div className="flex items-center gap-1.5 px-2.5 py-1 whitespace-nowrap rounded-full bg-[var(--surface-2)] border border-[var(--divider)]">
                   <ColoredIcon icon={getAvatarProfileMeta(selectedAvatar1).icon} color={getAvatarProfileMeta(selectedAvatar1).color} size="xs" />
                   <span className="text-xs font-bold text-[var(--text)]">{partner1Name}</span>
                 </div>
                 <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500/20" />
-                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[var(--surface-2)] border border-[var(--divider)]">
+                <div className="flex items-center gap-1.5 px-2.5 py-1 whitespace-nowrap rounded-full bg-[var(--surface-2)] border border-[var(--divider)]">
                   <ColoredIcon icon={getAvatarProfileMeta(selectedAvatar2).icon} color={getAvatarProfileMeta(selectedAvatar2).color} size="xs" />
                   <span className="text-xs font-bold text-[var(--text)]">{partner2Name}</span>
                 </div>

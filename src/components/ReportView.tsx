@@ -174,7 +174,7 @@ export const ReportView: React.FC<{
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
                 {analysis.hasData ? (
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--surface-2)] text-[var(--accent)] text-xs font-bold border border-[var(--divider)]">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 whitespace-nowrap rounded-full bg-[var(--surface-2)] text-[var(--accent)] text-xs font-bold border border-[var(--divider)]">
                     <Sparkles className="w-3.5 h-3.5" />
                     <span>Синхронизация пары: {analysis.compatibilityScore}%</span>
                   </div>
@@ -185,7 +185,7 @@ export const ReportView: React.FC<{
                   </div>
                 )}
 
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--surface-2)] text-[var(--text-2)] text-xs font-bold border border-[var(--divider)]">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 whitespace-nowrap rounded-full bg-[var(--surface-2)] text-[var(--text-2)] text-xs font-bold border border-[var(--divider)]">
                   <Award className="w-3.5 h-3.5 text-amber-500" />
                   <span>
                     Уровень {coupleLevelInfo.level} • {coupleXP} XP
@@ -424,7 +424,7 @@ export const ReportView: React.FC<{
             {/* Partner 1 Card */}
             <div className="bg-[var(--surface)] rounded-2xl p-5 border border-[var(--divider)] shadow-xs space-y-3">
               <div className="flex items-center gap-3 pb-3 border-b border-[var(--divider)]">
-                <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white font-extrabold text-lg flex items-center justify-center">
+                <div className="w-11 h-11 rounded-2xl bg-indigo-600 text-white font-extrabold text-lg flex items-center justify-center">
                   {coupleProfile.partner1.name[0] || '1'}
                 </div>
                 <div>
@@ -480,7 +480,7 @@ export const ReportView: React.FC<{
             {/* Partner 2 Card */}
             <div className="bg-[var(--surface)] rounded-2xl p-5 border border-[var(--divider)] shadow-xs space-y-3">
               <div className="flex items-center gap-3 pb-3 border-b border-[var(--divider)]">
-                <div className="w-10 h-10 rounded-2xl bg-rose-500 text-white font-extrabold text-lg flex items-center justify-center">
+                <div className="w-11 h-11 rounded-2xl bg-rose-500 text-white font-extrabold text-lg flex items-center justify-center">
                   {coupleProfile.partner2.name[0] || '2'}
                 </div>
                 <div>

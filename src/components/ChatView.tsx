@@ -145,7 +145,7 @@ export const ChatView: React.FC = () => {
             <button
               type="button"
               onClick={() => setActiveTab('home')}
-              className="md:hidden -ml-1 w-8 h-8 rounded-full flex items-center justify-center text-[var(--accent)] hover:bg-[var(--surface-2)] active:scale-95 transition-all shrink-0"
+              className="md:hidden -ml-1 w-11 h-11 rounded-full flex items-center justify-center text-[var(--accent)] hover:bg-[var(--surface-2)] active:scale-95 transition-all shrink-0"
               title="Назад"
             >
               <ChevronLeft className="w-6 h-6" />
@@ -187,7 +187,7 @@ export const ChatView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowCrisisHelp((prev) => !prev)}
-                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
                   showCrisisHelp ? 'bg-rose-100 text-rose-500 dark:bg-rose-950/40' : 'bg-[var(--surface-2)] text-[var(--text-2)] hover:text-[var(--text)]'
                 }`}
                 title="Экстренная помощь"
@@ -198,7 +198,7 @@ export const ChatView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => sendPartnerMessage('Сова, помоги нам разобраться с этим.', false)}
-                className="px-3 py-1.5 rounded-full bg-[var(--surface-2)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white border border-[var(--divider)] text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                className="px-3 py-1.5 whitespace-nowrap rounded-full bg-[var(--surface-2)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white border border-[var(--divider)] text-xs font-semibold flex items-center gap-1.5 transition-colors"
                 title="Позвать Сову в чат"
               >
                 <Bot className="w-3.5 h-3.5" />
@@ -372,7 +372,7 @@ export const ChatView: React.FC = () => {
         <button
           type="button"
           onClick={toggleRecording}
-          className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all ${
+          className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-all ${
             isRecording
               ? 'bg-rose-500 text-white animate-pulse'
               : 'bg-[var(--surface-2)] text-[var(--text-2)] hover:text-[var(--text)] active:scale-95'
@@ -408,7 +408,7 @@ export const ChatView: React.FC = () => {
         <button
           type="submit"
           disabled={!inputMessage.trim() || (owlMode === 'solo' && isAITyping)}
-          className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#FF453A] to-[#FF2D55] text-white flex items-center justify-center shrink-0 disabled:opacity-30 transition-all shadow-sm active:scale-95 hover:opacity-95"
+          className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#FF453A] to-[#FF2D55] text-white flex items-center justify-center shrink-0 disabled:opacity-30 transition-all shadow-sm active:scale-95 hover:opacity-95"
           title="Отправить"
         >
           <Send className="w-4 h-4 fill-white" />

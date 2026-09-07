@@ -97,7 +97,7 @@ export const Navigation: React.FC<NavigationProps> = ({
               <div>
                 <div className="flex items-center gap-1.5">
                   <span className="font-bold text-base tracking-tight text-[var(--text)]">Loop</span>
-                  <span className="text-[11px] uppercase font-semibold px-2 py-0.5 rounded-full bg-[var(--surface-2)] text-[var(--accent)] border border-[var(--divider)] shadow-2xs">
+                  <span className="text-[11px] uppercase font-semibold px-2 py-0.5 whitespace-nowrap rounded-full bg-[var(--surface-2)] text-[var(--accent)] border border-[var(--divider)] shadow-2xs">
                     Pro
                   </span>
                 </div>
@@ -107,7 +107,7 @@ export const Navigation: React.FC<NavigationProps> = ({
 
             <button
               onClick={() => setTheme(theme === 'night' ? 'aurora' : 'night')}
-              className="w-8 h-8 rounded-full bg-[var(--surface-2)] text-[var(--text)] flex items-center justify-center hover:opacity-80 transition-opacity border border-[var(--divider)] active:scale-95 shadow-2xs"
+              className="w-8 h-8 whitespace-nowrap rounded-full bg-[var(--surface-2)] text-[var(--text)] flex items-center justify-center hover:opacity-80 transition-opacity border border-[var(--divider)] active:scale-95 shadow-2xs"
               title="Переключить тему"
             >
               {theme === 'night' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-[var(--accent)]" />}
@@ -116,7 +116,7 @@ export const Navigation: React.FC<NavigationProps> = ({
 
           {/* Current User Card in Sidebar */}
           <div 
-            onClick={() => setActiveTab('profile')}
+            onClick={() => handleTabClick('profile')}
             className="p-3 mx-3 my-3 rounded-2xl bg-[var(--surface-2)] border border-[var(--divider)] cursor-pointer hover:border-[var(--accent)] hover:shadow-xs transition-all group shadow-2xs"
           >
             <div className="flex items-center justify-between mb-1.5">
@@ -228,10 +228,10 @@ export const Navigation: React.FC<NavigationProps> = ({
       {/* MOBILE BOTTOM TAB BAR (Apple Floating Glass Dock style) - Hidden in chat tab for full-screen messenger experience */}
       {!isTabActive('chat') && (
         <div 
-          className="bottom-nav md:hidden fixed bottom-0 left-0 right-0 z-40 select-none transition-all pb-[env(safe-area-inset-bottom,0px)]"
+          className="bottom-nav md:hidden fixed bottom-0 left-0 right-0 z-40 select-none transition-all pb-safe"
         >
           <div className="max-w-md mx-auto apple-glass rounded-t-2xl sm:rounded-2xl sm:mb-2 border-t sm:border border-[var(--divider)] shadow-[0_-4px_24px_rgba(0,0,0,0.06)] px-2 py-1">
-          <div className="grid grid-cols-5 h-13 items-center">
+          <div className="grid grid-cols-5 h-[56px] items-center">
             {navItems.map((item) => {
               const active = isTabActive(item.id);
               const Icon = item.icon;

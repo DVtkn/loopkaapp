@@ -24,7 +24,7 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[var(--divider)] pb-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-[var(--surface-2)] text-amber-500 border border-[var(--divider)] flex items-center justify-center shadow-xs">
+            <div className="w-11 h-11 rounded-2xl bg-[var(--surface-2)] text-amber-500 border border-[var(--divider)] flex items-center justify-center shadow-xs">
               <Award className="w-5 h-5" />
             </div>
             <div>

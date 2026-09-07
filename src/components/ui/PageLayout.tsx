@@ -57,7 +57,7 @@ export function PageLayout({
         <main className={`flex-1 min-h-0 flex flex-col min-w-0 w-full mx-auto ${
           isChatTab
             ? 'max-w-xl px-0 pb-0 h-full overflow-hidden'
-            : 'max-w-4xl px-4 sm:px-6 py-4 pb-[calc(86px+env(safe-area-inset-bottom,0px))] md:pb-8 overflow-y-auto'
+            : 'max-w-3xl px-4 sm:px-6 py-4 pb-[calc(86px+env(safe-area-inset-bottom,0px))] md:pb-8 overflow-y-auto'
         } ${className}`}>
           {!hideHeader && !isChatTab && (title || onBack || onHome) && (
             <div className="flex items-center justify-between pb-3 sm:pb-4 gap-3 shrink-0">
@@ -68,7 +68,7 @@ export function PageLayout({
                       <button
                         type="button"
                         onClick={onBack}
-                        className="p-2 -ml-2 rounded-xl text-[var(--text-2)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors cursor-pointer"
+                        className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center -ml-2 rounded-xl text-[var(--text-2)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors cursor-pointer"
                         title="Назад"
                       >
                         <ArrowLeft className="w-5 h-5" />
@@ -78,7 +78,7 @@ export function PageLayout({
                       <button
                         type="button"
                         onClick={onHome}
-                        className="p-2 rounded-xl text-[var(--text-2)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors cursor-pointer"
+                        className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-[var(--text-2)] hover:text-[var(--text)] hover:bg-[var(--surface-2)] transition-colors cursor-pointer"
                         title="На главную"
                       >
                         <Home className="w-5 h-5" />

@@ -46,4 +46,5 @@ export interface JsonStoreShape {
   coupleData: Record<string, any>;
   chatMessages: DbChatMessage[];
   rateLimits?: Record<string, { attempts: number; resetAt: number }>;
+  photos?: any[];
 }

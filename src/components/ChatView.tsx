@@ -20,6 +20,7 @@ import { useCouple } from '../context/CoupleContext';
 import { LoopLogo } from './LoopLogo';
 import { triggerHaptic } from '../utils/haptics';
 import { UserPartner } from '../types';
+import { getSemanticToken, SemanticColorType } from './ui/SystemBlocks';
 
 const isOnline = (lastActiveAt?: string) => {
   if (!lastActiveAt) return false;
@@ -127,10 +128,10 @@ export const ChatView: React.FC = () => {
   };
 
   const promptChips = [
-    { label: 'Разбор ссоры', text: 'Мы сегодня поссорились из-за бытовых мелочей. Помоги перевести претензии в Я-сообщения.', icon: MessageSquare },
-    { label: 'Метод Готтмана', text: 'Как использовать технику «Мягкого старта» в нашем разговоре сегодня вечером?', icon: Leaf },
-    { label: 'Языки любви', text: `Как мне лучше проявить заботу к ${otherPartner.name} с учётом её/его языка любви?`, icon: Heart },
-    { label: 'Сближение', text: 'Посоветуй 3 глубоких вопроса для нашего вечера без телефонов.', icon: Sparkles },
+    { label: 'Разбор ссоры', text: 'Мы сегодня поссорились из-за бытовых мелочей. Помоги перевести претензии в Я-сообщения.', icon: MessageSquare, color: 'dialogue' },
+    { label: 'Метод Готтмана', text: 'Как использовать технику «Мягкого старта» в нашем разговоре сегодня вечером?', icon: Leaf, color: 'care' },
+    { label: 'Языки любви', text: `Как мне лучше проявить заботу к ${otherPartner.name} с учётом её/его языка любви?`, icon: Heart, color: 'warmth' },
+    { label: 'Сближение', text: 'Посоветуй 3 глубоких вопроса для нашего вечера без телефонов.', icon: Sparkles, color: 'gamification' },
   ];
 
   return (
@@ -341,14 +342,23 @@ export const ChatView: React.FC = () => {
       <div className="chat-chips shrink-0 flex gap-2 overflow-x-auto no-scrollbar px-3 py-2 bg-[var(--bg)] border-t border-[var(--divider)]/40">
         {promptChips.map((chip, idx) => {
           const IconComp = chip.icon;
+          const token = getSemanticToken(chip.color as SemanticColorType);
           return (
             <button
               key={idx}
               type="button"
               onClick={() => handlePromptChipClick(chip.text)}
-              className="shrink-0 px-3.5 py-2 rounded-full bg-[var(--surface)] hover:bg-[var(--surface-2)] text-xs sm:text-sm font-medium text-[var(--text)] border border-[var(--divider)] shadow-2xs transition-colors whitespace-nowrap flex items-center gap-1.5"
+              className="shrink-0 px-3 py-1.5 rounded-full bg-[var(--surface)] hover:bg-[var(--surface-2)] text-xs sm:text-sm font-semibold text-[var(--text)] border border-[var(--divider)] shadow-2xs transition-all active:scale-95 whitespace-nowrap flex items-center gap-2 cursor-pointer"
             >
-              <IconComp className="w-3.5 h-3.5 text-[var(--accent)]" />
+              <div
+                className="w-5 h-5 rounded-lg flex items-center justify-center shrink-0 text-white"
+                style={{
+                  background: token.gradient,
+                  boxShadow: `inset 0 1px 1px rgba(255,255,255,0.4), 0 2px 4px ${token.glow}`,
+                }}
+              >
+                <IconComp className="w-3 h-3 text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.25)]" />
+              </div>
               <span>{chip.label}</span>
             </button>
           );

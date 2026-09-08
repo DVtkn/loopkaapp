@@ -34,6 +34,7 @@ import { ColoredIcon, IconColorTheme } from './ColoredIcon';
 import { triggerHaptic } from '../utils/haptics';
 import { TRUTHS, DARES } from '../data/truthDare';
 import { DEEP_TALKS, SPICY_18, THIS_OR_THAT } from '../data/gamesData';
+import { StatTile, CarouselTile, ActionRow, PrimaryCTA, CarouselItem } from './ui/SystemBlocks';
 
 export const DatesView: React.FC = () => {
   const {
@@ -59,12 +60,76 @@ export const DatesView: React.FC = () => {
   const otherPartner = currentPartnerId === 'partner1' ? coupleProfile.partner2 : coupleProfile.partner1;
 
   // --- Invite Form State ---
+  const [showInviteModal, setShowInviteModal] = useState<boolean>(false);
   const [inviteNote, setInviteNote] = useState<string>('Приглашаю тебя провести этот особенный вечер вдвоём');
   const [selectedVenueId, setSelectedVenueId] = useState<string>('');
   const [customLocationName, setCustomLocationName] = useState<string>('');
   const [inviteDate, setInviteDate] = useState<string>('');
   const [inviteTime, setInviteTime] = useState<string>('');
   const [inviteSentSuccess, setInviteSentSuccess] = useState<boolean>(false);
+
+  const dateFormats: CarouselItem[] = [
+    {
+      id: 'restaurant',
+      title: 'Ресторан',
+      icon: <Wine className="w-5 h-5" />,
+      color: 'warmth',
+      onClick: () => {
+        setInviteNote('Приглашаю тебя на романтический ужин в красивый ресторан');
+        setShowInviteModal(true);
+      },
+    },
+    {
+      id: 'cafe',
+      title: 'Кофейня',
+      icon: <Coffee className="w-5 h-5" />,
+      color: 'mood',
+      onClick: () => {
+        setInviteNote('Давай сходим за кофе и вкусным десертом');
+        setShowInviteModal(true);
+      },
+    },
+    {
+      id: 'park',
+      title: 'Прогулка',
+      icon: <TreePine className="w-5 h-5" />,
+      color: 'care',
+      onClick: () => {
+        setInviteNote('Пойдём погуляем в красивом парке на свежем воздухе');
+        setShowInviteModal(true);
+      },
+    },
+    {
+      id: 'cinema',
+      title: 'Кино',
+      icon: <Film className="w-5 h-5" />,
+      color: 'gamification',
+      onClick: () => {
+        setInviteNote('Выберем фильм и проведём уютный вечер в кино');
+        setShowInviteModal(true);
+      },
+    },
+    {
+      id: 'outdoor',
+      title: 'Крыша',
+      icon: <Sun className="w-5 h-5" />,
+      color: 'time',
+      onClick: () => {
+        setInviteNote('Хочу встретить с тобой закат на панорамной крыше');
+        setShowInviteModal(true);
+      },
+    },
+    {
+      id: 'spa',
+      title: 'СПА',
+      icon: <Sparkles className="w-5 h-5" />,
+      color: 'dialogue',
+      onClick: () => {
+        setInviteNote('Предлагаю расслабляющий день в СПА только для нас двоих');
+        setShowInviteModal(true);
+      },
+    },
+  ];
 
   // --- Add Venue Modal / Form State ---
   const [showAddVenueModal, setShowAddVenueModal] = useState<boolean>(false);
@@ -314,138 +379,170 @@ export const DatesView: React.FC = () => {
       </div>
 
       {/* ========================================================= */}
-      {/* SEGMENT 1: ПРИГЛАСИТЬ НА СВИДАНИЕ */}
+      {/* SEGMENT 1: ПРИГЛАСИТЬ НА СВИДАНИЕ (4-BLOCK LAYOUT) */}
       {/* ========================================================= */}
       {datesSubTab === 'invite' && (
-        <form onSubmit={handleSendInvite} className="space-y-4 animate-fadeIn">
-          {/* Note Card */}
-          <div className="p-4 space-y-3 rounded-2xl bg-[var(--surface)] border border-[var(--divider)] shadow-xs">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-extrabold text-[var(--text-2)] uppercase tracking-wider">
-                1. Романтическое послание
-              </span>
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-            </div>
-            <textarea
-              value={inviteNote}
-              onChange={(e) => setInviteNote(e.target.value)}
-              rows={3}
-              className="w-full p-3 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] resize-none"
+        <div className="space-y-4 animate-fadeIn">
+          {/* Block 1: Stat-tile grid (facts only, not clickable) */}
+          <div className="grid grid-cols-2 gap-3">
+            <StatTile
+              icon={<Heart className="w-5 h-5" />}
+              value={String(dateInvites.filter((i) => i.status === 'CONFIRMED' || i.completed).length)}
+              label="Свиданий проведено"
+              color="warmth"
+            />
+            <StatTile
+              icon={<MapPin className="w-5 h-5" />}
+              value={String(venues.length)}
+              label="Любимых мест"
+              color="mood"
             />
           </div>
 
-          {/* Place Selection */}
-          <div className="p-4 space-y-3 rounded-2xl bg-[var(--surface)] border border-[var(--divider)] shadow-xs">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-extrabold text-[var(--text-2)] uppercase tracking-wider">
-                2. Выбор локации (опционально)
-              </span>
-              <button
-                type="button"
-                onClick={() => setDatesSubTab('places')}
-                className="text-[11px] text-[var(--accent)] font-bold hover:underline flex items-center gap-1"
-              >
-                + Добавить место
-              </button>
-            </div>
+          {/* Block 2: Action-row group (max 2 rows) */}
+          <div className="space-y-2">
+            <ActionRow
+              icon={<MapPin className="w-5 h-5" />}
+              title="Места пары"
+              value={`${venues.length} локаций`}
+              onClick={() => setDatesSubTab('places')}
+              color="warmth"
+            />
+            <ActionRow
+              icon={<Gamepad2 className="w-5 h-5" />}
+              title="Игры для двоих"
+              value="4 формата"
+              onClick={() => setDatesSubTab('games')}
+              color="gamification"
+            />
+          </div>
 
-            {venues.length > 0 ? (
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-[var(--text-2)] block">
-                  Выбрать из вашего списка любимых мест:
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {venues.map((v) => {
-                    const isSelected = selectedVenueId === v.id;
-                    return (
-                      <button
-                        key={v.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedVenueId(isSelected ? '' : v.id);
-                          if (!isSelected) setCustomLocationName('');
-                        }}
-                        className={`p-3 rounded-xl border text-left transition-all ${
-                          isSelected
-                            ? 'bg-[var(--accent)]/10 border-[var(--accent)] text-[var(--text)] ring-1 ring-[var(--accent)]'
-                            : 'bg-[var(--surface-2)] border-[var(--divider)] text-[var(--text-2)] hover:text-[var(--text)]'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-[var(--text)] truncate">
-                            {v.name}
-                          </span>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--surface)] font-mono font-bold">
-                            {v.priceLevel}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-[var(--text-2)] truncate mt-0.5">{v.vibe}</p>
-                      </button>
-                    );
-                  })}
+          {/* Block 3: Primary CTA (exactly one) */}
+          <PrimaryCTA
+            icon={<Send className="w-5 h-5" />}
+            title="Пригласить на свидание"
+            subtitle={`Отправить инвайт ${otherPartner.name}`}
+            color="warmth"
+            onClick={() => setShowInviteModal(true)}
+          />
+
+          {/* Block 4: Carousel-tile (formats showcase) */}
+          <CarouselTile items={dateFormats} title="Идеи свиданий" />
+
+          {/* Modal: Invite Form */}
+          {showInviteModal && (
+            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="bg-[var(--surface)] rounded-3xl p-6 max-w-md w-full shadow-2xl border border-[var(--divider)] space-y-4 animate-fadeIn max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-amber-500" />
+                    <h3 className="text-base font-bold text-[var(--text)]">
+                      Приглашение на свидание
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowInviteModal(false)}
+                    className="p-1 text-[var(--text-2)] hover:text-[var(--text)] rounded-lg cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
+
+                <form onSubmit={(e) => { handleSendInvite(e); setShowInviteModal(false); }} className="space-y-3.5">
+                  <div>
+                    <label className="text-xs font-semibold text-[var(--text-2)] block mb-1">
+                      Романтическое послание
+                    </label>
+                    <textarea
+                      value={inviteNote}
+                      onChange={(e) => setInviteNote(e.target.value)}
+                      rows={2}
+                      className="w-full p-3 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] resize-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-[var(--text-2)] block mb-1">
+                      Локация или формат
+                    </label>
+                    {venues.length > 0 && (
+                      <select
+                        value={selectedVenueId}
+                        onChange={(e) => {
+                          setSelectedVenueId(e.target.value);
+                          if (e.target.value) setCustomLocationName('');
+                        }}
+                        className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none mb-2"
+                      >
+                        <option value="">-- Выбрать из мест пары --</option>
+                        {venues.map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {v.name} ({v.priceLevel})
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <input
+                      type="text"
+                      placeholder="Или введите название места..."
+                      value={customLocationName}
+                      onChange={(e) => {
+                        setCustomLocationName(e.target.value);
+                        if (e.target.value) setSelectedVenueId('');
+                      }}
+                      className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="text-xs font-semibold text-[var(--text-2)] block mb-1">
+                        Дата
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Напр. В субботу"
+                        value={inviteDate}
+                        onChange={(e) => setInviteDate(e.target.value)}
+                        className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-[var(--text-2)] block mb-1">
+                        Время
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Напр. 19:30"
+                        value={inviteTime}
+                        onChange={(e) => setInviteTime(e.target.value)}
+                        className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowInviteModal(false)}
+                      className="w-1/2 py-2.5 rounded-xl bg-[var(--surface-2)] text-xs font-bold text-[var(--text-2)] hover:text-[var(--text)] cursor-pointer"
+                    >
+                      Отмена
+                    </button>
+                    <button
+                      type="submit"
+                      className="w-1/2 py-2.5 rounded-xl bg-[var(--accent)] text-white text-xs font-bold shadow-xs hover:opacity-95 flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Отправить</span>
+                    </button>
+                  </div>
+                </form>
               </div>
-            ) : null}
-
-            {/* Custom Location Field */}
-            <div className="pt-2">
-              <label className="text-[10px] font-extrabold text-[var(--text-2)] uppercase block mb-1">
-                Свой вариант
-              </label>
-              <input
-                type="text"
-                value={customLocationName}
-                onChange={(e) => {
-                  setCustomLocationName(e.target.value);
-                  if (e.target.value) setSelectedVenueId('');
-                }}
-                className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
-              />
             </div>
-          </div>
-
-          {/* Date and Time */}
-          <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--divider)] shadow-xs grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-[10px] font-extrabold text-[var(--text-2)] uppercase block mb-1">
-                Дата (желаемая)
-              </label>
-              <input
-                type="text"
-                value={inviteDate}
-                onChange={(e) => setInviteDate(e.target.value)}
-                className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
-              />
-            </div>
-            <div>
-              <label className="text-[10px] font-extrabold text-[var(--text-2)] uppercase block mb-1">
-                Время
-              </label>
-              <input
-                type="text"
-                value={inviteTime}
-                onChange={(e) => setInviteTime(e.target.value)}
-                className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
-              />
-            </div>
-          </div>
-
-          {/* Submit Button */}
-          {inviteSentSuccess ? (
-            <div className="p-4 rounded-2xl bg-emerald-500 text-white font-bold text-xs text-center flex items-center justify-center gap-2 shadow-md animate-fadeIn">
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Приглашение отправлено {otherPartner.name}! (+20 XP)</span>
-            </div>
-          ) : (
-            <button
-              type="submit"
-              className="w-full py-3.5 rounded-2xl bg-[var(--accent)] text-white font-bold text-sm shadow-md hover:opacity-95 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
-            >
-              <Send className="w-4 h-4" />
-              <span>Отправить приглашение {otherPartner.name}</span>
-            </button>
           )}
-        </form>
+        </div>
       )}
 
       {/* ========================================================= */}
@@ -583,7 +680,91 @@ export const DatesView: React.FC = () => {
 
       
       {/* ========================================================= */}
-      {/* SEGMENT 4: ИГРЫ (ПРАВДА ИЛИ ДЕЙСТВИЕ) */}
+      {/* SEGMENT 2: МЕСТА ПАРЫ (4-BLOCK LAYOUT) */}
+      {/* ========================================================= */}
+      {datesSubTab === 'places' && (
+        <div className="space-y-4 animate-fadeIn">
+          {/* Block 1: Stat-tile grid */}
+          <div className="grid grid-cols-2 gap-3">
+            <StatTile
+              icon={<MapPin className="w-5 h-5" />}
+              value={String(venues.length)}
+              label="Мест сохранено"
+              color="warmth"
+            />
+            <StatTile
+              icon={<Sparkles className="w-5 h-5" />}
+              value="+30 XP"
+              label="За каждое место"
+              color="gamification"
+            />
+          </div>
+
+          {/* Block 2: Action-row group */}
+          <div className="space-y-2">
+            {venues.length > 0 ? (
+              <ActionRow
+                icon={<MapPin className="w-5 h-5" />}
+                title={venues[0].name}
+                value={venues[0].priceLevel || 'Локация'}
+                onClick={() => {
+                  setSelectedVenueId(venues[0].id);
+                  setInviteNote(`Приглашаю тебя в наше особенное место: «${venues[0].name}»`);
+                  setDatesSubTab('invite');
+                }}
+                color="warmth"
+              />
+            ) : (
+              <ActionRow
+                icon={<MapPin className="w-5 h-5" />}
+                title="Добавить первое место"
+                value="Создать"
+                onClick={() => setShowAddVenueModal(true)}
+                color="warmth"
+              />
+            )}
+          </div>
+
+          {/* Block 3: Primary CTA */}
+          <PrimaryCTA
+            icon={<Plus className="w-6 h-6" />}
+            title="Добавить любимое место"
+            subtitle="Ресторан, кофейня, парк или смотровая площадка"
+            color="warmth"
+            onClick={() => setShowAddVenueModal(true)}
+          />
+
+          {/* Block 4: Carousel-tile places */}
+          {venues.length > 0 ? (
+            <CarouselTile
+              title="Коллекция мест"
+              items={venues.map(v => {
+                const cat = categories.find(c => c.id === v.category);
+                const IconComponent = cat?.icon || MapPin;
+                return {
+                  id: v.id,
+                  icon: <IconComponent className="w-5 h-5" />,
+                  title: v.name,
+                  color: cat?.color === 'rose' ? 'warmth' : cat?.color === 'amber' ? 'mood' : cat?.color === 'emerald' ? 'care' : 'gamification',
+                  onClick: () => {
+                    setSelectedVenueId(v.id);
+                    setInviteNote(`Приглашаю тебя в наше особенное место: «${v.name}»`);
+                    setDatesSubTab('invite');
+                  }
+                };
+              })}
+            />
+          ) : (
+            <CarouselTile
+              title="Популярные форматы"
+              items={dateFormats}
+            />
+          )}
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* SEGMENT 4: ИГРЫ (4-BLOCK LAYOUT) */}
       {/* ========================================================= */}
       {datesSubTab === 'games' && (
         <motion.div
@@ -592,66 +773,112 @@ export const DatesView: React.FC = () => {
           className="space-y-4"
         >
           {!activeGame ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div 
+            <div className="space-y-4">
+              {/* Block 1: Stat-tile grid */}
+              <div className="grid grid-cols-2 gap-3">
+                <StatTile
+                  icon={<Gamepad2 className="w-5 h-5" />}
+                  value="4"
+                  label="Формата игр"
+                  color="gamification"
+                />
+                <StatTile
+                  icon={<Sparkles className="w-5 h-5" />}
+                  value="100+"
+                  label="Тем и заданий"
+                  color="mood"
+                />
+              </div>
+
+              {/* Block 2: Action-row */}
+              <div className="space-y-2">
+                <ActionRow
+                  icon={<Gamepad2 className="w-5 h-5" />}
+                  title="Правда или Действие"
+                  value="Играть"
+                  onClick={() => {
+                    triggerHaptic(50);
+                    setActiveGame('truth_dare');
+                    setTdCurrentPlayer(currentPartner?.name || 'Я');
+                  }}
+                  color="gamification"
+                />
+                <ActionRow
+                  icon={<Flame className="w-5 h-5" />}
+                  title="Пикантные вопросы 18+"
+                  value="Играть"
+                  onClick={() => {
+                    triggerHaptic(50);
+                    setActiveGame('spicy');
+                    handleDrawSimpleCard('spicy');
+                  }}
+                  color="warmth"
+                />
+              </div>
+
+              {/* Block 3: Primary CTA */}
+              <PrimaryCTA
+                icon={<Sparkles className="w-6 h-6" />}
+                title="Случайная игра для двоих"
+                subtitle="Запустить быстрый раунд сближения"
+                color="gamification"
                 onClick={() => {
                   triggerHaptic(50);
                   setActiveGame('truth_dare');
                   setTdCurrentPlayer(currentPartner?.name || 'Я');
                 }}
-                className="bg-[var(--surface)] p-5 rounded-3xl border border-[var(--divider)] shadow-sm hover:shadow-md transition-all cursor-pointer group"
-              >
-                <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <Gamepad2 className="w-6 h-6" />
-                </div>
-                <h3 className="text-lg font-bold text-[var(--text)] mb-1">Правда или Действие</h3>
-                <p className="text-sm text-[var(--text-2)]">Выполняйте задания или отвечайте на каверзные вопросы.</p>
-              </div>
+              />
 
-              <div 
-                onClick={() => {
-                  triggerHaptic(50);
-                  setActiveGame('deep_talks');
-                  handleDrawSimpleCard('deep_talks');
-                }}
-                className="bg-[var(--surface)] p-5 rounded-3xl border border-[var(--divider)] shadow-sm hover:shadow-md transition-all cursor-pointer group"
-              >
-                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <MessageCircle className="w-6 h-6" />
-                </div>
-                <h3 className="text-lg font-bold text-[var(--text)] mb-1">Глубокие беседы</h3>
-                <p className="text-sm text-[var(--text-2)]">Серьезные темы и искренние вопросы для сближения.</p>
-              </div>
-
-              <div 
-                onClick={() => {
-                  triggerHaptic(50);
-                  setActiveGame('spicy');
-                  handleDrawSimpleCard('spicy');
-                }}
-                className="bg-[var(--surface)] p-5 rounded-3xl border border-[var(--divider)] shadow-sm hover:shadow-md transition-all cursor-pointer group"
-              >
-                <div className="w-12 h-12 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <Flame className="w-6 h-6" />
-                </div>
-                <h3 className="text-lg font-bold text-[var(--text)] mb-1">Пикантные вопросы</h3>
-                <p className="text-sm text-[var(--text-2)]">Горячие темы (18+) для развития интимной близости.</p>
-              </div>
-
-              <div 
-                onClick={() => {
-                  triggerHaptic(50);
-                  setActiveGame('this_or_that');
-                  handleDrawSimpleCard('this_or_that');
-                }}
-                className="bg-[var(--surface)] p-5 rounded-3xl border border-[var(--divider)] shadow-sm hover:shadow-md transition-all cursor-pointer group"
-              >
-                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <Sparkles className="w-6 h-6" />
-                </div>
-                <h3 className="text-lg font-bold text-[var(--text)] mb-1">Или / Или</h3>
-                <p className="text-sm text-[var(--text-2)]">Быстрый опрос на предпочтения. Узнайте друг друга лучше!</p>
-              </div>
+              {/* Block 4: Carousel-tile games showcase */}
+              <CarouselTile
+                title="Все игры"
+                items={[
+                  {
+                    id: 'td',
+                    title: 'Правда',
+                    icon: <Gamepad2 className="w-5 h-5" />,
+                    color: 'gamification',
+                    onClick: () => {
+                      triggerHaptic(50);
+                      setActiveGame('truth_dare');
+                      setTdCurrentPlayer(currentPartner?.name || 'Я');
+                    }
+                  },
+                  {
+                    id: 'dt',
+                    title: 'Беседы',
+                    icon: <MessageCircle className="w-5 h-5" />,
+                    color: 'dialogue',
+                    onClick: () => {
+                      triggerHaptic(50);
+                      setActiveGame('deep_talks');
+                      handleDrawSimpleCard('deep_talks');
+                    }
+                  },
+                  {
+                    id: 'spicy',
+                    title: '18+',
+                    icon: <Flame className="w-5 h-5" />,
+                    color: 'warmth',
+                    onClick: () => {
+                      triggerHaptic(50);
+                      setActiveGame('spicy');
+                      handleDrawSimpleCard('spicy');
+                    }
+                  },
+                  {
+                    id: 'tot',
+                    title: 'Или / Или',
+                    icon: <Sparkles className="w-5 h-5" />,
+                    color: 'care',
+                    onClick: () => {
+                      triggerHaptic(50);
+                      setActiveGame('this_or_that');
+                      handleDrawSimpleCard('this_or_that');
+                    }
+                  }
+                ]}
+              />
             </div>
           ) : activeGame === 'truth_dare' ? (
             <div className="bg-[var(--surface)] p-5 rounded-3xl border border-[var(--divider)] shadow-sm relative min-h-[400px] flex flex-col">

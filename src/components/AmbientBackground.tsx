@@ -56,7 +56,7 @@ export const AmbientBackground: React.FC = () => {
       <div
         className="absolute inset-0"
         style={{
-          backgroundColor: isDark ? '#070709' : '#F4F4F8',
+          backgroundColor: isDark ? '#0D0C0E' : '#FAF9F6',
         }}
       />
 
@@ -66,14 +66,14 @@ export const AmbientBackground: React.FC = () => {
         style={{
           background: isDark
             ? `
-              radial-gradient(ellipse 120% 70% at 50% -10%, ${currentGlow.glowPrimary} 0%, rgba(255, 45, 85, 0.03) 45%, transparent 80%),
-              radial-gradient(ellipse 100% 60% at 85% 30%, ${currentGlow.glowSecondary} 0%, transparent 70%),
-              radial-gradient(ellipse 110% 70% at 15% 85%, ${currentGlow.glowPrimary} 0%, transparent 75%)
+              radial-gradient(ellipse 120% 70% at 50% -10%, rgba(255, 59, 78, 0.07) 0%, rgba(255, 90, 110, 0.03) 45%, transparent 80%),
+              radial-gradient(ellipse 100% 60% at 85% 30%, rgba(255, 59, 78, 0.05) 0%, transparent 70%),
+              radial-gradient(ellipse 110% 70% at 15% 85%, rgba(255, 90, 110, 0.04) 0%, transparent 75%)
             `
             : `
-              radial-gradient(ellipse 120% 60% at 50% -10%, ${currentGlow.glowPrimary} 0%, transparent 70%),
-              radial-gradient(ellipse 90% 50% at 80% 20%, ${currentGlow.glowSecondary} 0%, transparent 65%),
-              radial-gradient(ellipse 100% 60% at 20% 90%, ${currentGlow.glowPrimary} 0%, transparent 70%)
+              radial-gradient(ellipse 120% 60% at 50% -10%, rgba(255, 59, 78, 0.04) 0%, transparent 70%),
+              radial-gradient(ellipse 90% 50% at 80% 20%, rgba(255, 90, 110, 0.03) 0%, transparent 65%),
+              radial-gradient(ellipse 100% 60% at 20% 90%, rgba(255, 59, 78, 0.02) 0%, transparent 70%)
             `,
         }}
       />

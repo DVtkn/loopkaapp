@@ -65,3 +65,20 @@ export const pairLimiter = rateLimit({
     });
   },
 });
+
+export const photoUploadLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req: Request, res: Response) => {
+    logger.security("Превышен лимит загрузки фото", {
+      ip: req.ip,
+      path: req.originalUrl,
+    });
+    res.status(429).json({
+      error: "Слишком частая загрузка фотографий. Пожалуйста, подождите минуту.",
+    });
+  },
+});
+

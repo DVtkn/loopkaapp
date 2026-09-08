@@ -1,4 +1,10 @@
-import { pgTable, text, timestamp, boolean, jsonb, integer, real, unique, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, jsonb, integer, real, unique, index, customType } from 'drizzle-orm/pg-core';
+
+export const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() {
+    return 'bytea';
+  },
+});
 
 export const users = pgTable('users', {
   id: text('id').primaryKey(),
@@ -79,3 +85,19 @@ export const aiInsights = pgTable('ai_insights', {
 }, (t) => ({
   coupleCreatedIdx: index('ai_insights_couple_created_idx').on(t.coupleId, t.createdAt),
 }));
+
+export const photos = pgTable('photos', {
+  id: text('id').primaryKey(),
+  coupleId: text('couple_id').notNull(),
+  uploaderLogin: text('uploader_login').notNull(),
+  imageBytes: bytea('image_bytes').notNull(),
+  mimeType: text('mime_type').notNull(),
+  caption: text('caption'),
+  width: integer('width'),
+  height: integer('height'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  coupleIdIdx: index('photos_couple_id_idx').on(t.coupleId),
+  createdAtIdx: index('photos_created_at_idx').on(t.createdAt),
+}));
+

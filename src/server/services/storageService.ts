@@ -31,12 +31,13 @@ export function readEmergencyFile(): JsonStoreShape {
         coupleData: parsed.coupleData || {},
         chatMessages: parsed.chatMessages || [],
         rateLimits: parsed.rateLimits || {},
+        photos: parsed.photos || [],
       };
     }
   } catch (err: unknown) {
     logger.error('Ошибка чтения аварийного файла db_store.json', err);
   }
-  return { users: {}, pairRequests: [], coupleData: {}, chatMessages: [], rateLimits: {} };
+  return { users: {}, pairRequests: [], coupleData: {}, chatMessages: [], rateLimits: {}, photos: [] };
 }
 
 export function writeEmergencyFile(data: JsonStoreShape): void {

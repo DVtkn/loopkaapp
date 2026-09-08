@@ -6,11 +6,13 @@ import { createServer as createViteServer } from "vite";
 import bcrypt from "bcryptjs";
 import helmet from "helmet";
 import cors from "cors";
+import multer from "multer";
 import { eq, or, desc, and, sql } from "drizzle-orm";
 
 // Internal modules
 import { db, createPool, isSqlConfigured } from "./src/db/index.ts";
-import { users, pairRequests, coupleData, chatMessages, aiInsights, relationshipMetrics } from "./src/db/schema.ts";
+import { users, pairRequests, coupleData, chatMessages, aiInsights, relationshipMetrics, photos } from "./src/db/schema.ts";
+import { photoStorage, detectMimeType } from "./src/server/services/photoStorage.ts";
 import { recordDailyMetrics, getTrends } from "./src/server/analytics.ts";
 import { generateWeeklyInsight } from "./src/server/insights.ts";
 import { logger } from "./src/server/logger.ts";
@@ -20,6 +22,7 @@ import {
   loginLimiter,
   aiLimiter,
   pairLimiter,
+  photoUploadLimiter,
 } from "./src/server/middleware/rateLimit.ts";
 import {
   validateBody,
@@ -84,16 +87,16 @@ const PORT = 3000;
 // Helmet configured for security
 app.use(
   helmet({
-    contentSecurityPolicy: {
+    contentSecurityPolicy: process.env.NODE_ENV === "production" ? {
       directives: {
         defaultSrc: ["'self'"],
-        connectSrc: ["'self'", ...(process.env.APP_URL ? [process.env.APP_URL] : [])],
-        imgSrc: ["'self'", "data:", "blob:"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
+        connectSrc: ["'self'", "https:", "wss:"],
+        imgSrc: ["'self'", "data:", "blob:", "https:"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-        fontSrc: ["'self'", "data:"],
+        fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
       }
-    },
+    } : false,
     crossOriginEmbedderPolicy: false,
     crossOriginOpenerPolicy: false,
     crossOriginResourcePolicy: { policy: "cross-origin" },
@@ -273,6 +276,18 @@ async function initDatabase() {
         created_at text NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS photos (
+        id text PRIMARY KEY,
+        couple_id text NOT NULL,
+        uploader_login text NOT NULL,
+        image_bytes bytea NOT NULL,
+        mime_type text NOT NULL,
+        caption text,
+        width integer,
+        height integer,
+        created_at timestamp with time zone NOT NULL DEFAULT NOW()
+      );
+
       -- Индексы производительности (Drizzle & PostgreSQL)
       CREATE INDEX IF NOT EXISTS users_partner_login_idx ON users(partner_login);
       CREATE INDEX IF NOT EXISTS pair_requests_from_to_idx ON pair_requests(from_login, to_login);
@@ -281,6 +296,8 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS chat_messages_couple_created_idx ON chat_messages(couple_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS chat_messages_sender_login_idx ON chat_messages(sender_login);
       CREATE INDEX IF NOT EXISTS ai_insights_couple_created_idx ON ai_insights(couple_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS photos_couple_id_idx ON photos(couple_id);
+      CREATE INDEX IF NOT EXISTS photos_created_at_idx ON photos(created_at DESC);
     `);
     logger.info("Таблицы и индексы базы данных успешно проверены/созданы в PostgreSQL");
   } catch (err: unknown) {
@@ -1198,7 +1215,202 @@ app.post("/api/log-error", (req, res) => {
 });
 
 // ==========================================
-// 10. CENTRALIZED ERROR HANDLING MIDDLEWARE
+// 10. COUPLE PHOTO ARCHIVE (BYTEA STORAGE)
+// ==========================================
+
+const photoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5 MB
+  },
+});
+
+// Загрузка фото в архив пары
+app.post(
+  "/api/photos/upload",
+  photoUploadLimiter,
+  requireAuth,
+  (req, res, next) => {
+    photoUpload.single("photo")(req, res, (err) => {
+      if (err) {
+        if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+          return res.status(413).json({ error: "Размер файла превышает допустимый лимит 5 МБ" });
+        }
+        return res.status(400).json({ error: err.message || "Ошибка загрузки файла" });
+      }
+      next();
+    });
+  },
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ error: "Файл изображения не передан" });
+      }
+
+      const userLogin = req.user?.login;
+      if (!userLogin) {
+        return res.status(401).json({ error: "Необходима авторизация" });
+      }
+
+      const coupleId = req.body.coupleId ? String(req.body.coupleId).trim() : "";
+      const caption = req.body.caption ? String(req.body.caption).trim() : undefined;
+      const width = req.body.width ? parseInt(String(req.body.width), 10) : undefined;
+      const height = req.body.height ? parseInt(String(req.body.height), 10) : undefined;
+
+      if (!coupleId || !isUserInCouple(coupleId, userLogin)) {
+        logger.security("Отказ в доступе: попытка загрузки фото в чужую пару (IDOR)", {
+          userLogin,
+          coupleId,
+          ip: req.ip,
+        });
+        return res.status(403).json({ error: "Доступ запрещён: вы не состоите в этой паре" });
+      }
+
+      // Валидация MIME-типа по реальным сигнатурам байтов (Magic Bytes)
+      const detectedMime = detectMimeType(file.buffer);
+      if (!detectedMime) {
+        return res.status(400).json({
+          error: "Недопустимый формат файла. Поддерживаются только изображения JPEG, PNG и WebP",
+        });
+      }
+
+      const photo = await photoStorage.savePhoto({
+        coupleId,
+        uploaderLogin: userLogin,
+        imageBytes: file.buffer,
+        mimeType: detectedMime,
+        caption,
+        width: !isNaN(width as number) ? width : null,
+        height: !isNaN(height as number) ? height : null,
+      });
+
+      logger.info("Фото успешно загружено в архив пары", {
+        photoId: photo.id,
+        coupleId,
+        uploaderLogin: userLogin,
+        mimeType: photo.mimeType,
+        sizeBytes: file.size,
+      });
+
+      return res.status(201).json({
+        success: true,
+        photo,
+      });
+    } catch (err: unknown) {
+      logger.error("Критическая ошибка сохранения фото в архив", err);
+      return res.status(500).json({ error: "Не удалось сохранить фото" });
+    }
+  }
+);
+
+// Получить список метаданных фото пары (БЕЗ бинарных данных)
+app.get(
+  "/api/photos/list/:coupleId",
+  requireAuth,
+  requirePairOwnership,
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      const coupleId = req.params.coupleId;
+      const limit = Math.min(Math.max(1, parseInt(req.query.limit as string, 10) || 100), 100);
+      const offset = Math.max(0, parseInt(req.query.offset as string, 10) || 0);
+
+      const photos = await photoStorage.listPhotos(coupleId, limit, offset);
+
+      return res.json({
+        success: true,
+        photos,
+      });
+    } catch (err: unknown) {
+      logger.error("Ошибка загрузки списка фото архива", err);
+      return res.status(500).json({ error: "Не удалось получить список фото" });
+    }
+  }
+);
+
+// Выдача бинарных данных фото (требуется авторизация и принадлежность к паре)
+app.get(
+  "/api/photos/image/:id",
+  requireAuth,
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      const photoId = req.params.id;
+      const userLogin = req.user?.login;
+      if (!userLogin) {
+        return res.status(401).json({ error: "Необходима авторизация" });
+      }
+
+      const photo = await photoStorage.getPhotoBytes(photoId);
+      if (!photo) {
+        return res.status(404).json({ error: "Фотография не найдена" });
+      }
+
+      if (!isUserInCouple(photo.coupleId, userLogin)) {
+        logger.security("Несанкционированная попытка просмотра фото (IDOR)", {
+          userLogin,
+          photoId,
+          targetCoupleId: photo.coupleId,
+          ip: req.ip,
+        });
+        return res.status(403).json({ error: "Доступ к этой фотографии запрещён" });
+      }
+
+      res.setHeader("Content-Type", photo.mimeType);
+      res.setHeader("Cache-Control", "private, max-age=86400");
+      return res.end(photo.buffer);
+    } catch (err: unknown) {
+      logger.error("Ошибка выдачи файла фото", err);
+      return res.status(500).json({ error: "Ошибка при получении изображения" });
+    }
+  }
+);
+
+// Удаление фото из архива
+app.delete(
+  "/api/photos/:id",
+  requireAuth,
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      const photoId = req.params.id;
+      const userLogin = req.user?.login;
+      if (!userLogin) {
+        return res.status(401).json({ error: "Необходима авторизация" });
+      }
+
+      const photo = await photoStorage.getPhotoById(photoId);
+      if (!photo) {
+        return res.status(404).json({ error: "Фотография не найдена" });
+      }
+
+      const canDelete = isUserInCouple(photo.coupleId, userLogin) || photo.uploaderLogin === userLogin;
+      if (!canDelete) {
+        logger.security("Несанкционированная попытка удаления фото (IDOR)", {
+          userLogin,
+          photoId,
+          targetCoupleId: photo.coupleId,
+          ip: req.ip,
+        });
+        return res.status(403).json({ error: "У вас нет прав на удаление этой фотографии" });
+      }
+
+      await photoStorage.deletePhoto(photoId);
+
+      logger.info("Фотография удалена из архива", {
+        photoId,
+        userLogin,
+        coupleId: photo.coupleId,
+      });
+
+      return res.json({ success: true, message: "Фотография удалена" });
+    } catch (err: unknown) {
+      logger.error("Ошибка удаления фото из архива", err);
+      return res.status(500).json({ error: "Не удалось удалить фотографию" });
+    }
+  }
+);
+
+// ==========================================
+// 11. CENTRALIZED ERROR HANDLING MIDDLEWARE
 // ==========================================
 
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

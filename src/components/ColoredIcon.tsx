@@ -103,78 +103,114 @@ export type IconColorTheme =
   | 'fuchsia'
   | 'slate';
 
-const COLOR_CLASSES: Record<IconColorTheme, { bg: string; text: string; ring: string; glow: string }> = {
+const COLOR_CLASSES: Record<IconColorTheme, { bg: string; text: string; ring: string; glow: string; gradient: string; from: string; to: string }> = {
   rose: {
+    from: '#FF3B4E',
+    to: '#FF5A6E',
     bg: 'bg-rose-500/10 dark:bg-rose-500/15',
-    text: 'text-rose-500 dark:text-rose-400',
+    text: 'text-[#FF3B4E] dark:text-[#FF5A6E]',
     ring: 'border-rose-500/20 dark:border-rose-500/30',
-    glow: 'rgba(244, 63, 94, 0.25)',
+    glow: 'rgba(255, 59, 78, 0.35)',
+    gradient: 'shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.45),0_4px_12px_rgba(255,59,78,0.25)] text-white',
   },
   coral: {
-    bg: 'bg-orange-500/10 dark:bg-orange-500/15',
-    text: 'text-orange-500 dark:text-orange-400',
-    ring: 'border-orange-500/20 dark:border-orange-500/30',
-    glow: 'rgba(249, 115, 22, 0.25)',
+    from: '#FF3B4E',
+    to: '#FF7582',
+    bg: 'bg-rose-500/10 dark:bg-rose-500/15',
+    text: 'text-[#FF3B4E] dark:text-[#FF7582]',
+    ring: 'border-rose-500/20 dark:border-rose-500/30',
+    glow: 'rgba(255, 59, 78, 0.35)',
+    gradient: 'shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.45),0_4px_12px_rgba(255,59,78,0.25)] text-white',
   },
   amber: {
+    from: '#FF8A50',
+    to: '#FFA364',
     bg: 'bg-amber-500/10 dark:bg-amber-500/15',
-    text: 'text-amber-500 dark:text-amber-400',
+    text: 'text-amber-600 dark:text-amber-400',
     ring: 'border-amber-500/20 dark:border-amber-500/30',
-    glow: 'rgba(245, 158, 11, 0.25)',
+    glow: 'rgba(255, 138, 80, 0.35)',
+    gradient: 'shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.45),0_4px_12px_rgba(255,138,80,0.25)] text-white',
   },
   gold: {
-    bg: 'bg-yellow-500/10 dark:bg-yellow-500/15',
-    text: 'text-yellow-600 dark:text-yellow-400',
-    ring: 'border-yellow-500/20 dark:border-yellow-500/30',
-    glow: 'rgba(234, 179, 8, 0.25)',
+    from: '#FF9E40',
+    to: '#FFB86B',
+    bg: 'bg-amber-500/10 dark:bg-amber-500/15',
+    text: 'text-amber-600 dark:text-amber-400',
+    ring: 'border-amber-500/20 dark:border-amber-500/30',
+    glow: 'rgba(255, 158, 64, 0.35)',
+    gradient: 'shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.45),0_4px_12px_rgba(255,158,64,0.25)] text-white',
   },
   emerald: {
+    from: '#2FB86F',
+    to: '#239358',
     bg: 'bg-emerald-500/10 dark:bg-emerald-500/15',
-    text: 'text-emerald-500 dark:text-emerald-400',
+    text: 'text-emerald-600 dark:text-emerald-400',
     ring: 'border-emerald-500/20 dark:border-emerald-500/30',
-    glow: 'rgba(16, 185, 129, 0.25)',
+    glow: 'rgba(47, 184, 111, 0.35)',
+    gradient: 'shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.45),0_4px_12px_rgba(47,184,111,0.25)] text-white',
   },
   teal: {
+    from: '#2FB86F',
+    to: '#20834E',
     bg: 'bg-teal-500/10 dark:bg-teal-500/15',
-    text: 'text-teal-500 dark:text-teal-400',
+    text: 'text-teal-600 dark:text-teal-400',
     ring: 'border-teal-500/20 dark:border-teal-500/30',
-    glow: 'rgba(20, 184, 166, 0.25)',
+    glow: 'rgba(47, 184, 111, 0.35)',
+    gradient: 'shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.45),0_4px_12px_rgba(47,184,111,0.25)] text-white',
   },
   cyan: {
-    bg: 'bg-cyan-500/10 dark:bg-cyan-500/15',
-    text: 'text-cyan-500 dark:text-cyan-400',
-    ring: 'border-cyan-500/20 dark:border-cyan-500/30',
-    glow: 'rgba(6, 182, 212, 0.25)',
+    from: '#FF4D6D',
+    to: '#C9184A',
+    bg: 'bg-rose-500/10 dark:bg-rose-500/15',
+    text: 'text-[#FF4D6D] dark:text-[#FF758F]',
+    ring: 'border-rose-500/20 dark:border-rose-500/30',
+    glow: 'rgba(255, 77, 109, 0.35)',
+    gradient: 'shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.45),0_4px_12px_rgba(255,77,109,0.25)] text-white',
   },
   blue: {
-    bg: 'bg-blue-500/10 dark:bg-blue-500/15',
-    text: 'text-blue-500 dark:text-blue-400',
-    ring: 'border-blue-500/20 dark:border-blue-500/30',
-    glow: 'rgba(59, 130, 246, 0.25)',
+    from: '#FF4D6D',
+    to: '#C9184A',
+    bg: 'bg-rose-500/10 dark:bg-rose-500/15',
+    text: 'text-[#FF4D6D] dark:text-[#FF758F]',
+    ring: 'border-rose-500/20 dark:border-rose-500/30',
+    glow: 'rgba(255, 77, 109, 0.35)',
+    gradient: 'shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.45),0_4px_12px_rgba(255,77,109,0.25)] text-white',
   },
   indigo: {
-    bg: 'bg-indigo-500/10 dark:bg-indigo-500/15',
-    text: 'text-indigo-500 dark:text-indigo-400',
-    ring: 'border-indigo-500/20 dark:border-indigo-500/30',
-    glow: 'rgba(99, 102, 241, 0.25)',
+    from: '#E02A3C',
+    to: '#FF4558',
+    bg: 'bg-rose-500/10 dark:bg-rose-500/15',
+    text: 'text-[#E02A3C] dark:text-[#FF5A6E]',
+    ring: 'border-rose-500/20 dark:border-rose-500/30',
+    glow: 'rgba(224, 42, 60, 0.35)',
+    gradient: 'shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.45),0_4px_12px_rgba(224,42,60,0.25)] text-white',
   },
   purple: {
-    bg: 'bg-purple-500/10 dark:bg-purple-500/15',
-    text: 'text-purple-500 dark:text-purple-400',
-    ring: 'border-purple-500/20 dark:border-purple-500/30',
-    glow: 'rgba(168, 85, 247, 0.25)',
+    from: '#FF5E7E',
+    to: '#E63956',
+    bg: 'bg-rose-500/10 dark:bg-rose-500/15',
+    text: 'text-[#FF5E7E] dark:text-[#FF758F]',
+    ring: 'border-rose-500/20 dark:border-rose-500/30',
+    glow: 'rgba(255, 94, 126, 0.35)',
+    gradient: 'shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.45),0_4px_12px_rgba(255,94,126,0.25)] text-white',
   },
   fuchsia: {
-    bg: 'bg-fuchsia-500/10 dark:bg-fuchsia-500/15',
-    text: 'text-fuchsia-500 dark:text-fuchsia-400',
-    ring: 'border-fuchsia-500/20 dark:border-fuchsia-500/30',
-    glow: 'rgba(217, 70, 239, 0.25)',
+    from: '#FF5E7E',
+    to: '#C9184A',
+    bg: 'bg-rose-500/10 dark:bg-rose-500/15',
+    text: 'text-[#FF5E7E] dark:text-[#FF758F]',
+    ring: 'border-rose-500/20 dark:border-rose-500/30',
+    glow: 'rgba(255, 94, 126, 0.35)',
+    gradient: 'shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.45),0_4px_12px_rgba(255,94,126,0.25)] text-white',
   },
   slate: {
-    bg: 'bg-slate-500/10 dark:bg-slate-500/15',
-    text: 'text-slate-500 dark:text-slate-400',
-    ring: 'border-slate-500/20 dark:border-slate-500/30',
-    glow: 'rgba(100, 116, 139, 0.25)',
+    from: '#786F72',
+    to: '#4A4346',
+    bg: 'bg-stone-500/10 dark:bg-stone-500/15',
+    text: 'text-stone-600 dark:text-stone-300',
+    ring: 'border-stone-500/20 dark:border-stone-500/30',
+    glow: 'rgba(120, 111, 114, 0.35)',
+    gradient: 'shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.45),0_4px_12px_rgba(120,111,114,0.25)] text-white',
   },
 };
 
@@ -206,7 +242,7 @@ export function getMoodMeta(keyOrEmojiOrLabel?: string): MoodMeta {
   if (s.includes('calm') || s.includes('спокой') || s.includes('🌿') || s.includes('тиш') || s.includes('мир')) {
     return MOOD_PRESETS[0];
   }
-  if (s.includes('inspire') || s.includes('вдохнов') || s.includes('✨') || s.includes('творч')) {
+  if (s.includes('inspire') || s.includes('вдохнов') || s.includes('предвкуш') || s.includes('ожидан') || s.includes('✨') || s.includes('творч')) {
     return MOOD_PRESETS[1];
   }
   if (s.includes('tender') || s.includes('нежн') || s.includes('💕') || s.includes('люб')) {
@@ -218,7 +254,7 @@ export function getMoodMeta(keyOrEmojiOrLabel?: string): MoodMeta {
   if (s.includes('tired') || s.includes('устал') || s.includes('🔋') || s.includes('сон') || s.includes('отдых')) {
     return MOOD_PRESETS[4];
   }
-  if (s.includes('energy') || s.includes('энерг') || s.includes('🔥') || s.includes('драйв') || s.includes('огонь')) {
+  if (s.includes('energy') || s.includes('энерг') || s.includes('радост') || s.includes('счаст') || s.includes('весел') || s.includes('🔥') || s.includes('драйв') || s.includes('огонь')) {
     return MOOD_PRESETS[5];
   }
   if (s.includes('romance') || s.includes('романт') || s.includes('🥰') || s.includes('страст')) {
@@ -242,12 +278,12 @@ export interface LoveTapMeta {
 }
 
 export const LOVE_TAP_PRESETS: LoveTapMeta[] = [
-  { type: 'thinking', label: 'Думаю о тебе', color: 'amber', icon: Lightbulb },
+  { type: 'thinking', label: 'Думаю', color: 'amber', icon: Lightbulb },
   { type: 'miss', label: 'Скучаю', color: 'blue', icon: Clock },
-  { type: 'support', label: 'Нужна поддержка', color: 'rose', icon: HeartHandshake },
-  { type: 'proud', label: 'Горжусь тобой', color: 'indigo', icon: Award },
-  { type: 'grateful', label: 'Ценю тебя', color: 'emerald', icon: Heart },
-  { type: 'talk', label: 'Хочу поговорить', color: 'purple', icon: MessageCircle },
+  { type: 'support', label: 'Поддержка', color: 'rose', icon: HeartHandshake },
+  { type: 'proud', label: 'Горжусь', color: 'indigo', icon: Award },
+  { type: 'grateful', label: 'Ценю', color: 'emerald', icon: Heart },
+  { type: 'talk', label: 'Поговорить', color: 'purple', icon: MessageCircle },
 ];
 
 export function getLoveTapMeta(typeOrEmoji: string): LoveTapMeta {
@@ -338,7 +374,7 @@ export interface ColoredIconProps {
   name?: string;
   color?: IconColorTheme;
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
-  variant?: 'subtle' | 'solid' | 'ghost' | 'glow';
+  variant?: 'subtle' | 'solid' | 'ghost' | 'glow' | 'ios';
   className?: string;
   iconClassName?: string;
 }
@@ -372,24 +408,29 @@ export const ColoredIcon: React.FC<ColoredIconProps> = ({
     );
   }
 
-  if (variant === 'solid') {
+  if (variant === 'ios' || variant === 'subtle' || variant === 'solid') {
     return (
       <div
-        className={`inline-flex items-center justify-center flex-shrink-0 text-white shadow-xs ${sizeCfg.box} ${className}`}
+        className={`inline-flex items-center justify-center flex-shrink-0 transition-transform ${sizeCfg.box} text-white shadow-xs ${className}`}
         style={{
-          background: `linear-gradient(135deg, var(--tw-gradient-stops, #ff2d55), #e11d48)`,
+          background: `linear-gradient(135deg, ${pal.from}, ${pal.to})`,
+          boxShadow: `inset 0 1px 1.5px rgba(255,255,255,0.45), 0 3px 10px ${pal.glow}`,
         }}
       >
-        <IconComponent className={`${sizeCfg.icon} ${iconClassName}`} />
+        <IconComponent className={`${sizeCfg.icon} text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.25)] ${iconClassName}`} />
       </div>
     );
   }
 
   return (
     <div
-      className={`inline-flex items-center justify-center flex-shrink-0 border transition-transform ${sizeCfg.box} ${pal.bg} ${pal.text} ${pal.ring} ${className}`}
+      className={`inline-flex items-center justify-center flex-shrink-0 transition-transform ${sizeCfg.box} text-white ${className}`}
+      style={{
+        background: `linear-gradient(135deg, ${pal.from}, ${pal.to})`,
+        boxShadow: `inset 0 1px 1.5px rgba(255,255,255,0.45), 0 3px 10px ${pal.glow}`,
+      }}
     >
-      <IconComponent className={`${sizeCfg.icon} ${iconClassName}`} />
+      <IconComponent className={`${sizeCfg.icon} text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.25)] ${iconClassName}`} />
     </div>
   );
 };

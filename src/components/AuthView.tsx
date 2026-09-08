@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { LandingView } from './LandingView';
 import {
   Heart,
   Lock,
@@ -15,6 +16,7 @@ import { useCouple } from '../context/CoupleContext';
 
 export const AuthView: React.FC = () => {
   const { authLogin, authRegister, authResetPassword } = useCouple();
+  const [showLanding, setShowLanding] = useState(true);
 
   const [mode, setMode] = useState<'login' | 'register' | 'reset'>('login');
   const [login, setLogin] = useState<string>('');
@@ -71,6 +73,14 @@ export const AuthView: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  if (showLanding) {
+    return (
+      <div className="h-full w-full overflow-y-auto bg-[var(--bg)] selection:bg-[var(--accent)]/20 selection:text-[var(--accent)]">
+        <LandingView onEnterApp={() => setShowLanding(false)} />
+      </div>
+    );
+  }
 
   return (
     <div className="h-full w-full bg-[var(--bg)] flex items-center justify-center p-4 sm:p-6 select-none overflow-y-auto relative">

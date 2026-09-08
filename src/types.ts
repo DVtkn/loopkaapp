@@ -364,3 +364,15 @@ export interface AiInsightRecord {
   periodEnd: string;
   createdAt: string;
 }
+
+export interface PhotoMetadata {
+  id: string;
+  coupleId: string;
+  uploaderLogin: string;
+  mimeType: string;
+  caption: string | null;
+  width: number | null;
+  height: number | null;
+  createdAt: string;
+}
+

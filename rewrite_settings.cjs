@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+const fs = require('fs');
+
+const code = `import React, { useState, useEffect } from 'react';
 import { 
   Sparkles, Award, Star, Moon, Sun, Bell, BellRing, Lock, Download, 
   RotateCcw, LogOut, Edit2, Heart, UserPlus, Copy, CheckCircle2, ChevronRight
@@ -56,7 +58,7 @@ export const SettingsView: React.FC = () => {
 
   const handleChangePassword = async () => {
     const res = await changePassword(oldPassword, newPassword);
-    setPasswordMsg({ text: res.success ? 'Пароль изменён' : (res.error || 'Ошибка'), isError: !res.success });
+    setPasswordMsg({ text: res.message || res.error || '', isError: !res.success });
     if (res.success) {
       setTimeout(() => setShowPasswordModal(false), 1500);
     }
@@ -98,20 +100,20 @@ export const SettingsView: React.FC = () => {
       const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(coupleProfile, null, 2));
       const a = document.createElement('a');
       a.href = dataStr;
-      a.download = `loop-data-${coupleProfile.id}.json`;
+      a.download = \`loop-data-\${coupleProfile.id}.json\`;
       a.click();
     } catch {}
   };
 
   // Carousel Items
   const settingsItems: CarouselItem[] = [
-    { id: 'theme', icon: theme === 'night' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />, title: 'Тема', onClick: () => setTheme(theme === 'night' ? 'aurora' : 'night'), color: 'warmth' },
-    { id: 'push', icon: pushStatus.permission === 'granted' ? <BellRing className="w-5 h-5" /> : <Bell className="w-5 h-5" />, title: 'Уведомления', onClick: handleEnablePush, color: 'time' },
-    { id: 'password', icon: <Lock className="w-5 h-5" />, title: 'Пароль', onClick: () => setShowPasswordModal(true), color: 'dialogue' },
-    { id: 'export', icon: <Download className="w-5 h-5" />, title: 'Экспорт', onClick: handleExportData, color: 'care' },
-    { id: 'reset', icon: <RotateCcw className="w-5 h-5" />, title: 'Сброс тестов', onClick: () => setShowResetTestsModal(true), color: 'mood' },
-    { id: 'demo', icon: <Sparkles className="w-5 h-5" />, title: 'Демо-режим', onClick: loadDemoCouple, color: 'gamification' },
-    { id: 'logout', icon: <LogOut className="w-5 h-5" />, title: 'Выйти', onClick: authLogout, color: 'warmth' }
+    { id: 'theme', icon: theme === 'dark' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />, title: 'Тема', onClick: () => setTheme(theme === 'dark' ? 'light' : 'dark'), color: 'var(--accent)' },
+    { id: 'push', icon: pushStatus.isGranted ? <BellRing className="w-5 h-5" /> : <Bell className="w-5 h-5" />, title: 'Уведомления', onClick: handleEnablePush, color: '#3b82f6' },
+    { id: 'password', icon: <Lock className="w-5 h-5" />, title: 'Пароль', onClick: () => setShowPasswordModal(true), color: '#8b5cf6' },
+    { id: 'export', icon: <Download className="w-5 h-5" />, title: 'Экспорт', onClick: handleExportData, color: '#10b981' },
+    { id: 'reset', icon: <RotateCcw className="w-5 h-5" />, title: 'Сброс тестов', onClick: () => setShowResetTestsModal(true), color: '#f59e0b' },
+    { id: 'demo', icon: <Sparkles className="w-5 h-5" />, title: 'Демо-режим', onClick: loadDemoCouple, color: '#ec4899' },
+    { id: 'logout', icon: <LogOut className="w-5 h-5" />, title: 'Выйти', onClick: authLogout, color: '#ef4444' }
   ];
 
   return (
@@ -122,26 +124,25 @@ export const SettingsView: React.FC = () => {
         <div className="grid grid-cols-2 gap-3 shrink-0">
           <StatTile 
             icon={<Award className="w-6 h-6" />} 
-            value={coupleLevelInfo.level}
-            label={coupleLevelInfo.levelName}
-            color="gamification"
+            value={coupleLevelInfo.currentLevel}
+            label={coupleLevelInfo.title}
+            color="#6366f1"
           />
           <StatTile 
             icon={<Star className="w-6 h-6" />} 
             value={coupleXP}
             label="Опыт пары"
-            color="mood"
+            color="#f59e0b"
           />
         </div>
 
         {/* Block 2: Action Rows Group (Max 2) */}
-        <div className="rounded-2xl overflow-hidden shadow-xs space-y-2">
+        <div className="rounded-[20px] overflow-hidden border border-[var(--divider)] shadow-xs">
           <ActionRow 
             icon={<Edit2 className="w-4 h-4" />}
             title={currentUser?.name || 'Мой профиль'}
-            value={`@${currentUser?.login}`}
+            value={\`@\${currentUser?.login}\`}
             onClick={() => setShowEditName(true)}
-            color="dialogue"
           />
           {isPaired ? (
             <ActionRow 
@@ -149,7 +150,7 @@ export const SettingsView: React.FC = () => {
               title={otherPartner?.name || 'Партнёр'}
               value="В союзе"
               onClick={() => setShowDisconnectModal(true)}
-              color="warmth"
+              color="#f43f5e"
             />
           ) : (
             <ActionRow 
@@ -157,17 +158,16 @@ export const SettingsView: React.FC = () => {
               title="Пара не создана"
               value="Связать"
               onClick={() => setShowPairModal(true)}
-              color="warmth"
+              color="#f43f5e"
             />
           )}
         </div>
 
         {/* Block 3: Primary CTA */}
         <PrimaryCTA 
-          icon={copiedCode ? <CheckCircle2 className="w-6 h-6" /> : <Copy className="w-6 h-6" />}
+          icon={copiedCode ? <CheckCircle2 className="w-5 h-5 fill-white" /> : <Copy className="w-5 h-5 fill-white" />}
           title={copiedCode ? "Скопировано!" : "Код для связи"}
-          subtitle={`Ваш код: ${coupleProfile.linkCode || '@' + currentUser?.login}`}
-          color="gamification"
+          subtitle={\`Ваш код: \${coupleProfile.linkCode || '@' + currentUser?.login}\`}
           onClick={handleCopyLinkCode}
         />
 
@@ -211,7 +211,7 @@ export const SettingsView: React.FC = () => {
               className="w-full bg-[var(--surface-2)] border border-[var(--divider)] rounded-xl px-4 py-3 text-[var(--text)] font-medium outline-none focus:border-[var(--accent)] mb-2"
               placeholder="Логин партнёра"
             />
-            {pairMessage && <p className={`text-xs font-bold mb-4 ${pairMessage.isError ? 'text-rose-500' : 'text-emerald-500'}`}>{pairMessage.text}</p>}
+            {pairMessage && <p className={\`text-xs font-bold mb-4 \${pairMessage.isError ? 'text-rose-500' : 'text-emerald-500'}\`}>{pairMessage.text}</p>}
             <div className="flex gap-2 mt-2">
               <button onClick={() => setShowPairModal(false)} className="flex-1 py-3 rounded-xl bg-[var(--surface-2)] font-bold text-sm text-[var(--text)]">Отмена</button>
               <button onClick={handlePair} className="flex-1 py-3 rounded-xl bg-[var(--accent)] font-bold text-sm text-white">Отправить</button>
@@ -239,7 +239,7 @@ export const SettingsView: React.FC = () => {
               className="w-full bg-[var(--surface-2)] border border-[var(--divider)] rounded-xl px-4 py-3 text-[var(--text)] font-medium outline-none"
               placeholder="Новый пароль"
             />
-            {passwordMsg && <p className={`text-xs font-bold ${passwordMsg.isError ? 'text-rose-500' : 'text-emerald-500'}`}>{passwordMsg.text}</p>}
+            {passwordMsg && <p className={\`text-xs font-bold \${passwordMsg.isError ? 'text-rose-500' : 'text-emerald-500'}\`}>{passwordMsg.text}</p>}
             <div className="flex gap-2 pt-2">
               <button onClick={() => setShowPasswordModal(false)} className="flex-1 py-3 rounded-xl bg-[var(--surface-2)] font-bold text-sm text-[var(--text)]">Отмена</button>
               <button onClick={handleChangePassword} className="flex-1 py-3 rounded-xl bg-[var(--accent)] font-bold text-sm text-white">Сохранить</button>
@@ -280,3 +280,7 @@ export const SettingsView: React.FC = () => {
     </PageLayout>
   );
 };
+`;
+
+fs.writeFileSync('src/components/SettingsView.tsx', code);
+console.log("SettingsView rewritten");

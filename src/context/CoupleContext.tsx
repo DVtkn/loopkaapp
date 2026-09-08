@@ -133,6 +133,7 @@ interface CoupleContextType {
   toggleChallenge: (id: string) => void;
   tests: TestCategory[];
   submitTestAnswers: (testId: string, answers: Record<string, any>) => void;
+  resetTests: () => void;
   smallCravings: SmallCraving[];
   addCraving: (title: string, category: SmallCraving['category']) => void;
   toggleCraving: (id: string) => void;
@@ -510,7 +511,14 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               const updated = { ...prev };
               data.users.forEach((u: UserAccount) => {
                 const k = u.login.toLowerCase();
-                if (!updated[k] || updated[k].name !== u.name || updated[k].avatarEmoji !== u.avatarEmoji || updated[k].partnerLogin !== u.partnerLogin) {
+                if (
+                  !updated[k] ||
+                  updated[k].name !== u.name ||
+                  updated[k].avatarEmoji !== u.avatarEmoji ||
+                  updated[k].partnerLogin !== u.partnerLogin ||
+                  JSON.stringify(updated[k]?.currentMood) !== JSON.stringify(u.currentMood) ||
+                  updated[k]?.lastActiveAt !== u.lastActiveAt
+                ) {
                   updated[k] = { ...updated[k], ...u };
                   changed = true;
                 }
@@ -663,7 +671,14 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               const updated = { ...prev };
               usersData.users.forEach((u: UserAccount) => {
                 const k = u.login.toLowerCase();
-                if (!updated[k] || updated[k].name !== u.name || updated[k].avatarEmoji !== u.avatarEmoji || updated[k].partnerLogin !== u.partnerLogin) {
+                if (
+                  !updated[k] ||
+                  updated[k].name !== u.name ||
+                  updated[k].avatarEmoji !== u.avatarEmoji ||
+                  updated[k].partnerLogin !== u.partnerLogin ||
+                  JSON.stringify(updated[k]?.currentMood) !== JSON.stringify(u.currentMood) ||
+                  updated[k]?.lastActiveAt !== u.lastActiveAt
+                ) {
                   updated[k] = { ...updated[k], ...u };
                   changed = true;
                 }
@@ -1762,6 +1777,30 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     triggerConfetti();
   };
 
+  const resetTests = () => {
+    const fresh = getFreshTests();
+    setTests(fresh);
+    safeSetStorage('together_tests', fresh);
+    setCoupleProfile((prev) => {
+      const updated = {
+        ...prev,
+        testsCompletedCount: 0,
+        partner1: {
+          ...prev.partner1,
+          loveLanguage: 'Пройдите тест',
+          attachmentStyle: 'Пройдите тест',
+        },
+        partner2: {
+          ...prev.partner2,
+          loveLanguage: 'Пройдите тест',
+          attachmentStyle: 'Пройдите тест',
+        },
+      };
+      safeSetStorage('together_couple_profile', updated);
+      return updated;
+    });
+  };
+
   const addCraving = (title: string, category: SmallCraving['category']) => {
     const targetPartner: PartnerId = currentPartnerId === 'partner1' ? 'partner2' : 'partner1';
     const newCraving: SmallCraving = {
@@ -1859,6 +1898,45 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const confirmDatePlan = (inviteId: string, location: string, dateStr: string) => {};
   const addMoodStatus = (emoji: string, label: string, severity: number, note?: string) => {
+    const cleanNote = (note || '').trim();
+    const newMood = {
+      emoji,
+      label,
+      note: cleanNote,
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (currentUser) {
+      updateUserProfile({
+        currentMood: newMood,
+        lastActiveAt: new Date().toISOString(),
+      });
+    }
+
+    setCoupleProfile((prev) => {
+      const isP1 = currentPartnerId === 'partner1';
+      return {
+        ...prev,
+        partner1: isP1 ? { ...prev.partner1, currentMood: newMood } : prev.partner1,
+        partner2: !isP1 ? { ...prev.partner2, currentMood: newMood } : prev.partner2,
+      };
+    });
+
+    const newMoodEntry: MoodHistoryItem = {
+      id: `m-${Date.now()}`,
+      partnerId: currentPartnerId,
+      date: new Date().toISOString(),
+      emoji,
+      label,
+      score: severity,
+      note: cleanNote,
+    };
+    setMoodHistory((prev) => {
+      const updated = [newMoodEntry, ...prev.slice(0, 49)];
+      safeSetStorage('together_mood_history', updated);
+      return updated;
+    });
+
     addCoupleXP(15, `Отметка настроения: ${label}`, 'mood');
   };
 
@@ -2229,6 +2307,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         toggleChallenge,
         tests,
         submitTestAnswers,
+        resetTests,
         smallCravings,
         addCraving,
         toggleCraving,

@@ -124,12 +124,13 @@ const MainLayout: React.FC = () => {
           </div>
         )}
 
-                <AnimatePresence initial={false}>
+        <AnimatePresence initial={false} mode="wait">
           <motion.div
             key={isChatTab ? 'chat' : activeTab}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.15 }}
+            initial={{ opacity: 0, x: 10 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -10 }}
+            transition={{ duration: 0.2, ease: [0.25, 1, 0.5, 1] }}
             className="flex-1 flex flex-col min-h-0 h-full w-full"
           >
             {renderActiveView()}

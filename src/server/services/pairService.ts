@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { db, isSqlConfigured } from '../../db/index.ts';
 import { users, pairRequests } from '../../db/schema.ts';
 import { logger } from '../logger.ts';
-import { readEmergencyFile, writeEmergencyFile, findUserByLogin } from './storageService.ts';
+import { readEmergencyFile, writeEmergencyFile, findUserByLogin, getCoupleData, saveCoupleData } from './storageService.ts';
 import { DbUser, DbPairRequest } from '../types.ts';
 
 export async function acceptPair(cleanMe: string, cleanPartner: string) {
@@ -84,6 +84,49 @@ export async function acceptPair(cleanMe: string, cleanPartner: string) {
 
   const updatedMe = await findUserByLogin(cleanMe);
   const updatedPartner = await findUserByLogin(cleanPartner);
+
+  if (updatedMe && updatedPartner) {
+    const key = [cleanMe, cleanPartner].sort().join('_');
+    const existingData = await getCoupleData(key);
+    if (!existingData || !existingData.coupleProfile) {
+      const initData = {
+        ...(existingData || {}),
+        coupleProfile: {
+          id: 'c-' + Date.now(),
+          status: 'ACTIVE',
+          linkCode: `LOOP-${Math.floor(1000 + Math.random() * 9000)}`,
+          startDate: now.split('T')[0],
+          city: updatedMe.city || updatedPartner.city || 'Москва',
+          partner1: {
+            id: 'partner1',
+            name: updatedMe.name || cleanMe,
+            login: cleanMe,
+            avatar: updatedMe.avatarEmoji || 'user',
+            email: '',
+            gender: updatedMe.gender,
+            loveLanguage: updatedMe.loveLanguage || 'Пройдите тест',
+            attachmentStyle: updatedMe.attachmentStyle || 'Пройдите тест',
+            currentMood: updatedMe.currentMood || { emoji: 'calm', label: 'Спокойно', updatedAt: now }
+          },
+          partner2: {
+            id: 'partner2',
+            name: updatedPartner.name || cleanPartner,
+            login: cleanPartner,
+            avatar: updatedPartner.avatarEmoji || 'user',
+            email: '',
+            gender: updatedPartner.gender,
+            loveLanguage: updatedPartner.loveLanguage || 'Пройдите тест',
+            attachmentStyle: updatedPartner.attachmentStyle || 'Пройдите тест',
+            currentMood: updatedPartner.currentMood || { emoji: 'calm', label: 'Спокойно', updatedAt: now }
+          },
+          level: 1,
+          levelName: 'Первый шаг',
+          testsCompletedCount: 0,
+        }
+      };
+      await saveCoupleData(key, initData);
+    }
+  }
 
   return { updatedMe, updatedPartner };
 }

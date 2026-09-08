@@ -247,7 +247,7 @@ export const CarouselTile: React.FC<CarouselTileProps> = ({ items, title }) => {
   return (
     <div className="space-y-2.5 shrink-0 w-full overflow-hidden">
       {title && (
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-3)] px-0.5">
+        <h3 className="text-xs font-semibold text-[var(--text-3)] px-0.5">
           {title}
         </h3>
       )}

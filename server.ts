@@ -796,6 +796,7 @@ app.get("/api/pair/status/:login", requireAuth, requirePairOwnership, async (req
 
     return res.json({
       paired: !!user.partnerLogin,
+      user: toSafeUser(user),
       partner: partner ? toSafeUser(partner) : null,
       incomingRequests: incoming,
       outgoingRequests: outgoing,
@@ -914,7 +915,7 @@ app.get("/api/chat/messages/:coupleId", requireAuth, requirePairOwnership, async
 
 app.post("/api/chat/messages", requireAuth, requirePairOwnership, validateBody(chatMessageCreateSchema), async (req: AuthenticatedRequest, res) => {
   try {
-    const { coupleId, senderLogin, text } = req.body;
+    const { coupleId, senderLogin, content, role } = req.body;
     const userLogin = req.user?.login;
 
     if (senderLogin !== userLogin) {
@@ -926,8 +927,8 @@ app.post("/api/chat/messages", requireAuth, requirePairOwnership, validateBody(c
       id: crypto.randomUUID(),
       coupleId,
       senderLogin,
-      role: "partner1",
-      content: text,
+      role: role || "partner1",
+      content,
       isRead: false,
       createdAt: now,
     };

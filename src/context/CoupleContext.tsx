@@ -1,5 +1,5 @@
 import { apiFetch } from "../utils/api";
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from 'react';
 import {
   PartnerId,
   CoupleProfile,
@@ -195,8 +195,6 @@ interface CoupleContextType {
 const CoupleContext = createContext<CoupleContextType | undefined>(undefined);
 
 export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentPartnerId, setCurrentPartnerId] = useState<PartnerId>('partner1');
-
   const [theme, setThemeState] = useState<AppTheme>(() => {
     return safeGetStorage('together_theme', 'aurora');
   });
@@ -645,6 +643,9 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                   icon: 'heart',
                 });
                 triggerConfetti();
+                setTimeout(() => {
+                  fetchCoupleDataRef.current?.();
+                }, 500);
               }
             }
           }
@@ -1264,7 +1265,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const res = await apiFetch('/api/pair/accept', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ myLogin, partnerLogin: cleanPartner }),
+        body: JSON.stringify({ fromLogin: cleanPartner, toLogin: myLogin }),
       });
 
       const data = await res.json();
@@ -1299,6 +1300,10 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       safeSetStorage('together_pair_requests', updatedRequests);
 
       triggerConfetti();
+
+      setTimeout(() => {
+        fetchCoupleDataRef.current?.();
+      }, 500);
 
       addFeedItem({
         author: 'system',
@@ -1335,7 +1340,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       apiFetch('/api/pair/reject', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ myLogin, partnerLogin: cleanPartner }),
+        body: JSON.stringify({ fromLogin: cleanPartner, toLogin: myLogin }),
       }).catch(() => {});
     } catch {}
   };
@@ -1539,6 +1544,19 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [coupleProfile, setCoupleProfile] = useState<CoupleProfile>(() => {
     return safeGetStorage('together_couple_profile', initialCoupleProfile);
   });
+
+  const currentPartnerId = useMemo<PartnerId>(() => {
+    if (!currentUser || !coupleProfile) return 'partner1';
+    const p1Login = coupleProfile.partner1?.login?.toLowerCase().replace(/^@/, '');
+    const p2Login = coupleProfile.partner2?.login?.toLowerCase().replace(/^@/, '');
+    const myLogin = currentUser.login?.toLowerCase().replace(/^@/, '');
+    if (p2Login && myLogin === p2Login) return 'partner2';
+    return 'partner1';
+  }, [currentUser, coupleProfile]);
+
+  const setCurrentPartnerId = (id: PartnerId) => {
+    // No-op in real backend mode
+  };
 
   const [pulseHistory, setPulseHistory] = useState<PulseEntry[]>(() => {
     const data = safeGetStorage<PulseEntry[]>('together_pulse_history', []);

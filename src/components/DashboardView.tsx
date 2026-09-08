@@ -857,7 +857,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
               </div>
               <div className="min-w-0">
                 <div className="text-xs sm:text-sm font-bold text-[var(--text)] leading-tight flex items-center gap-1">
-                  <span>{hasCompatibilityData ? `${compatibilityPercent}%` : '—'}</span>
+                  <span>{hasCompatibilityData ? `${compatibilityPercent}%` : null}</span>
                   <span className="text-[10px] text-[var(--text-3)] font-normal hidden sm:inline">
                     {hasCompatibilityData ? '• Паспорт' : '• Тесты'}
                   </span>

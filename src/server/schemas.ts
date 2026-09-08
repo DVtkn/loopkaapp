@@ -73,8 +73,9 @@ export const coupleSyncSchema = z.object({
 
 export const chatMessageCreateSchema = z.object({
   coupleId: z.string().min(3).max(100),
-  senderLogin: loginSchema,
-  text: z.string().min(1, "Сообщение не может быть пустым").max(2000, "Сообщение слишком длинное"),
+  senderLogin: z.string(),
+  role: z.string().optional(),
+  content: z.string().min(1, "Сообщение не может быть пустым").max(2000, "Сообщение слишком длинное"),
 });
 
 export const aiChatMessageSchema = z.object({

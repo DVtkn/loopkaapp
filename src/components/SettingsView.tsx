@@ -165,7 +165,7 @@ export const SettingsView: React.FC = () => {
         {/* Block 2.5: Incoming Requests */}
         {incomingRequests && incomingRequests.length > 0 && (
           <div className="rounded-2xl overflow-hidden shadow-xs space-y-2 mt-4 bg-[var(--surface-2)] border border-[var(--divider)] p-4">
-            <h4 className="text-xs font-bold text-[var(--text-2)] uppercase tracking-wider mb-2">
+            <h4 className="text-xs font-bold text-[var(--text-2)] mb-2">
               Входящие запросы в пару
             </h4>
             <div className="space-y-2">

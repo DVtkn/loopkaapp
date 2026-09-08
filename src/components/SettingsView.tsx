@@ -14,7 +14,7 @@ export const SettingsView: React.FC = () => {
     currentUser, coupleProfile, currentPartnerId,
     theme, setTheme, coupleXP, coupleLevelInfo,
     updateUserProfile, authLogout, changePassword,
-    sendPairRequestByLogin, disconnectPair, resetTests,
+    sendPairRequestByLogin, incomingRequests, acceptPairRequest, rejectPairRequest, disconnectPair, resetTests,
     loadDemoCouple, triggerConfetti, setActiveTab: setAppActiveTab
   } = useCouple();
 
@@ -161,6 +161,29 @@ export const SettingsView: React.FC = () => {
             />
           )}
         </div>
+
+        {/* Block 2.5: Incoming Requests */}
+        {incomingRequests && incomingRequests.length > 0 && (
+          <div className="rounded-2xl overflow-hidden shadow-xs space-y-2 mt-4 bg-[var(--surface-2)] border border-[var(--divider)] p-4">
+            <h4 className="text-xs font-bold text-[var(--text-2)] uppercase tracking-wider mb-2">
+              Входящие запросы в пару
+            </h4>
+            <div className="space-y-2">
+              {incomingRequests.map((req) => (
+                <div key={req.id} className="p-3 rounded-xl bg-[var(--surface)] border border-[var(--divider)] flex items-center justify-between shadow-xs">
+                  <div>
+                    <p className="text-sm font-bold text-[var(--text)]">@{req.fromLogin}</p>
+                    <p className="text-[11px] text-[var(--text-3)] font-medium">Хочет создать союз</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => acceptPairRequest(req.fromLogin)} className="px-3 py-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-lg text-xs font-bold transition-colors hover:bg-emerald-500/20 active:scale-95">Принять</button>
+                    <button onClick={() => rejectPairRequest(req.fromLogin)} className="px-3 py-1.5 bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-lg text-xs font-bold transition-colors hover:bg-rose-500/20 active:scale-95">Скрыть</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Block 3: Primary CTA */}
         <PrimaryCTA 

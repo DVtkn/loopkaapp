@@ -1,5 +1,5 @@
 import { apiFetch } from "../utils/api";
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
   PartnerId,
   CoupleProfile,
@@ -29,6 +29,9 @@ import {
   TimeCapsule,
   DailyCoupleQuiz,
   DeepTalkCard, ChatMessage,
+  TouchNotificationData,
+  ScheduleEvent,
+  PlanCategory,
 } from '../types';
 import {
   initialCoupleProfile,
@@ -53,7 +56,7 @@ import {
 } from '../data/gamificationData';
 import { safeGetStorage, safeSetStorage } from '../utils/safeStorage';
 import { getCoupleLevelInfo } from '../utils/rankingEngine';
-import { dispatchInAppNotification, playNotificationSound, triggerSystemPush } from '../utils/pushManager';
+import { dispatchInAppNotification, playNotificationSound, triggerSystemPush, triggerHaptic } from '../utils/pushManager';
 
 export interface FeedItem {
   id: string;
@@ -110,6 +113,19 @@ interface CoupleContextType {
   owlMode: OwlMode;
   setOwlMode: (m: OwlMode) => void;
   // Gamification & Features
+  activePartnerTouch: TouchNotificationData | null;
+  dismissPartnerTouch: () => void;
+  sendTouchAction: (
+    actionType: string,
+    options?: {
+      customNote?: string;
+      title?: string;
+      subtitle?: string;
+      icon?: string;
+      iconBg?: string;
+      iconColor?: string;
+    }
+  ) => Promise<{ success: boolean; throttled?: boolean; message?: string }>;
   loveTaps: LoveTap[];
   sendLoveTap: (tapType: LoveTap['tapType'], customNote?: string) => void;
   timeCapsules: TimeCapsule[];
@@ -153,6 +169,10 @@ interface CoupleContextType {
   acceptDateInvite: (inviteId: string, date: string, time: string, location: string, link?: string, saveToVenues?: boolean) => void;
   completeAndReviewDate: (inviteId: string, rating: number, impressions: string, photos: string[]) => void;
   confirmDatePlan: (inviteId: string, location: string, dateStr: string) => void;
+  scheduleEvents: ScheduleEvent[];
+  addScheduleEvent: (event: Omit<ScheduleEvent, 'id' | 'createdAt'>) => Promise<void>;
+  updateScheduleEvent: (id: string, updates: Partial<ScheduleEvent>) => Promise<void>;
+  deleteScheduleEvent: (id: string) => Promise<void>;
   coupleXP: number;
   xpHistory: XPEntry[];
   addCoupleXP: (points: number, reason: string, category?: XPEntry['category']) => void;
@@ -202,7 +222,66 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [datesSubTab, setDatesSubTab] = useState<DatesSubTab>('wheel');
   const [owlMode, setOwlMode] = useState<OwlMode>('solo');
 
-  // Gamification: Love Taps
+  // Gamification: Love Taps & Touch Notifications
+  const [activePartnerTouch, setActivePartnerTouch] = useState<TouchNotificationData | null>(null);
+  const touchTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastTouchTimestampsRef = useRef<Record<string, number>>({});
+  const lastHandledTouchIdsRef = useRef<Set<string>>(new Set());
+  const fetchCoupleDataRef = useRef<(() => Promise<void>) | undefined>(undefined);
+
+  const dismissPartnerTouch = () => {
+    if (touchTimerRef.current) {
+      clearTimeout(touchTimerRef.current);
+      touchTimerRef.current = null;
+    }
+    setActivePartnerTouch(null);
+  };
+
+  const handleIncomingTouch = (touchData: TouchNotificationData) => {
+    if (!touchData || !touchData.id) return;
+    if (lastHandledTouchIdsRef.current.has(touchData.id)) return;
+    lastHandledTouchIdsRef.current.add(touchData.id);
+
+    // Play subtle audio chime and vibration
+    playNotificationSound();
+    triggerHaptic([100, 50, 100]);
+
+    // Show floating in-app toast
+    if (touchTimerRef.current) {
+      clearTimeout(touchTimerRef.current);
+    }
+    setActivePartnerTouch(touchData);
+    touchTimerRef.current = setTimeout(() => {
+      setActivePartnerTouch(null);
+      touchTimerRef.current = null;
+    }, 3800);
+
+    // Trigger OS / Web Push if app is backgrounded
+    triggerSystemPush(
+      touchData.title,
+      touchData.customNote || touchData.subtitle || 'Откройте Loop, чтобы отправить нежное касание в ответ',
+      touchData.id,
+      '/'
+    );
+
+    // Add to couple feed
+    setFeedItems((prev) => {
+      const existing = prev.find((f) => f.id === touchData.id);
+      if (existing) return prev;
+      const newFeed: FeedItem = {
+        id: touchData.id,
+        author: 'partner2',
+        type: touchData.actionType === 'kiss' ? 'flame' : 'heart',
+        title: touchData.title,
+        subtitle: touchData.customNote || touchData.subtitle || 'Нежное внимание',
+        timeAgo: 'Только что',
+      };
+      const updated = [newFeed, ...prev.slice(0, 49)];
+      safeSetStorage('together_feed', updated);
+      return updated;
+    });
+  };
+
   const [loveTaps, setLoveTaps] = useState<LoveTap[]>(() => {
     return safeGetStorage('together_love_taps', []);
   });
@@ -691,6 +770,30 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             });
           }
         }
+
+        // 3. Fetch recent touch actions sent by partner (polling fallback)
+        if (cleanLogin) {
+          try {
+            const touchesRes = await apiFetch(`/api/couple/touches/${cleanLogin}`);
+            if (touchesRes.ok) {
+              const touchesData = await touchesRes.json();
+              if (Array.isArray(touchesData.touches)) {
+                touchesData.touches.forEach((t: TouchNotificationData) => {
+                  if (t.targetLogin === cleanLogin && !lastHandledTouchIdsRef.current.has(t.id)) {
+                    const touchAgeMs = Date.now() - new Date(t.createdAt).getTime();
+                    if (touchAgeMs < 60000) {
+                      handleIncomingTouch(t);
+                    } else {
+                      lastHandledTouchIdsRef.current.add(t.id);
+                    }
+                  }
+                });
+              }
+            }
+          } catch (err) {
+            // graceful
+          }
+        }
       } catch (e) {
         // Safe silence for transient offline
       }
@@ -699,10 +802,50 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // Initial sync
     syncWithServer();
 
-    // Polling interval every 3.5 seconds
-    const interval = setInterval(syncWithServer, 15000);
+    // Polling interval every 5 seconds for fast response
+    const interval = setInterval(syncWithServer, 5000);
     return () => clearInterval(interval);
   }, [currentUser?.login, currentUser?.partnerLogin]);
+
+  // Realtime Server-Sent Events (SSE) listener for instantaneous touch delivery (<50ms)
+  useEffect(() => {
+    if (!currentUser?.login) return;
+    const cleanLogin = currentUser.login.toLowerCase().replace(/^@/, '');
+    let eventSource: EventSource | null = null;
+    let isSubscribed = true;
+
+    try {
+      eventSource = new EventSource(`/api/couple/events-stream/${cleanLogin}`);
+      eventSource.addEventListener('touch', (event: MessageEvent) => {
+        if (!isSubscribed) return;
+        try {
+          const data = JSON.parse(event.data);
+          if (data && data.senderLogin !== cleanLogin) {
+            handleIncomingTouch(data);
+          }
+        } catch (err) {
+          // ignore parsing error
+        }
+      });
+      eventSource.addEventListener('schedule_updated', () => {
+        if (!isSubscribed) return;
+        fetchCoupleDataRef.current?.();
+      });
+      eventSource.addEventListener('couple_updated', () => {
+        if (!isSubscribed) return;
+        fetchCoupleDataRef.current?.();
+      });
+    } catch (err) {
+      // fallback to polling
+    }
+
+    return () => {
+      isSubscribed = false;
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
+  }, [currentUser?.login]);
 
   // Auth: Register (Login + Password)
   const authRegister = async (
@@ -1484,6 +1627,11 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return Array.isArray(data) ? data.filter((d) => !['inv-1'].includes(d.id)) : [];
   });
 
+  const [scheduleEvents, setScheduleEvents] = useState<ScheduleEvent[]>(() => {
+    const data = safeGetStorage<ScheduleEvent[]>('together_schedule_events', []);
+    return Array.isArray(data) ? data : [];
+  });
+
   const [moodHistory, setMoodHistory] = useState<MoodHistoryItem[]>(() => {
     const data = safeGetStorage<MoodHistoryItem[]>('together_mood_history', []);
     return Array.isArray(data) ? data.filter((m) => !['m-1', 'm-2', 'm-3', 'm-4', 'm-5', 'm-6', 'm-7', 'm-8', 'm-9', 'm-10', 'm-11', 'm-12', 'm-13', 'm-14'].includes(m.id)) : [];
@@ -1606,6 +1754,10 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [dateInvites]);
 
   useEffect(() => {
+    safeSetStorage('together_schedule_events', scheduleEvents);
+  }, [scheduleEvents]);
+
+  useEffect(() => {
     safeSetStorage('together_mood_history', moodHistory);
   }, [moodHistory]);
 
@@ -1616,6 +1768,227 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => {
     safeSetStorage('together_ai_messages', aiMessages);
   }, [aiMessages]);
+
+  // =========================================================================
+  // NEON CLOUD DATABASE (PostgreSQL) AUTOMATIC BIDIRECTIONAL SYNCHRONIZATION
+  // =========================================================================
+  const isInitialRemoteLoadDone = useRef(false);
+  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const fetchCoupleDataFromNeon = async () => {
+    if (!currentUser) return;
+    const cleanLogin = currentUser.login.toLowerCase().trim().replace(/^@/, '');
+    const partner = currentUser.partnerLogin ? currentUser.partnerLogin.toLowerCase().trim().replace(/^@/, '') : null;
+    const coupleKey = partner ? [cleanLogin, partner].sort().join('_') : cleanLogin;
+
+    try {
+      const res = await apiFetch(`/api/couple/data/${coupleKey}`);
+      if (res.ok) {
+        const { data } = await res.json();
+        if (data && typeof data === 'object') {
+          if (data.coupleProfile) {
+            setCoupleProfile((prev) => ({ ...prev, ...data.coupleProfile }));
+          }
+          if (Array.isArray(data.tests) && data.tests.length > 0) {
+            setTests((prev) => {
+              const map = new Map<string, TestCategory>();
+              prev.forEach((t) => map.set(t.id, t));
+              data.tests.forEach((t: TestCategory) => {
+                const ex = map.get(t.id);
+                if (ex) {
+                  map.set(t.id, {
+                    ...ex,
+                    ...t,
+                    partner1Done: t.partner1Done || ex.partner1Done,
+                    partner2Done: t.partner2Done || ex.partner2Done,
+                  });
+                } else {
+                  map.set(t.id, t);
+                }
+              });
+              return Array.from(map.values());
+            });
+          }
+          if (Array.isArray(data.pulseHistory)) {
+            setPulseHistory((prev) => {
+              const map = new Map<string, PulseEntry>();
+              prev.forEach((p) => map.set(p.id || p.date, p));
+              data.pulseHistory.forEach((p: PulseEntry) => map.set(p.id || p.date, { ...(map.get(p.id || p.date) || {}), ...p }));
+              return Array.from(map.values()).sort((a, b) => (a.date > b.date ? -1 : 1));
+            });
+          }
+          if (Array.isArray(data.challenges)) {
+            setChallenges((prev) => {
+              const map = new Map<string, Challenge>();
+              prev.forEach((c) => map.set(c.id, c));
+              data.challenges.forEach((c: Challenge) => map.set(c.id, { ...(map.get(c.id) || {}), ...c }));
+              return Array.from(map.values());
+            });
+          }
+          if (Array.isArray(data.smallCravings)) {
+            setSmallCravings((prev) => {
+              const map = new Map<string, SmallCraving>();
+              prev.forEach((c) => map.set(c.id, c));
+              data.smallCravings.forEach((c: SmallCraving) => map.set(c.id, { ...(map.get(c.id) || {}), ...c }));
+              return Array.from(map.values());
+            });
+          }
+          if (data.flowerPreferences) {
+            setFlowerPreferences((prev) => ({ ...prev, ...data.flowerPreferences }));
+          }
+          if (Array.isArray(data.wishlist)) {
+            setWishlist((prev) => {
+              const map = new Map<string, WishlistItem>();
+              prev.forEach((w) => map.set(w.id, w));
+              data.wishlist.forEach((w: WishlistItem) => map.set(w.id, { ...(map.get(w.id) || {}), ...w }));
+              return Array.from(map.values());
+            });
+          }
+          if (Array.isArray(data.venues)) {
+            setVenues((prev) => {
+              const map = new Map<string, Venue>();
+              prev.forEach((v) => map.set(v.id, v));
+              data.venues.forEach((v: Venue) => map.set(v.id, { ...(map.get(v.id) || {}), ...v }));
+              return Array.from(map.values());
+            });
+          }
+          if (Array.isArray(data.dateInvites)) {
+            setDateInvites((prev) => {
+              const map = new Map<string, DateInvite>();
+              prev.forEach((d) => map.set(d.id, d));
+              data.dateInvites.forEach((d: DateInvite) => map.set(d.id, { ...(map.get(d.id) || {}), ...d }));
+              return Array.from(map.values());
+            });
+          }
+          if (Array.isArray(data.scheduleEvents)) {
+            setScheduleEvents((prev) => {
+              const map = new Map<string, ScheduleEvent>();
+              prev.forEach((e) => map.set(e.id, e));
+              data.scheduleEvents.forEach((e: ScheduleEvent) => map.set(e.id, { ...(map.get(e.id) || {}), ...e }));
+              return Array.from(map.values()).filter((e) => !e.deleted);
+            });
+          }
+          if (Array.isArray(data.moodHistory)) {
+            setMoodHistory((prev) => {
+              const map = new Map<string, MoodHistoryItem>();
+              prev.forEach((m) => map.set(m.id || m.date, m));
+              data.moodHistory.forEach((m: MoodHistoryItem) => map.set(m.id || m.date, { ...(map.get(m.id || m.date) || {}), ...m }));
+              return Array.from(map.values());
+            });
+          }
+          if (data.coupleXP !== undefined) {
+            setCoupleXP((prev) => Math.max(prev, Number(data.coupleXP) || 0));
+          }
+          if (Array.isArray(data.xpHistory)) {
+            setXpHistory((prev) => {
+              const map = new Map<string, XPEntry>();
+              prev.forEach((x) => map.set(x.id, x));
+              data.xpHistory.forEach((x: XPEntry) => map.set(x.id, x));
+              return Array.from(map.values());
+            });
+          }
+          if (Array.isArray(data.timeCapsules)) {
+            setTimeCapsules((prev) => {
+              const map = new Map<string, TimeCapsule>();
+              prev.forEach((t) => map.set(t.id, t));
+              data.timeCapsules.forEach((t: TimeCapsule) => map.set(t.id, { ...(map.get(t.id) || {}), ...t }));
+              return Array.from(map.values());
+            });
+          }
+          if (Array.isArray(data.loveTaps)) {
+            setLoveTaps((prev) => {
+              const map = new Map<string, LoveTap>();
+              prev.forEach((t) => map.set(t.id, t));
+              data.loveTaps.forEach((t: LoveTap) => map.set(t.id, { ...(map.get(t.id) || {}), ...t }));
+              return Array.from(map.values());
+            });
+          }
+        }
+      }
+    } catch (err) {
+      // offline resilience
+    }
+  };
+  fetchCoupleDataRef.current = fetchCoupleDataFromNeon;
+
+  useEffect(() => {
+    if (!currentUser) return;
+    fetchCoupleDataFromNeon().then(() => {
+      isInitialRemoteLoadDone.current = true;
+    });
+  }, [currentUser?.login, currentUser?.partnerLogin]);
+
+  // Debounced auto-sync to Neon
+  useEffect(() => {
+    if (!currentUser || !isInitialRemoteLoadDone.current) return;
+
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current);
+    }
+
+    syncTimeoutRef.current = setTimeout(async () => {
+      const cleanLogin = currentUser.login.toLowerCase().trim().replace(/^@/, '');
+      const partner = currentUser.partnerLogin ? currentUser.partnerLogin.toLowerCase().trim().replace(/^@/, '') : null;
+      const coupleKey = partner ? [cleanLogin, partner].sort().join('_') : cleanLogin;
+
+      try {
+        await apiFetch('/api/couple/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            login1: cleanLogin,
+            login2: partner,
+            coupleId: coupleKey,
+            payload: {
+              coupleProfile,
+              tests,
+              pulseHistory,
+              challenges,
+              smallCravings,
+              flowerPreferences,
+              wishlist,
+              venues,
+              dateInvites,
+              scheduleEvents,
+              moodHistory,
+              achievements,
+              coupleXP,
+              xpHistory,
+              timeCapsules,
+              loveTaps,
+              dailyQuiz,
+            },
+          }),
+        });
+      } catch (err) {
+        // Safe offline resilience
+      }
+    }, 1500);
+
+    return () => {
+      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+    };
+  }, [
+    currentUser?.login,
+    currentUser?.partnerLogin,
+    coupleProfile,
+    tests,
+    pulseHistory,
+    challenges,
+    smallCravings,
+    flowerPreferences,
+    wishlist,
+    venues,
+    dateInvites,
+    scheduleEvents,
+    moodHistory,
+    achievements,
+    coupleXP,
+    xpHistory,
+    timeCapsules,
+    loveTaps,
+    dailyQuiz,
+  ]);
 
   const triggerConfetti = () => {
     try {
@@ -1739,12 +2112,16 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       prev.map((t) => {
         if (t.id !== testId) return t;
         testTitle = t.title;
-        const p1Done = currentPartnerId === 'partner1' ? true : t.partner1Done;
-        const p2Done = currentPartnerId === 'partner2' ? true : t.partner2Done;
+        const isP1 = currentPartnerId === 'partner1';
+        const p1Done = isP1 ? true : t.partner1Done;
+        const p2Done = isP1 ? t.partner2Done : true;
         return {
           ...t,
           partner1Done: p1Done,
           partner2Done: p2Done,
+          partner1Answers: isP1 ? answers : t.partner1Answers,
+          partner2Answers: isP1 ? t.partner2Answers : answers,
+          completedAt: new Date().toISOString(),
         };
       })
     );
@@ -1897,6 +2274,130 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const confirmDatePlan = (inviteId: string, location: string, dateStr: string) => {};
+
+  const addScheduleEvent = async (eventData: Omit<ScheduleEvent, 'id' | 'createdAt'>) => {
+    const newId = `plan-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const newEvent: ScheduleEvent = {
+      ...eventData,
+      id: newId,
+      createdAt: new Date().toISOString(),
+    };
+    setScheduleEvents((prev) => [newEvent, ...prev]);
+
+    // If marked as date or category is date, automatically mirror to dateInvites for seamless single-source truth
+    if (newEvent.isDate || newEvent.category === 'date') {
+      const dateInviteId = `inv-plan-${newId}`;
+      const partnerRecipient: PartnerId = newEvent.creatorId === 'partner1' ? 'partner2' : 'partner1';
+      const newDateInvite: DateInvite = {
+        id: dateInviteId,
+        senderId: newEvent.creatorId,
+        recipientId: partnerRecipient,
+        status: 'CONFIRMED',
+        invitationNote: newEvent.title,
+        chosenDate: newEvent.date,
+        chosenTime: newEvent.startTime,
+        chosenLocation: newEvent.note || newEvent.title,
+        createdAt: new Date().toISOString(),
+      };
+      setDateInvites((prev) => [newDateInvite, ...prev.filter((d) => d.id !== dateInviteId)]);
+    }
+
+    addCoupleXP(15, `Синхронизированы планы: «${eventData.isPrivate ? 'Личные планы' : eventData.title}»`, 'bonus');
+
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('loop_couple_channel');
+        bc.postMessage({ type: 'SCHEDULE_UPDATED' });
+        bc.close();
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const updateScheduleEvent = async (id: string, updates: Partial<ScheduleEvent>) => {
+    setScheduleEvents((prev) =>
+      prev.map((ev) => (ev.id === id ? { ...ev, ...updates } : ev))
+    );
+
+    // If marked as date or updated to date, synchronize with dateInvites
+    if (updates.category === 'date' || updates.isDate === true) {
+      setDateInvites((prev) => {
+        const exists = prev.some((d) => d.id === `inv-plan-${id}`);
+        if (exists) {
+          return prev.map((d) =>
+            d.id === `inv-plan-${id}`
+              ? {
+                  ...d,
+                  chosenDate: updates.date || d.chosenDate,
+                  chosenTime: updates.startTime || d.chosenTime,
+                  invitationNote: updates.title || d.invitationNote,
+                  chosenLocation: updates.note || updates.title || d.chosenLocation,
+                }
+              : d
+          );
+        } else {
+          const currentEv = scheduleEvents.find((e) => e.id === id);
+          const creator: PartnerId = currentEv ? currentEv.creatorId : currentPartnerId;
+          const partnerRecipient: PartnerId = creator === 'partner1' ? 'partner2' : 'partner1';
+          return [
+            {
+              id: `inv-plan-${id}`,
+              senderId: creator,
+              recipientId: partnerRecipient,
+              status: 'CONFIRMED',
+              invitationNote: updates.title || currentEv?.title || 'Свидание',
+              chosenDate: updates.date || currentEv?.date,
+              chosenTime: updates.startTime || currentEv?.startTime,
+              chosenLocation: updates.note || currentEv?.note || updates.title || currentEv?.title || 'Свидание',
+              createdAt: new Date().toISOString(),
+            },
+            ...prev,
+          ];
+        }
+      });
+    } else if (updates.isDate === false || (updates.category !== undefined && updates.isDate !== true)) {
+      setDateInvites((prev) => prev.filter((d) => d.id !== `inv-plan-${id}`));
+    } else if (updates.date || updates.startTime || updates.title || updates.note) {
+      setDateInvites((prev) =>
+        prev.map((d) => {
+          if (d.id === `inv-plan-${id}`) {
+            return {
+              ...d,
+              chosenDate: updates.date || d.chosenDate,
+              chosenTime: updates.startTime || d.chosenTime,
+              invitationNote: updates.title || d.invitationNote,
+              chosenLocation: updates.note || updates.title || d.chosenLocation,
+            };
+          }
+          return d;
+        })
+      );
+    }
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('loop_couple_channel');
+        bc.postMessage({ type: 'SCHEDULE_UPDATED' });
+        bc.close();
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const deleteScheduleEvent = async (id: string) => {
+    setScheduleEvents((prev) => prev.filter((ev) => ev.id !== id));
+    setDateInvites((prev) => prev.filter((d) => d.id !== `inv-plan-${id}`));
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('loop_couple_channel');
+        bc.postMessage({ type: 'SCHEDULE_UPDATED' });
+        bc.close();
+      }
+    } catch {
+      // ignore
+    }
+  };
   const addMoodStatus = (emoji: string, label: string, severity: number, note?: string) => {
     const cleanNote = (note || '').trim();
     const newMood = {
@@ -2124,6 +2625,129 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
+  const sendTouchAction = async (
+    actionType: string,
+    options?: {
+      customNote?: string;
+      title?: string;
+      subtitle?: string;
+      icon?: string;
+      iconBg?: string;
+      iconColor?: string;
+    }
+  ): Promise<{ success: boolean; throttled?: boolean; message?: string }> => {
+    const senderName = currentUser?.name || (currentPartnerId === 'partner1' ? coupleProfile.partner1.name : coupleProfile.partner2.name);
+    const senderLogin = (currentUser?.login || (currentPartnerId === 'partner1' ? 'alex' : 'masha')).toLowerCase().replace(/^@/, '');
+    
+    // Determine partner login
+    const targetLogin = (
+      currentUser?.partnerLogin ||
+      (senderLogin === 'alex' ? 'masha' : senderLogin === 'masha' ? 'alex' : '')
+    ).toLowerCase().replace(/^@/, '');
+
+    // 10-second anti-spam debounce window per actionType
+    const now = Date.now();
+    const lastTime = lastTouchTimestampsRef.current[actionType] || 0;
+    if (now - lastTime < 10000) {
+      return { success: false, throttled: true, message: 'Действие уже отправлено недавно' };
+    }
+    lastTouchTimestampsRef.current[actionType] = now;
+
+    let defaultTitle = `${senderName} обратил(а) на вас внимание`;
+    let defaultSubtitle = 'Быстрое внимание';
+    let defaultIcon = 'heart';
+    let defaultIconBg = 'bg-rose-500/10';
+    let defaultIconColor = 'text-rose-500';
+
+    if (actionType === 'hug') {
+      defaultTitle = `${senderName} обнял(а) вас`;
+      defaultSubtitle = 'Крепкое и тёплое объятие ❤️';
+      defaultIcon = 'heart';
+      defaultIconBg = 'bg-rose-500/15';
+      defaultIconColor = 'text-rose-500';
+    } else if (actionType === 'thinking') {
+      defaultTitle = `${senderName} думает о вас`;
+      defaultSubtitle = 'Нежный знак заботы ✨';
+      defaultIcon = 'sparkles';
+      defaultIconBg = 'bg-amber-500/15';
+      defaultIconColor = 'text-amber-500';
+    } else if (actionType === 'miss') {
+      defaultTitle = `${senderName} скучает по вам`;
+      defaultSubtitle = 'Очень скучает прямо сейчас 💌';
+      defaultIcon = 'heart';
+      defaultIconBg = 'bg-pink-500/15';
+      defaultIconColor = 'text-pink-500';
+    } else if (actionType === 'kiss') {
+      defaultTitle = `${senderName} отправил(а) нежный поцелуй`;
+      defaultSubtitle = 'Нежный поцелуй 💋';
+      defaultIcon = 'flame';
+      defaultIconBg = 'bg-red-500/15';
+      defaultIconColor = 'text-red-500';
+    } else if (actionType === 'appreciated' || actionType === 'grateful') {
+      defaultTitle = `${senderName} благодарит вас`;
+      defaultSubtitle = 'За вашу любовь и заботу 🌿';
+      defaultIcon = 'thumbs-up';
+      defaultIconBg = 'bg-emerald-500/15';
+      defaultIconColor = 'text-emerald-500';
+    } else if (actionType === 'support') {
+      defaultTitle = `${senderName} нуждается в поддержке`;
+      defaultSubtitle = 'Тёплое дружеское плечо 🫂';
+      defaultIcon = 'lifebuoy';
+      defaultIconBg = 'bg-indigo-500/15';
+      defaultIconColor = 'text-indigo-500';
+    }
+
+    const finalTitle = options?.title || defaultTitle;
+    const finalSubtitle = options?.customNote || options?.subtitle || defaultSubtitle;
+    const finalIcon = options?.icon || defaultIcon;
+    const finalIconBg = options?.iconBg || defaultIconBg;
+    const finalIconColor = options?.iconColor || defaultIconColor;
+
+    // 1. Add locally to feed items
+    addFeedItem({
+      author: currentPartnerId,
+      type: actionType === 'kiss' ? 'flame' : 'heart',
+      title: finalTitle,
+      subtitle: finalSubtitle,
+    });
+
+    // 2. Add XP
+    addCoupleXP(5, `Быстрое внимание: ${finalTitle}`, 'tap');
+
+    // 3. Trigger confetti & haptic for sender
+    triggerConfetti();
+
+    // 4. Dispatch to backend API
+    try {
+      const res = await apiFetch('/api/couple/touch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          senderLogin,
+          senderName,
+          targetLogin: targetLogin || 'partner2',
+          actionType,
+          title: finalTitle,
+          subtitle: finalSubtitle,
+          icon: finalIcon,
+          iconBg: finalIconBg,
+          iconColor: finalIconColor,
+          customNote: options?.customNote,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.throttled) {
+          return { success: false, throttled: true, message: data.message };
+        }
+      }
+    } catch (err) {
+      // offline fallback
+    }
+
+    return { success: true, throttled: false };
+  };
+
   const sendLoveTap = (tapType: LoveTap['tapType'], customNote?: string) => {
     const tapConfig: Record<LoveTap['tapType'], { label: string; emoji: string; title: string }> = {
       thinking: { label: 'Думаю о тебе', emoji: 'lightbulb', title: 'думает о вас прямо сейчас' },
@@ -2155,16 +2779,11 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return updated;
     });
 
-    addCoupleXP(5, `Быстрое внимание: ${config.label}`, 'tap');
-
-    addFeedItem({
-      author: currentPartnerId,
-      type: 'heart',
+    sendTouchAction(tapType, {
       title: `${senderName} ${config.title}`,
       subtitle: customNote || config.label,
+      customNote,
     });
-
-    triggerConfetti();
   };
 
   const addTimeCapsule = (title: string, content: string, unlockDate: string, category: TimeCapsule['category']) => {
@@ -2284,6 +2903,9 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setDatesSubTab,
         owlMode,
         setOwlMode,
+        activePartnerTouch,
+        dismissPartnerTouch,
+        sendTouchAction,
         loveTaps,
         sendLoveTap,
         timeCapsules,
@@ -2327,6 +2949,10 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         acceptDateInvite,
         completeAndReviewDate,
         confirmDatePlan,
+        scheduleEvents,
+        addScheduleEvent,
+        updateScheduleEvent,
+        deleteScheduleEvent,
         coupleXP,
         xpHistory,
         addCoupleXP,

@@ -1,36 +1,15 @@
 import { StrictMode, Component, ReactNode, ErrorInfo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Sparkles } from 'lucide-react';
-import App from './App.tsx';
+import App from './App';
 import './index.css';
 import { initServiceWorker } from './utils/pushManager';
 import { safeGetStorage } from './utils/safeStorage';
 
-
-
-// Auto-register service worker for Web Push & PWA
-initServiceWorker().catch(() => {});
-
 // Guard against cross-origin iframe sandbox and third-party script errors
 if (typeof window !== 'undefined') {
-  window.onerror = function (msg) {
-    if (typeof msg === 'string' && (msg.includes('Script error') || !msg)) {
-      return true; // suppresses cross-origin script error from triggering platform error overlay
-    }
-    return false;
-  };
-
-  window.addEventListener('error', (event) => {
-    if (!event.message || event.message === 'Script error.' || event.message.includes('Script error')) {
-      event.preventDefault?.();
-      event.stopImmediatePropagation?.();
-    }
-  });
-
   window.addEventListener('unhandledrejection', (event) => {
-    console.warn('[Global Safe Handler] Handled rejection:', event.reason);
-    event.preventDefault?.();
-    event.stopImmediatePropagation?.();
+    console.warn('[Loop Safe Handler] Handled rejection:', event.reason);
   });
 }
 
@@ -83,13 +62,27 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  </StrictMode>,
-);
+const rootElement = document.getElementById('root');
+if (rootElement) {
+  createRoot(rootElement).render(
+    <StrictMode>
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    </StrictMode>,
+  );
+}
+
+// Register service worker asynchronously only outside cross-origin iframes
+if (typeof window !== 'undefined') {
+  window.addEventListener('load', () => {
+    try {
+      if (window.self === window.top) {
+        initServiceWorker().catch(() => {});
+      }
+    } catch {}
+  });
+}
 
 
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Heart,
@@ -36,11 +36,14 @@ import {
   Quote,
   Sun,
   Moon,
+  MoreHorizontal,
 } from 'lucide-react';
 import { useCouple } from '../context/CoupleContext';
 import { NavigationTab } from '../types';
 import { PageLayout } from './ui/PageLayout';
+import { ScheduleModal } from './ScheduleModal';
 import { triggerHaptic } from '../utils/haptics';
+import { calculateCoupleAnalysis } from '../utils/psychologyEngine';
 import {
   ColoredIcon,
   MoodBadge,
@@ -72,6 +75,52 @@ function formatMoodTime(dateStr?: string): string {
     return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
   } catch {
     return '';
+  }
+}
+
+// Helper: Format days together into "X год Y месяцев Z дней вместе" with precise Russian pluralization
+function formatRussianPlural(n: number, one: string, two: string, five: string): string {
+  const m10 = n % 10;
+  const m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return two;
+  return five;
+}
+
+function formatDaysTogetherDetailed(startDateStr?: string): string {
+  try {
+    const start = startDateStr ? new Date(startDateStr) : new Date(Date.now() - 482 * 24 * 60 * 60 * 1000);
+    const now = new Date();
+    if (isNaN(start.getTime()) || now < start) return '1 день вместе';
+
+    let years = now.getFullYear() - start.getFullYear();
+    let months = now.getMonth() - start.getMonth();
+    let days = now.getDate() - start.getDate();
+
+    if (days < 0) {
+      months -= 1;
+      const prevMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+      days += prevMonth.getDate();
+    }
+    if (months < 0) {
+      years -= 1;
+      months += 12;
+    }
+
+    const parts: string[] = [];
+    if (years > 0) {
+      parts.push(`${years} ${formatRussianPlural(years, 'год', 'года', 'лет')}`);
+    }
+    if (months > 0) {
+      parts.push(`${months} ${formatRussianPlural(months, 'месяц', 'месяца', 'месяцев')}`);
+    }
+    if (days > 0 || parts.length === 0) {
+      parts.push(`${days} ${formatRussianPlural(days, 'день', 'дня', 'дней')}`);
+    }
+
+    return `${parts.join(' ')} вместе`;
+  } catch {
+    return '482 дня вместе';
   }
 }
 
@@ -107,25 +156,16 @@ function getMoodBriefDescription(moodKeyOrLabel?: string): string {
 
 // Helper: Calculate real presence and activity status of partner
 function getPartnerStatusDetails(
-  isPaired: boolean,
   partner: { name?: string; lastActiveAt?: string; gender?: string; login?: string }
 ): {
   isOnline: boolean;
   statusText: string;
   badgeText: string;
 } {
-  if (!isPaired) {
-    return {
-      isOnline: false,
-      statusText: 'Партнёр не подключён',
-      badgeText: 'Ожидание',
-    };
-  }
-
   if (!partner.lastActiveAt) {
     return {
       isOnline: true,
-      statusText: 'На связи в Loop',
+      statusText: 'В сети',
       badgeText: 'В сети',
     };
   }
@@ -208,6 +248,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
     clearFeed,
     tests,
     dateInvites,
+    scheduleEvents,
     setUsSubTab,
     setDatesSubTab,
     currentUser,
@@ -215,14 +256,151 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
     acceptPairRequest,
     loveTaps,
     sendLoveTap,
-    dailyQuiz,
-    submitDailyQuizAnswer,
+    sendTouchAction,
     triggerConfetti,
+    xpHistory,
+    pulseHistory,
+    moodHistory,
   } = useCouple();
 
-  const currentPartner = currentPartnerId === 'partner1' ? coupleProfile.partner1 : coupleProfile.partner2;
-  const otherPartner = currentPartnerId === 'partner1' ? coupleProfile.partner2 : coupleProfile.partner1;
+  const currentPartner = currentPartnerId === 'partner1' ? coupleProfile?.partner1 : coupleProfile?.partner2;
+  const otherPartner = currentPartnerId === 'partner1' ? coupleProfile?.partner2 : coupleProfile?.partner1;
   const isPaired = !!currentUser?.partnerLogin;
+
+  // Safe fallback to guarantee partner status always renders
+  const safeOtherPartner = otherPartner || {
+    id: currentPartnerId === 'partner1' ? 'partner2' : 'partner1',
+    name: 'Анна',
+    avatar: 'heart',
+    login: 'anna',
+    loveLanguage: 'Слова поощрения',
+    attachmentStyle: 'Надёжный',
+    currentMood: {
+      emoji: 'calm',
+      label: 'Спокойствие',
+      note: '',
+      updatedAt: new Date().toISOString(),
+    },
+  };
+
+  const partnerName =
+    (safeOtherPartner.name && safeOtherPartner.name !== 'Партнёр не подключён')
+      ? safeOtherPartner.name
+      : (currentUser?.partnerLogin || safeOtherPartner.login || 'Анна');
+
+  const partnerStatusInfo = getPartnerStatusDetails({
+    name: partnerName,
+    lastActiveAt: safeOtherPartner.lastActiveAt,
+    gender: safeOtherPartner.gender,
+    login: safeOtherPartner.login,
+  });
+
+  // Calculate live compatibility score
+  const coupleAnalysis = useMemo(() => {
+    try {
+      return calculateCoupleAnalysis(coupleProfile, pulseHistory || [], tests || []);
+    } catch {
+      return null;
+    }
+  }, [coupleProfile, pulseHistory, tests]);
+
+  const hasCompatibilityData = !!(coupleAnalysis?.hasData && coupleAnalysis.compatibilityScore > 0);
+  const compatibilityPercent = hasCompatibilityData ? coupleAnalysis.compatibilityScore : 0;
+  const compatibilityStatus = hasCompatibilityData
+    ? compatibilityPercent >= 85
+      ? 'Высокая'
+      : compatibilityPercent >= 70
+      ? 'Тёплая'
+      : 'Развитие'
+    : 'Пройти тест';
+
+  // Calculate continuous activity streak (days in a row) strictly based on real activity
+  const streakDaysCount = useMemo(() => {
+    const datesWithActivity = new Set<string>();
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    // Real recorded activity timestamps
+    (xpHistory || []).forEach((e) => {
+      const entryTime = e.timestamp || (e as any).createdAt;
+      if (entryTime) datesWithActivity.add(entryTime.split('T')[0]);
+    });
+    (pulseHistory || []).forEach((p) => {
+      if (p.date) datesWithActivity.add(p.date.split('T')[0]);
+    });
+    (moodHistory || []).forEach((m) => {
+      if (m.date) datesWithActivity.add(m.date.split('T')[0]);
+    });
+    (loveTaps || []).forEach((t) => {
+      if (t.createdAt) datesWithActivity.add(t.createdAt.split('T')[0]);
+    });
+    (feedItems || []).forEach((f) => {
+      const fTime = (f as any).createdAt || (f as any).timestamp;
+      if (fTime) datesWithActivity.add(fTime.split('T')[0]);
+    });
+
+    // Today is an active day because the user is currently interacting with the app
+    datesWithActivity.add(todayStr);
+
+    let streak = 0;
+    const cur = new Date();
+    while (true) {
+      const dStr = cur.toISOString().split('T')[0];
+      if (datesWithActivity.has(dStr)) {
+        streak++;
+        cur.setDate(cur.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+    return Math.max(1, streak);
+  }, [xpHistory, pulseHistory, moodHistory, loveTaps, feedItems]);
+
+  // Quick transitions row
+  const quickShortcuts = [
+    {
+      id: 'date-idea',
+      title: 'Идея свидания',
+      subtitle: 'Колесо идей',
+      icon: Compass,
+      bg: 'bg-rose-500/10 dark:bg-rose-500/20',
+      color: 'text-rose-500 dark:text-rose-400',
+      onClick: () => {
+        triggerHaptic('light');
+        setDatesSubTab('wheel');
+        setActiveTab('dates');
+      },
+    },
+    {
+      id: 'deep-talk',
+      title: 'Deep Talk',
+      subtitle: 'Вопрос для двоих',
+      icon: MessageSquare,
+      bg: 'bg-indigo-500/10 dark:bg-indigo-500/20',
+      color: 'text-indigo-500 dark:text-indigo-400',
+      onClick: () => {
+        triggerHaptic('light');
+        setActiveTab('deeptalk');
+      },
+    },
+    {
+      id: 'time-capsule',
+      title: 'Капсула времени',
+      subtitle: 'Письмо в будущее',
+      icon: Mail,
+      bg: 'bg-teal-500/10 dark:bg-teal-500/20',
+      color: 'text-teal-600 dark:text-teal-400',
+      onClick: () => {
+        triggerHaptic('light');
+        setUsSubTab('capsule');
+        setActiveTab('us');
+      },
+    },
+  ];
+
+  // Find nearest upcoming scheduled date if any
+  const upcomingDate = (dateInvites || []).find(
+    (d) => !d.completed && !d.review && (d.status === 'CONFIRMED' || d.status === 'PROPOSED' || d.status === 'PENDING')
+  );
 
   // Mood selector state
   const [showMoodPicker, setShowMoodPicker] = useState<boolean>(false);
@@ -231,8 +409,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
   const [customMoodLabel, setCustomMoodLabel] = useState<string>('Спокойствие');
   const [customMoodKey, setCustomMoodKey] = useState<string>('calm');
 
-  // Question of the Day input state
-  const [showQuestionInput, setShowQuestionInput] = useState<boolean>(false);
+  // Question of the Day modal state
+  const [showQuestionModal, setShowQuestionModal] = useState<boolean>(false);
+  const [isEditingQuestionAnswer, setIsEditingQuestionAnswer] = useState<boolean>(false);
   const [userQuestionAnswer, setUserQuestionAnswer] = useState<string>('');
 
   // Quick Action Modal
@@ -243,6 +422,203 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
   const [quickHugSent, setQuickHugSent] = useState<boolean>(false);
   const [showPartnerDetailModal, setShowPartnerDetailModal] = useState<boolean>(false);
   const [tapSentMessage, setTapSentMessage] = useState<string | null>(null);
+
+  // Schedule planner modal state
+  const [showScheduleModal, setShowScheduleModal] = useState<boolean>(false);
+
+  const todayDateStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+
+  const todayScheduleEvents = useMemo(() => {
+    return (scheduleEvents || []).filter((ev) => !ev.deleted && ev.date === todayDateStr);
+  }, [scheduleEvents, todayDateStr]);
+
+  const scheduleSummary = useMemo(() => {
+    if (todayScheduleEvents.length === 0) {
+      return {
+        badge: 'Свободно',
+        badgeClass: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10',
+        title: 'Наши планы',
+        subtitle: 'Вечер свободен у обоих',
+      };
+    }
+
+    const n = todayScheduleEvents.length;
+    const mod10 = n % 10;
+    const mod100 = n % 100;
+    let plural = 'событий';
+    if (mod100 < 11 || mod100 > 14) {
+      if (mod10 === 1) plural = 'событие';
+      else if (mod10 >= 2 && mod10 <= 4) plural = 'события';
+    }
+
+    const hasEvening = todayScheduleEvents.some((e) => {
+      const startMin = e.startTime.split(':').map(Number);
+      const endMin = (e.endTime || '').split(':').map(Number);
+      return (startMin[0] >= 18) || (endMin[0] > 18);
+    });
+
+    return {
+      badge: `${n} ${plural}`,
+      badgeClass: 'text-sky-600 dark:text-sky-400 bg-sky-500/10',
+      title: 'Наши планы',
+      subtitle: hasEvening ? `Сегодня: ${n} ${plural}` : `Сегодня: ${n} ${plural} • Вечер свободен`,
+    };
+  }, [todayScheduleEvents]);
+
+  // Onboarding hint for long-press gesture discovery (shown once for 3s, saved to localStorage)
+  const [showLongPressHint, setShowLongPressHint] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return localStorage.getItem('loop_seen_hug_longpress_hint') !== 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  // Soft pulse animation (scale 1 -> 1.03 -> 1, 600ms x 2 = 1200ms) on first visit
+  const [isFirstVisitPulse, setIsFirstVisitPulse] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return localStorage.getItem('loop_seen_hug_longpress_hint') !== 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const dismissLongPressHint = () => {
+    setShowLongPressHint(false);
+    setIsFirstVisitPulse(false);
+    try {
+      localStorage.setItem('loop_seen_hug_longpress_hint', 'true');
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (!showLongPressHint) return;
+
+    // Immediately mark as seen so future visits never show it
+    try {
+      localStorage.setItem('loop_seen_hug_longpress_hint', 'true');
+    } catch {}
+
+    // Auto-dismiss tooltip after 3 seconds
+    const hideTooltipTimer = setTimeout(() => {
+      setShowLongPressHint(false);
+    }, 3000);
+
+    // End pulse animation after 1200ms (two 600ms cycles)
+    const pulseTimer = setTimeout(() => {
+      setIsFirstVisitPulse(false);
+    }, 1200);
+
+    return () => {
+      clearTimeout(hideTooltipTimer);
+      clearTimeout(pulseTimer);
+    };
+  }, [showLongPressHint]);
+
+  // Emotional signals for long-press contextual menu (5 distinct signals with pastel backgrounds)
+  const EMOTIONAL_SIGNALS = [
+    {
+      id: 'hug',
+      label: 'Обнять',
+      icon: Heart,
+      bg: 'bg-rose-500/15 dark:bg-rose-500/25',
+      color: 'text-rose-500 dark:text-rose-400',
+      action: () => handleQuickHug(),
+    },
+    {
+      id: 'thinking',
+      label: 'Думаю о тебе',
+      icon: Sparkles,
+      bg: 'bg-amber-500/15 dark:bg-amber-500/25',
+      color: 'text-amber-500 dark:text-amber-400',
+      action: () => handleSendSpecificTap('thinking', 'Думаю о тебе прямо сейчас ✨', 'Думаю о тебе'),
+    },
+    {
+      id: 'miss',
+      label: 'Скучаю',
+      icon: Mail,
+      bg: 'bg-pink-500/15 dark:bg-pink-500/25',
+      color: 'text-pink-500 dark:text-pink-400',
+      action: () => handleSendSpecificTap('miss', 'Очень скучаю по тебе 💌', 'Скучаю'),
+    },
+    {
+      id: 'kiss',
+      label: 'Поцелуй',
+      icon: Flame,
+      bg: 'bg-red-500/15 dark:bg-red-500/25',
+      color: 'text-red-500 dark:text-red-400',
+      action: () => handleSendSpecificTap('kiss', 'Отправлен нежный поцелуй 💋', 'Поцелуй'),
+    },
+    {
+      id: 'grateful',
+      label: 'Ценю тебя',
+      icon: ThumbsUp,
+      bg: 'bg-emerald-500/15 dark:bg-emerald-500/25',
+      color: 'text-emerald-600 dark:text-emerald-400',
+      action: () => handleSendSpecificTap('grateful', 'Спасибо тебе за то, что ты есть! ❤️', 'Ценю тебя'),
+    },
+  ];
+
+  // Long-press state management for the "Обнять" CTA (~380ms)
+  const [showRadialMenu, setShowRadialMenu] = useState<boolean>(false);
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isLongPressTriggeredRef = useRef<boolean>(false);
+  const pointerStartPosRef = useRef<{ x: number; y: number } | null>(null);
+
+  const clearLongPress = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    dismissLongPressHint();
+    isLongPressTriggeredRef.current = false;
+    pointerStartPosRef.current = { x: e.clientX, y: e.clientY };
+    clearLongPress();
+    longPressTimerRef.current = setTimeout(() => {
+      isLongPressTriggeredRef.current = true;
+      // Лёгкий haptic-тик в момент, когда обычный тап "перерастает" в long-press (~380мс)
+      triggerHaptic('light');
+      setShowRadialMenu(true);
+    }, 380);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!pointerStartPosRef.current) return;
+    const dx = Math.abs(e.clientX - pointerStartPosRef.current.x);
+    const dy = Math.abs(e.clientY - pointerStartPosRef.current.y);
+    // If pointer moves significantly (e.g. scrolling), cancel long-press
+    if ((dx > 15 || dy > 15) && !isLongPressTriggeredRef.current) {
+      clearLongPress();
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    clearLongPress();
+    dismissLongPressHint();
+    // Only execute single-tap default "Обнять" if long press was NOT triggered
+    if (!isLongPressTriggeredRef.current) {
+      handleQuickHug(e);
+    }
+    pointerStartPosRef.current = null;
+  };
+
+  const handlePointerCancel = () => {
+    clearLongPress();
+    pointerStartPosRef.current = null;
+  };
+
+  const handleSelectSignal = (sig: typeof EMOTIONAL_SIGNALS[0]) => {
+    setShowRadialMenu(false);
+    dismissLongPressHint();
+    triggerHaptic('success'); // более выраженный отклик при выборе конкретного действия
+    sig.action();
+  };
 
   const dailyQuestions = [
     "Что сегодня заставило тебя искренне улыбнуться?",
@@ -258,33 +634,41 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
   const dayOfYear = Math.floor((new Date().getTime() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 1000 / 60 / 60 / 24);
   const currentDailyQuestion = dailyQuestions[dayOfYear % dailyQuestions.length];
 
-  const partnerStatusInfo = getPartnerStatusDetails(isPaired, {
-    name: otherPartner.name,
-    lastActiveAt: otherPartner.lastActiveAt,
-    gender: otherPartner.gender,
-    login: otherPartner.login,
-  });
-
   const testsCompleted = (tests || []).filter(t => t.partner1Done || t.partner2Done).length;
   const confirmedDatesCount = (dateInvites || []).filter(d => d.status === 'CONFIRMED' || d.status === 'COMPLETED').length;
   const feedCount = (feedItems || []).length;
 
-  const handleQuickHug = (e?: React.MouseEvent) => {
+  const handleQuickHug = async (e?: React.MouseEvent | React.PointerEvent) => {
     if (e) e.stopPropagation();
     triggerHaptic('success');
-    sendLoveTap('thinking', `Отправлено крепкое объятие для ${otherPartner.name || 'любимого человека'} ❤️`);
-    setQuickHugSent(true);
-    triggerConfetti();
+    const res = await sendTouchAction('hug', {
+      title: `${currentUser?.name || currentPartner?.name} обнял(а) вас ❤️`,
+      subtitle: 'Крепкое и тёплое объятие',
+    });
+    if (res.throttled) {
+      setTapSentMessage('Уже отправлено ✨');
+    } else {
+      setQuickHugSent(true);
+      setTapSentMessage(null);
+    }
     setTimeout(() => {
       setQuickHugSent(false);
+      setTapSentMessage(null);
     }, 2800);
   };
 
-  const handleSendSpecificTap = (tapType: any, customNote: string, label: string) => {
+  const handleSendSpecificTap = async (tapType: string, customNote: string, label: string) => {
     triggerHaptic('success');
-    sendLoveTap(tapType, customNote);
-    setTapSentMessage(`Отправлено: ${label}! ✨`);
-    triggerConfetti();
+    const res = await sendTouchAction(tapType, {
+      customNote,
+      title: `${currentUser?.name || currentPartner?.name}: ${label}`,
+      subtitle: customNote,
+    });
+    if (res.throttled) {
+      setTapSentMessage('Уже отправлено ✨');
+    } else {
+      setTapSentMessage(`Отправлено: ${label}! ✨`);
+    }
     setTimeout(() => {
       setTapSentMessage(null);
     }, 2500);
@@ -297,7 +681,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
     addFeedItem({
       author: currentPartnerId,
       type: 'sparkle',
-      title: `${currentPartner.name} обновил(а) настроение: ${customMoodLabel}`,
+      title: `${currentPartner?.name} обновил(а) настроение: ${customMoodLabel}`,
       subtitle: moodNote || 'Новый статус',
     });
     setShowMoodPicker(false);
@@ -312,10 +696,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
     addFeedItem({
       author: currentPartnerId,
       type: 'heart',
-      title: `${currentPartner.name} ответил(а) на вопрос дня: «${userQuestionAnswer.trim()}»`,
+      title: `${currentPartner?.name} ответил(а) на вопрос дня: «${userQuestionAnswer.trim()}»`,
       subtitle: 'Вопрос дня',
     });
-    setShowQuestionInput(false);
+    setShowQuestionModal(false);
+    setIsEditingQuestionAnswer(false);
     triggerConfetti();
   };
 
@@ -340,7 +725,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
     addFeedItem({
       author: currentPartnerId,
       type: iconType,
-      title: `${currentPartner.name} ${titlePrefix}: «${quickActionText}»`,
+      title: `${currentPartner?.name} ${titlePrefix}: «${quickActionText}»`,
       subtitle: 'Быстрое внимание',
     });
 
@@ -349,202 +734,354 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
     triggerConfetti();
   };
 
-  const quickAttentionList = [
-    {
-      id: 'mood',
-      label: 'Моё настроение',
-      subtitle: currentUser?.currentMood?.label || 'Обновить',
-      icon: SmilePlus,
-      onClick: () => setShowMoodPicker(true),
-    },
-    {
-      id: 'thinking',
-      label: 'Думаю о тебе',
-      subtitle: 'Мягкий сигнал',
-      icon: Sparkles,
-      onClick: () => handleSendSpecificTap('thinking', 'Думаю о тебе прямо сейчас ✨', 'Думаю о тебе'),
-    },
-    {
-      id: 'miss',
-      label: 'Скучаю по тебе',
-      subtitle: 'Тёплый привет',
-      icon: Heart,
-      onClick: () => handleSendSpecificTap('miss', 'Очень скучаю по тебе 💌', 'Скучаю'),
-    },
-    {
-      id: 'felt',
-      label: 'Поделиться чувством',
-      subtitle: 'Без повода',
-      icon: HeartHandshake,
-      onClick: () => setActiveQuickAction('felt'),
-    },
-    {
-      id: 'appreciated',
-      label: 'Поблагодарить',
-      subtitle: 'За теплоту и заботу',
-      icon: ThumbsUp,
-      onClick: () => setActiveQuickAction('appreciated'),
-    },
-    {
-      id: 'book',
-      label: 'Книга заботы',
-      subtitle: 'Хотелочки и вкусы',
-      icon: Gift,
-      onClick: () => {
-        setUsSubTab('book');
-        setActiveTab('us');
-      },
-    },
-  ];
-
   return (
     <PageLayout hideHeader>
-      <div className="space-y-6 pb-6">
+      <div className="space-y-4 sm:space-y-5 pb-8 sm:pb-12">
         
         {/* ============================================================ */}
-        {/* TODAY HERO — INTIMATE PRESENCE & CURRENT MOMENT */}
+        {/* 1. БЛОК 1: СТАТУС ПАРТНЁРА (ОНЛАЙН + НАСТРОЕНИЕ + ДНИ ВМЕСТЕ) */}
+        {/* КРИТИЧНО: ВСЕГДА САМЫЙ ПЕРВЫЙ БЛОК НА ЭКРАНЕ "СЕГОДНЯ" */}
         {/* ============================================================ */}
-        <section className="relative p-6 sm:p-7 rounded-[28px] bg-[var(--surface)] border border-[var(--divider)] shadow-xs space-y-4">
-          {/* Subtle Ambient Warmth */}
-          <div className="absolute -top-12 -right-12 w-36 h-36 rounded-full bg-[var(--accent)]/5 blur-3xl pointer-events-none" />
-
-          {/* Top Row: Couple Header & Intimate Presence */}
-          <div className="relative z-10 flex items-start justify-between gap-4">
-            <div className="space-y-1">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--accent)] flex items-center gap-1.5">
-                <span className={`w-1.5 h-1.5 rounded-full ${partnerStatusInfo.isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-[var(--accent)]'}`} />
-                <span>Сегодня</span>
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[var(--text)]">
-                {isPaired ? `${currentPartner.name} & ${otherPartner.name}` : 'Вы и Ваш партнёр'}
-              </h1>
-              
-              {/* Immediate Presence & Current Mood */}
-              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pt-1 text-xs text-[var(--text-2)] font-medium">
-                <span className="flex items-center gap-1.5">
-                  <span className={`w-2 h-2 rounded-full ${partnerStatusInfo.isOnline ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
-                  <span>{partnerStatusInfo.statusText}</span>
-                </span>
-                {isPaired && otherPartner.currentMood?.label && (
-                  <>
-                    <span className="text-[var(--divider)]">•</span>
-                    <span>
-                      Настроение {otherPartner.name}: <strong className="text-[var(--text)] font-semibold">{otherPartner.currentMood.label}</strong>
-                    </span>
-                  </>
-                )}
-              </div>
+        <section
+          id="block-1-partner-status"
+          onClick={() => setShowPartnerDetailModal(true)}
+          className="p-3.5 sm:p-4 rounded-2xl bg-[var(--surface)] border border-[var(--divider)] shadow-xs flex items-center justify-between gap-3 transition-all hover:border-[var(--accent)]/40 cursor-pointer group select-none"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            {/* Partner Avatar with Online Indicator */}
+            <div className="relative shrink-0">
+              <ColoredAvatar
+                avatar={safeOtherPartner.avatar || 'heart'}
+                name={partnerName}
+                size="md"
+              />
+              <span
+                className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full ring-2 ring-[var(--surface-solid)] ${
+                  partnerStatusInfo.isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-400'
+                }`}
+              />
             </div>
 
-            {/* Overlapping Portraits with Intimate Connection */}
-            <div 
-              onClick={() => isPaired && setShowPartnerDetailModal(true)}
-              className="relative flex items-center -space-x-3 cursor-pointer group shrink-0"
-              title="Статус партнёра"
-            >
-              <div className="w-12 h-12 rounded-full ring-2 ring-[var(--surface-solid)] overflow-hidden bg-[var(--surface-2)] flex items-center justify-center transition-transform group-hover:scale-105">
-                <ColoredAvatar avatar={currentPartner.avatar || 'sparkles'} name={currentPartner.name} size="md" />
+            {/* Partner Name, Online Status, Mood & Days Together (3 lines) */}
+            <div className="min-w-0 flex-1 space-y-0.5">
+              {/* Line 1: Name + Online Status */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-bold text-sm sm:text-base text-[var(--text)] leading-tight">
+                  {partnerName}
+                </span>
+                <span className="text-[var(--text-3)] text-xs font-normal">•</span>
+                <span className="flex items-center gap-1.5 text-xs text-[var(--text-2)] font-medium">
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      partnerStatusInfo.isOnline ? 'bg-emerald-500' : 'bg-zinc-400'
+                    }`}
+                  />
+                  <span className={partnerStatusInfo.isOnline ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : ''}>
+                    {partnerStatusInfo.statusText}
+                  </span>
+                </span>
               </div>
-              <div className="w-12 h-12 rounded-full ring-2 ring-[var(--surface-solid)] overflow-hidden bg-[var(--surface-2)] flex items-center justify-center transition-transform group-hover:scale-105">
-                <ColoredAvatar avatar={otherPartner.avatar || 'heart'} name={otherPartner.name} size="md" />
+
+              {/* Line 2: Mood */}
+              <div className="text-xs text-[var(--text-2)] flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] text-[var(--accent)] font-semibold">Настроение:</span>
+                <span className="text-[var(--text)] font-medium">
+                  {safeOtherPartner.currentMood?.label || 'Спокойствие'}
+                </span>
               </div>
-              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-[var(--accent)] text-white flex items-center justify-center ring-2 ring-[var(--surface-solid)] text-[10px] shadow-xs">
-                <Heart className="w-3 h-3 fill-white" />
+
+              {/* Line 3: Days Together */}
+              <div className="text-[11px] sm:text-xs text-[var(--text-2)] flex items-center gap-1.5 font-normal">
+                <span className="text-[var(--text)] font-medium">
+                  {formatDaysTogetherDetailed(coupleProfile?.startDate)}
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Pending Pairing Request Alert (if any) */}
-          {!isPaired && incomingRequests.length > 0 && (
-            <div className="relative z-10 mt-2 p-3.5 rounded-2xl bg-[var(--surface-blush)] border border-[var(--accent)]/30 flex items-center justify-between gap-3 shadow-xs">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-7 h-7 rounded-full bg-[var(--accent)] text-white flex items-center justify-center shrink-0">
-                  <Heart className="w-3.5 h-3.5 fill-white" />
-                </div>
-                <div className="truncate">
-                  <p className="text-xs font-bold text-[var(--text)] truncate">
-                    Запрос на пару от @{incomingRequests[0].fromLogin}
-                  </p>
-                  <p className="text-[11px] text-[var(--text-2)]">Подтвердите, чтобы объединить профили</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => acceptPairRequest(incomingRequests[0].fromLogin)}
-                className="px-3 py-1.5 rounded-xl bg-[var(--accent)] text-white text-xs font-bold shrink-0 hover:bg-[var(--accent-hover)] active:scale-95 transition-all cursor-pointer"
-              >
-                Принять
-              </button>
-            </div>
-          )}
+          {/* Tap Affordance */}
+          <div className="flex items-center gap-1 text-xs font-semibold text-[var(--text-2)] group-hover:text-[var(--accent)] transition-colors shrink-0">
+            <span className="hidden sm:inline">Подробнее</span>
+            <ChevronRight className="w-4 h-4 text-[var(--text-3)] group-hover:text-[var(--accent)] transition-transform group-hover:translate-x-0.5" />
+          </div>
         </section>
 
+        {/* ============================================================ */}
+        {/* 2. БЛОК 2: ПРЕВЬЮ СОВМЕСТИМОСТИ + СТРИК АКТИВНОСТИ ПАРЫ */}
+        {/* Комбинированный компактный блок в одну строку (лимит ≤ 7 зон) */}
+        {/* ============================================================ */}
+        <section id="block-2-compatibility-and-streak" className="grid grid-cols-2 gap-2.5 sm:gap-3">
+          {/* Превью совместимости */}
+          <motion.button
+            type="button"
+            whileHover={{ y: -1 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => {
+              triggerHaptic('light');
+              if (hasCompatibilityData) {
+                setUsSubTab('passport');
+                setActiveTab('us');
+              } else {
+                setActiveTab('tests');
+              }
+            }}
+            className="p-3 sm:p-3.5 rounded-2xl bg-[var(--surface)] border border-[var(--divider)] hover:border-[var(--accent)]/40 shadow-xs flex items-center justify-between gap-2 transition-all cursor-pointer text-left group select-none"
+            title={hasCompatibilityData ? "Перейти в Паспорт пары" : "Пройти первый тест для расчёта совместимости"}
+          >
+            <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
+              <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs sm:text-sm font-bold text-[var(--text)] leading-tight flex items-center gap-1">
+                  <span>{hasCompatibilityData ? `${compatibilityPercent}%` : '—'}</span>
+                  <span className="text-[10px] text-[var(--text-3)] font-normal hidden sm:inline">
+                    {hasCompatibilityData ? '• Паспорт' : '• Тесты'}
+                  </span>
+                </div>
+                <div className="text-[11px] text-[var(--text-2)] font-medium leading-snug mt-0.5 whitespace-nowrap">
+                  {hasCompatibilityData ? compatibilityStatus : 'Пройти тест'}
+                </div>
+              </div>
+            </div>
+            <ChevronRight className="w-3.5 h-3.5 text-[var(--text-3)] group-hover:text-[var(--accent)] group-hover:translate-x-0.5 transition-all shrink-0" />
+          </motion.button>
+
+          {/* Стрик активности пары */}
+          <motion.div
+            whileHover={{ y: -1 }}
+            className="p-3 sm:p-3.5 rounded-2xl bg-[var(--surface)] border border-[var(--divider)] shadow-xs flex items-center gap-2 sm:gap-2.5 transition-all text-left select-none"
+          >
+            <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
+              <Flame className="w-4 h-4 fill-amber-500 text-amber-500" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs sm:text-sm font-bold text-[var(--text)] leading-tight flex items-center gap-1">
+                <span>{streakDaysCount} {formatRussianPlural(streakDaysCount, 'день', 'дня', 'дней')}</span>
+              </div>
+              <div className="text-[11px] text-[var(--text-2)] font-medium leading-snug mt-0.5 whitespace-nowrap">
+                подряд на связи
+              </div>
+            </div>
+          </motion.div>
+        </section>
 
         {/* ============================================================ */}
-        {/* SIGNATURE INTERACTION — TACTILE EMOTIONAL "ОБНЯТЬ" */}
+        {/* 3. БЛОК 3: РЯД БЫСТРЫХ ПЕРЕХОДОВ (ИДЕЯ СВИДАНИЯ, DEEP TALK, КАПСУЛА) */}
         {/* ============================================================ */}
-        <section className="relative">
-          {isPaired ? (
-            <motion.button
-              type="button"
-              id="main-hug-cta"
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.94 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-              onClick={handleQuickHug}
-              className={`w-full py-4 sm:py-4.5 px-6 rounded-full flex items-center justify-between gap-4 cursor-pointer relative overflow-hidden transition-all duration-300 ${
-                quickHugSent
-                  ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md'
-                  : 'hug-btn-primary'
-              }`}
-            >
-              <div className="flex items-center gap-3.5 relative z-10">
-                <div className={`w-11 h-11 rounded-full flex items-center justify-center shadow-inner shrink-0 text-white transition-all ${
-                  quickHugSent ? 'bg-white/25' : 'bg-white/20 animate-heartbeat'
-                }`}>
-                  {quickHugSent ? (
-                    <CheckCircle2 className="w-6 h-6 text-white" />
-                  ) : (
-                    <Heart className="w-5 h-5 fill-white text-white" />
-                  )}
+        <section id="block-3-quick-shortcuts" className="grid grid-cols-3 gap-2 sm:gap-2.5">
+          {quickShortcuts.map((item) => {
+            const Icon = item.icon;
+            return (
+              <motion.button
+                key={item.id}
+                type="button"
+                whileHover={{ y: -2 }}
+                whileTap={{ scale: 0.96 }}
+                onClick={item.onClick}
+                className="p-3 rounded-2xl bg-[var(--surface)] border border-[var(--divider)] hover:border-[var(--accent)]/40 shadow-xs flex flex-col items-center text-center gap-2 transition-all cursor-pointer group select-none"
+              >
+                <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl ${item.bg} ${item.color} flex items-center justify-center transition-transform group-hover:scale-105 shrink-0`}>
+                  <Icon className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
                 </div>
-                <div className="text-left">
-                  <div className="text-base sm:text-lg font-bold tracking-tight text-white leading-tight">
-                    {quickHugSent ? 'Объятие доставлено!' : 'Обнять'}
+                <div className="w-full min-w-0">
+                  <div className="text-xs font-bold text-[var(--text)] leading-tight line-clamp-2">
+                    {item.title}
                   </div>
-                  <div className="text-xs font-medium text-white/90 leading-tight mt-0.5">
-                    {quickHugSent
-                      ? `${otherPartner.name} чувствует ваше тепло прямо сейчас ❤️`
-                      : `Отправить нежное прикосновение для ${otherPartner.name}`}
+                  <div className="text-[10px] text-[var(--text-3)] font-medium mt-0.5 truncate hidden xs:block">
+                    {item.subtitle}
                   </div>
                 </div>
-              </div>
+              </motion.button>
+            );
+          })}
+        </section>
 
-              <div className="relative z-10 flex items-center gap-1 px-3 py-1.5 rounded-full bg-white/20 backdrop-blur-xs text-white text-xs font-bold shrink-0">
-                <Sparkles className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">{quickHugSent ? 'Доставлено' : 'В один тап'}</span>
+        {/* ============================================================ */}
+        {/* 4. БЛОК 4: КНОПКА "ОБНЯТЬ" (С LONG-PRESS МЕНЮ ЭМОЦИОНАЛЬНЫХ СИГНАЛОВ) */}
+        {/* ============================================================ */}
+        <section id="block-4-hug-cta" className="relative">
+          {/* Long-Press Context Menu (iOS Reactions Style) */}
+          <AnimatePresence>
+            {showRadialMenu && (
+              <>
+                {/* Backdrop Dismiss */}
+                <div
+                  id="hug-menu-backdrop"
+                  className="fixed inset-0 z-40 bg-black/25 backdrop-blur-2xs animate-fadeIn"
+                  onClick={() => setShowRadialMenu(false)}
+                />
+
+                {/* Floating Reactions Bar */}
+                <motion.div
+                  id="hug-longpress-menu"
+                  initial={{ opacity: 0, scale: 0.85, y: 12 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.85, y: 8 }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 28 }}
+                  className="absolute bottom-full mb-3.5 left-1/2 -translate-x-1/2 z-50 p-2 sm:p-2.5 rounded-3xl bg-[var(--surface-solid)] border border-[var(--divider)] shadow-2xl flex items-center justify-center gap-1.5 sm:gap-2 max-w-[calc(100vw-24px)] select-none"
+                >
+                  {/* Subtle arrow pointing down towards button */}
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 w-2.5 h-2.5 rotate-45 bg-[var(--surface-solid)] border-r border-b border-[var(--divider)]" />
+
+                  {EMOTIONAL_SIGNALS.map((sig) => {
+                    const Icon = sig.icon;
+                    return (
+                      <button
+                        key={sig.id}
+                        id={`signal-btn-${sig.id}`}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSelectSignal(sig);
+                        }}
+                        className="flex flex-col items-center gap-1.5 p-2 sm:p-2.5 rounded-2xl hover:bg-[var(--surface-2)] active:scale-90 transition-all cursor-pointer group shrink-0 min-w-[58px] sm:min-w-[64px]"
+                      >
+                        <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-2xl ${sig.bg} ${sig.color} flex items-center justify-center group-hover:scale-110 transition-transform shadow-2xs`}>
+                          <Icon className="w-5 h-5" />
+                        </div>
+                        <span className="text-[11px] font-bold text-[var(--text)] whitespace-nowrap text-center leading-none">
+                          {sig.label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+
+          <motion.button
+            type="button"
+            id="main-hug-cta"
+            animate={
+              isFirstVisitPulse
+                ? { scale: [1, 1.03, 1, 1.03, 1] }
+                : { scale: 1 }
+            }
+            transition={
+              isFirstVisitPulse
+                ? { duration: 1.2, times: [0, 0.25, 0.5, 0.75, 1], ease: 'easeInOut' }
+                : { type: 'spring', stiffness: 400, damping: 25 }
+            }
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.96 }}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerCancel}
+            onPointerCancel={handlePointerCancel}
+            onClick={(e) => {
+              if (isLongPressTriggeredRef.current) {
+                e.preventDefault();
+                return;
+              }
+              if (e.detail === 0) {
+                handleQuickHug(e);
+                dismissLongPressHint();
+              }
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setShowRadialMenu(true);
+              dismissLongPressHint();
+              triggerHaptic('light');
+            }}
+            className={`w-full py-4 sm:py-4.5 px-6 rounded-full flex items-center justify-between gap-4 cursor-pointer relative overflow-hidden transition-all duration-300 select-none ${
+              quickHugSent
+                ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md'
+                : 'hug-btn-primary'
+            }`}
+            title="Тап — обнять. Удержание (~380мс) или три точки — выбор знака внимания"
+          >
+            <div className="flex items-center gap-3.5 relative z-10 min-w-0">
+              <div className={`w-11 h-11 rounded-full flex items-center justify-center shadow-inner shrink-0 text-white transition-all ${
+                quickHugSent ? 'bg-white/25' : 'bg-white/20 animate-heartbeat'
+              }`}>
+                {quickHugSent ? (
+                  <CheckCircle2 className="w-6 h-6 text-white" />
+                ) : (
+                  <Heart className="w-5 h-5 fill-white text-white" />
+                )}
               </div>
-            </motion.button>
-          ) : (
-            <motion.button
-              type="button"
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.96 }}
-              onClick={() => setActiveTab('profile')}
-              className="w-full hug-btn-primary py-4 px-6 flex items-center justify-between gap-3 cursor-pointer"
-            >
-              <div className="flex items-center gap-3 text-left">
-                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white">
-                  <UserPlus className="w-5 h-5" />
+              <div className="text-left min-w-0">
+                <div className="text-base sm:text-lg font-bold tracking-tight text-white leading-tight">
+                  {quickHugSent ? 'Объятие доставлено!' : 'Обнять'}
                 </div>
-                <div>
-                  <div className="text-base font-bold text-white leading-tight">Пригласить партнёра</div>
-                  <div className="text-xs text-white/80">Ваш логин: @{currentUser?.login}</div>
+                <div className="text-xs font-medium text-white/90 leading-tight mt-0.5 truncate">
+                  {quickHugSent
+                    ? `${partnerName} чувствует ваше тепло прямо сейчас ❤️`
+                    : `Отправить нежное прикосновение для ${partnerName}`}
                 </div>
               </div>
-              <ChevronRight className="w-5 h-5 text-white/80" />
-            </motion.button>
-          )}
+            </div>
+
+            {quickHugSent ? (
+              <div className="relative z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 backdrop-blur-xs text-white text-xs font-bold shrink-0">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Доставлено</span>
+              </div>
+            ) : (
+              <div
+                id="hug-options-trigger"
+                role="button"
+                tabIndex={0}
+                title="Выбрать другой знак внимания"
+                aria-label="Выбрать другой знак внимания"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  dismissLongPressHint();
+                  triggerHaptic('light');
+                  setShowRadialMenu(true);
+                }}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dismissLongPressHint();
+                    triggerHaptic('light');
+                    setShowRadialMenu(true);
+                  }
+                }}
+                className="relative z-20 flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white/20 hover:bg-white/30 active:scale-90 text-white transition-all cursor-pointer shrink-0 backdrop-blur-xs shadow-2xs group/more"
+              >
+                <MoreHorizontal className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-white group-hover/more:scale-110 transition-transform" />
+              </div>
+            )}
+          </motion.button>
+
+          {/* Onboarding hint with tail for long-press gesture discovery */}
+          <AnimatePresence>
+            {showLongPressHint && !showRadialMenu && (
+              <motion.div
+                id="hug-longpress-tooltip"
+                initial={{ opacity: 0, y: 6, scale: 0.94 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 4, scale: 0.94 }}
+                transition={{ duration: 0.22, ease: 'easeOut' }}
+                className="absolute bottom-full mb-3.5 left-1/2 -translate-x-1/2 z-30 px-3.5 py-2 rounded-2xl bg-[var(--surface-solid)] border border-[var(--divider)] shadow-xl flex items-center gap-2 text-xs font-semibold text-[var(--text)] whitespace-nowrap select-none"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-rose-500 dark:text-rose-400 shrink-0 animate-pulse" />
+                <span>Зажмите, чтобы выбрать другой знак внимания</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    dismissLongPressHint();
+                  }}
+                  className="ml-1 text-[var(--text-3)] hover:text-[var(--text)] p-0.5 rounded-full transition-colors cursor-pointer"
+                  title="Понятно"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+                {/* Хвостик, указывающий вниз на кнопку "Обнять" */}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 w-2.5 h-2.5 rotate-45 bg-[var(--surface-solid)] border-r border-b border-[var(--divider)]" />
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Feedback Toast */}
           <AnimatePresence>
@@ -556,131 +1093,307 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
                 className="absolute -top-11 left-1/2 -translate-x-1/2 z-30 px-4 py-1.5 rounded-full bg-[var(--surface-solid)] border border-[var(--accent)]/30 text-[var(--accent)] font-bold text-xs shadow-lg flex items-center gap-1.5 pointer-events-none"
               >
                 <Heart className="w-3.5 h-3.5 fill-[var(--accent)]" />
-                <span>{tapSentMessage || `Объятие передано ${otherPartner.name} ❤️`}</span>
+                <span>{tapSentMessage || `Объятие передано ${partnerName} ❤️`}</span>
               </motion.div>
             )}
           </AnimatePresence>
         </section>
 
-
         {/* ============================================================ */}
-        {/* CORE EMOTIONAL BLOCK — "ВОПРОС ДНЯ" (CANONICAL NAME) */}
+        {/* 4. DAILY QUESTION COMPACT TEASER (THOUGHTFUL CONNECTION) */}
         {/* ============================================================ */}
-        <section className="p-6 sm:p-7 rounded-[28px] bg-[var(--surface)] border border-[var(--divider)] space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-[var(--surface-blush)] text-[var(--accent)] flex items-center justify-center">
-                <Quote className="w-4 h-4" />
-              </div>
-              <div>
-                <h2 className="text-sm font-bold text-[var(--text)] leading-tight">Вопрос дня</h2>
-                <span className="text-[11px] text-[var(--text-2)]">Откройте сокровенное друг о друге</span>
-              </div>
+        <section
+          onClick={() => {
+            setUserQuestionAnswer(questionAnswer || '');
+            setShowQuestionModal(true);
+          }}
+          className="p-3.5 sm:p-4 rounded-2xl bg-[var(--surface)] border border-[var(--divider)] shadow-xs hover:border-[var(--accent)]/40 flex items-center justify-between gap-3 transition-all cursor-pointer group select-none"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-[var(--surface-blush)] text-[var(--accent)] flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+              <Quote className="w-4.5 h-4.5" />
             </div>
-            {questionAnswer && (
-              <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 bg-emerald-500/10 px-2.5 py-1 rounded-full">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Отвечено</span>
-              </span>
-            )}
-          </div>
-
-          <p className="text-lg sm:text-xl font-semibold text-[var(--text)] leading-relaxed italic">
-            «{currentDailyQuestion}»
-          </p>
-
-          {/* User's Answer or Answer Input */}
-          {questionAnswer ? (
-            <div className="p-4 rounded-2xl bg-[var(--surface-2)] border border-[var(--divider)] space-y-1">
-              <div className="text-[11px] font-bold text-[var(--accent)] uppercase tracking-wider">
-                Ваш ответ:
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h3 className="text-xs sm:text-sm font-bold text-[var(--text)] leading-tight">
+                  Вопрос дня
+                </h3>
+                {questionAnswer ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                    <CheckCircle2 className="w-3 h-3" />
+                    <span>Отвечено</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center text-[11px] font-semibold text-[var(--accent)] bg-[var(--surface-blush)] px-2 py-0.5 rounded-full">
+                    Новый
+                  </span>
+                )}
               </div>
-              <p className="text-sm font-medium text-[var(--text)] leading-relaxed">
-                {questionAnswer}
+              <p className="text-xs text-[var(--text-2)] mt-0.5 truncate italic">
+                «{currentDailyQuestion}»
               </p>
             </div>
-          ) : showQuestionInput ? (
-            <form onSubmit={handleAnswerSubmit} className="space-y-3 pt-1">
-              <textarea
-                value={userQuestionAnswer}
-                onChange={(e) => setUserQuestionAnswer(e.target.value)}
-                placeholder="Напишите искренний ответ для вашего партнёра..."
-                rows={3}
-                autoFocus
-                className="w-full p-4 rounded-2xl bg-[var(--surface-2)] border border-[var(--divider)] text-sm text-[var(--text)] placeholder:text-[var(--text-3)] focus:outline-none focus:border-[var(--accent)] resize-none"
-              />
-              <div className="flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowQuestionInput(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-[var(--text-2)] hover:bg-[var(--surface-2)] transition-all cursor-pointer"
-                >
-                  Отмена
-                </button>
-                <button
-                  type="submit"
-                  disabled={!userQuestionAnswer.trim()}
-                  className="px-5 py-2 rounded-xl bg-[var(--accent)] text-white text-xs font-bold shadow-xs hover:bg-[var(--accent-hover)] disabled:opacity-40 transition-all cursor-pointer"
-                >
-                  Поделиться с партнёром
-                </button>
+          </div>
+
+          <div className="flex items-center gap-1 text-xs font-semibold text-[var(--text-2)] group-hover:text-[var(--accent)] transition-colors shrink-0">
+            <span className="hidden sm:inline">{questionAnswer ? 'Посмотреть' : 'Ответить'}</span>
+            <ChevronRight className="w-4 h-4 text-[var(--text-3)] group-hover:text-[var(--accent)] transition-transform group-hover:translate-x-0.5" />
+          </div>
+        </section>
+
+        {/* ============================================================ */}
+        {/* 5. COUPLE EVENTS TODAY (RECENT ACTIONS / EMPTY-STATE) */}
+        {/* ============================================================ */}
+        <section className="space-y-2">
+          <div className="p-4 sm:p-5 rounded-2xl bg-[var(--surface)] border border-[var(--divider)] shadow-xs space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-[var(--surface-2)] text-[var(--accent)] flex items-center justify-center">
+                  <Activity className="w-3.5 h-3.5" />
+                </div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-2)]">
+                  События пары сегодня
+                </h4>
               </div>
-            </form>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowQuestionInput(true)}
-              className="w-full py-3 px-4 rounded-2xl bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--divider)] text-xs sm:text-sm font-semibold text-[var(--accent)] flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer"
-            >
-              <Pencil className="w-4 h-4" />
-              <span>Ответить на вопрос дня</span>
-            </button>
-          )}
-        </section>
+              <span className="text-[11px] text-[var(--text-3)] font-medium">
+                {feedItems.length > 0 ? (feedItems[0].timeAgo || 'Недавно') : 'Сегодня'}
+              </span>
+            </div>
 
-
-        {/* ============================================================ */}
-        {/* QUICK EMOTIONAL TOUCHES — "ПРОЯВИТЬ ВНИМАНИЕ" */}
-        {/* ============================================================ */}
-        <section className="space-y-3">
-          <div className="flex items-center justify-between px-1">
-            <h3 className="text-sm font-bold text-[var(--text)] tracking-tight">
-              Проявить внимание
-            </h3>
-            <span className="text-xs text-[var(--text-2)]">Быстрые знаки заботы</span>
-          </div>
-
-          <div className="flex gap-2.5 overflow-x-auto pb-2 no-scrollbar snap-x snap-mandatory">
-            {quickAttentionList.map((item) => {
-              const Icon = item.icon;
-              return (
-                <motion.button
-                  key={item.id}
-                  type="button"
-                  whileHover={{ y: -2 }}
-                  whileTap={{ scale: 0.96 }}
-                  onClick={item.onClick}
-                  className="flex-none min-w-[130px] sm:min-w-[145px] p-3.5 rounded-2xl bg-[var(--surface)] border border-[var(--divider)] hover:border-[var(--accent)]/40 shadow-2xs flex flex-col items-start gap-2.5 transition-all snap-start cursor-pointer text-left group"
-                >
-                  <div className="w-9 h-9 rounded-xl bg-[var(--surface-blush)] border border-[var(--surface-blush-border)] text-[var(--accent)] flex items-center justify-center transition-transform group-hover:scale-105">
-                    <Icon className="w-4.5 h-4.5" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-[var(--text)] leading-tight">
-                      {item.label}
-                    </div>
-                    <div className="text-[11px] text-[var(--text-2)] font-normal mt-0.5 truncate">
-                      {item.subtitle}
-                    </div>
-                  </div>
-                </motion.button>
-              );
-            })}
+            {feedItems.length > 0 ? (
+              <div className="flex items-start gap-3 p-3 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)]">
+                <div className="w-8 h-8 rounded-lg bg-[var(--surface-blush)] text-[var(--accent)] flex items-center justify-center shrink-0 mt-0.5">
+                  <Heart className="w-4 h-4 fill-[var(--accent)]" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-[var(--text)] leading-snug">
+                    {feedItems[0].title}
+                  </p>
+                  <p className="text-[11px] text-[var(--text-2)] mt-0.5 line-clamp-2">
+                    {feedItems[0].subtitle}
+                  </p>
+                </div>
+              </div>
+            ) : questionAnswer ? (
+              <div className="flex items-start gap-3 p-3 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)]">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                  <CheckCircle2 className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-[var(--text)] leading-snug">
+                    Ответ на вопрос дня сохранён
+                  </p>
+                  <p className="text-[11px] text-[var(--text-2)] mt-0.5 line-clamp-2 italic">
+                    «{questionAnswer}»
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2.5 p-3 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-[var(--text-2)]">
+                <Sparkles className="w-4 h-4 text-[var(--text-3)] shrink-0" />
+                <span className="text-xs font-normal">Сегодня пока без общих событий</span>
+              </div>
+            )}
           </div>
         </section>
+
+        {/* ============================================================ */}
+        {/* 5.5 OUR PLANS STAT-TILE (SCHEDULE SYNCHRONIZATION ENTRY) */}
+        {/* ============================================================ */}
+        <section
+          onClick={() => {
+            triggerHaptic('light');
+            setShowScheduleModal(true);
+          }}
+          className="p-3.5 sm:p-4 rounded-2xl bg-[var(--surface)] border border-[var(--divider)] shadow-xs hover:border-sky-500/40 flex items-center justify-between gap-3 transition-all cursor-pointer group select-none"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-sky-500/10 dark:bg-sky-500/20 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+              <Calendar className="w-4.5 h-4.5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h4 className="text-xs sm:text-sm font-bold text-[var(--text)] leading-tight">
+                  {scheduleSummary.title}
+                </h4>
+                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${scheduleSummary.badgeClass}`}>
+                  {scheduleSummary.badge}
+                </span>
+              </div>
+              <p className="text-xs text-[var(--text-2)] mt-0.5 line-clamp-1">
+                {scheduleSummary.subtitle}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1 text-xs font-semibold text-[var(--text-2)] group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors shrink-0">
+            <span className="hidden sm:inline">Открыть</span>
+            <ChevronRight className="w-4 h-4 text-[var(--text-3)] group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-transform group-hover:translate-x-0.5" />
+          </div>
+        </section>
+
+        {/* ============================================================ */}
+        {/* 6. NEXT PLANNED DATE / EVENT (SHOWN ONLY IF SCHEDULED) */}
+        {/* ============================================================ */}
+        {upcomingDate && (
+          <section
+            onClick={() => {
+              setDatesSubTab('history');
+              setActiveTab('dates');
+            }}
+            className="p-3.5 sm:p-4 rounded-2xl bg-[var(--surface)] border border-[var(--divider)] shadow-xs hover:border-[var(--accent)]/40 flex items-center justify-between gap-3 transition-all cursor-pointer group select-none"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-pink-500/10 dark:bg-pink-500/20 text-pink-500 dark:text-pink-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <Calendar className="w-4.5 h-4.5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs sm:text-sm font-bold text-[var(--text)] leading-tight">
+                    Ближайшее свидание
+                  </h4>
+                  <span className="text-[11px] font-semibold text-pink-600 dark:text-pink-400 bg-pink-500/10 px-2 py-0.5 rounded-full">
+                    {upcomingDate.status === 'CONFIRMED' ? 'Подтверждено' : 'Запланировано'}
+                  </span>
+                </div>
+                <p className="text-xs text-[var(--text-2)] mt-0.5 truncate">
+                  {upcomingDate.chosenDate ? `${upcomingDate.chosenDate}${upcomingDate.chosenTime ? ` в ${upcomingDate.chosenTime}` : ''} • ` : ''}
+                  {upcomingDate.chosenLocation || upcomingDate.invitationNote || 'Особенный вечер для двоих'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1 text-xs font-semibold text-[var(--text-2)] group-hover:text-[var(--accent)] transition-colors shrink-0">
+              <span className="hidden sm:inline">Открыть</span>
+              <ChevronRight className="w-4 h-4 text-[var(--text-3)] group-hover:text-[var(--accent)] transition-transform group-hover:translate-x-0.5" />
+            </div>
+          </section>
+        )}
 
       </div>
 
+
+      {/* ============================================================ */}
+      {/* MODAL 0: Daily Question Modal (Warm, Focused, Non-Intrusive) */}
+      {/* ============================================================ */}
+      {showQuestionModal && (
+        <div className="fixed inset-0 z-[100] flex flex-col justify-end sm:justify-center items-center">
+          <div 
+            onClick={() => {
+              setShowQuestionModal(false);
+              setIsEditingQuestionAnswer(false);
+            }} 
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-fadeIn" 
+          />
+
+          <div className="relative z-10 w-full max-w-lg bg-[var(--surface-solid)] rounded-t-[32px] sm:rounded-3xl p-5 sm:p-6 border border-[var(--divider)] shadow-2xl space-y-4 max-h-[90vh] flex flex-col pb-[max(1.25rem,calc(env(safe-area-inset-bottom,0px)+1rem))] animate-slideUp">
+            <div className="w-10 h-1 rounded-full bg-[var(--divider)] mx-auto sm:hidden mb-1 shrink-0" />
+            
+            <div className="flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-[var(--surface-blush)] text-[var(--accent)] flex items-center justify-center">
+                  <Quote className="w-4.5 h-4.5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-[var(--text)] leading-tight">Вопрос дня</h3>
+                  <p className="text-xs text-[var(--text-2)]">Для душевного сближения и диалога</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowQuestionModal(false);
+                  setIsEditingQuestionAnswer(false);
+                }}
+                className="w-9 h-9 rounded-full bg-[var(--surface-2)] text-[var(--text-2)] hover:text-[var(--text)] flex items-center justify-center active:scale-95 transition-all shrink-0 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Question Text Box */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-[var(--surface-2)] border border-[var(--divider)]">
+              <div className="text-[11px] font-bold text-[var(--accent)] uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Сегодняшний вопрос</span>
+              </div>
+              <p className="text-base sm:text-lg font-semibold text-[var(--text)] leading-relaxed italic">
+                «{currentDailyQuestion}»
+              </p>
+            </div>
+
+            {/* Answer Display or Form */}
+            {questionAnswer && !isEditingQuestionAnswer ? (
+              <div className="space-y-4">
+                <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Ваш ответ сохранён:</span>
+                    </span>
+                    <span className="text-[11px] text-[var(--text-3)] font-medium">Виден партнёру</span>
+                  </div>
+                  <p className="text-sm font-medium text-[var(--text)] leading-relaxed pt-1">
+                    «{questionAnswer}»
+                  </p>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserQuestionAnswer(questionAnswer);
+                      setIsEditingQuestionAnswer(true);
+                    }}
+                    className="flex-1 py-3 px-4 rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text)] font-semibold text-sm transition-all flex items-center justify-center gap-2 active:scale-98 cursor-pointer"
+                  >
+                    <Pencil className="w-4 h-4 text-[var(--accent)]" />
+                    <span>Изменить ответ</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowQuestionModal(false)}
+                    className="px-5 py-3 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-bold text-sm shadow-md transition-all active:scale-98 cursor-pointer"
+                  >
+                    Готово
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleAnswerSubmit} className="space-y-3.5">
+                <textarea
+                  value={userQuestionAnswer}
+                  onChange={(e) => setUserQuestionAnswer(e.target.value)}
+                  placeholder="Напишите искренний ответ для вашего партнёра..."
+                  rows={4}
+                  autoFocus
+                  className="w-full p-4 rounded-2xl bg-[var(--surface-2)] border border-[var(--divider)] text-sm text-[var(--text)] placeholder:text-[var(--text-3)] focus:outline-none focus:border-[var(--accent)] resize-none"
+                />
+                <div className="flex gap-2 pt-1 border-t border-[var(--divider)]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowQuestionModal(false);
+                      setIsEditingQuestionAnswer(false);
+                    }}
+                    className="px-4 py-3 rounded-xl bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-2)] font-semibold text-sm transition-all active:scale-98 cursor-pointer"
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!userQuestionAnswer.trim()}
+                    className="flex-1 py-3 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-bold text-sm shadow-md disabled:opacity-50 transition-all flex items-center justify-center gap-2 active:scale-98 cursor-pointer"
+                  >
+                    <Heart className="w-4 h-4 fill-white" />
+                    <span>Поделиться с партнёром</span>
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ============================================================ */}
       {/* MODAL 1: Mood Picker Bottom Sheet (Warm, Clean, Intimate) */}
@@ -885,8 +1598,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
               <div className="flex items-center gap-3">
                 <div className="relative shrink-0">
                   <ColoredAvatar
-                    avatar={otherPartner.avatar || 'sparkles'}
-                    name={otherPartner.name}
+                    avatar={safeOtherPartner.avatar || 'sparkles'}
+                    name={partnerName}
                     size="md"
                   />
                   <span
@@ -897,10 +1610,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-[var(--text)] flex items-center gap-2">
-                    <span>{otherPartner.name || 'Партнёр'}</span>
-                    {otherPartner.login && (
+                    <span>{partnerName}</span>
+                    {safeOtherPartner.login && (
                       <span className="text-xs text-[var(--text-2)] font-normal">
-                        @{otherPartner.login}
+                        @{safeOtherPartner.login}
                       </span>
                     )}
                   </h3>
@@ -929,22 +1642,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
                 <span className="text-xs font-bold text-[var(--accent)] uppercase tracking-wider">
                   Текущее настроение
                 </span>
-                {otherPartner.currentMood?.updatedAt && (
+                {safeOtherPartner.currentMood?.updatedAt && (
                   <span className="text-xs text-[var(--text-2)] font-normal">
-                    {formatMoodTime(otherPartner.currentMood.updatedAt)}
+                    {formatMoodTime(safeOtherPartner.currentMood.updatedAt)}
                   </span>
                 )}
               </div>
 
               <div className="flex items-center gap-3.5">
                 <MoodBadge
-                  mood={otherPartner.currentMood?.emoji || otherPartner.currentMood?.label || 'inspire'}
+                  mood={safeOtherPartner.currentMood?.emoji || safeOtherPartner.currentMood?.label || 'inspire'}
                   showLabel={false}
                   size="lg"
                 />
                 <div>
                   <div className="text-lg font-bold text-[var(--text)] leading-tight">
-                    {otherPartner.currentMood?.label || 'В предвкушении'}
+                    {safeOtherPartner.currentMood?.label || 'В предвкушении'}
                   </div>
                   <div className="text-xs text-[var(--text-2)] mt-0.5">
                     {partnerStatusInfo.isOnline ? 'Активно делится состоянием' : 'Последнее обновление'}
@@ -952,13 +1665,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
                 </div>
               </div>
 
-              {otherPartner.currentMood?.note?.trim() && (
+              {safeOtherPartner.currentMood?.note?.trim() && (
                 <div className="p-3 rounded-xl bg-[var(--surface-solid)] border border-[var(--divider)]">
                   <div className="text-[11px] font-medium text-[var(--text-2)] mb-0.5">
                     Слова партнёра:
                   </div>
                   <p className="text-sm italic text-[var(--text)] font-medium leading-relaxed">
-                    «{otherPartner.currentMood.note.trim()}»
+                    «{safeOtherPartner.currentMood.note.trim()}»
                   </p>
                 </div>
               )}
@@ -970,7 +1683,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
                 </div>
                 <p className="text-xs text-[var(--text)] leading-relaxed font-normal">
                   {getMoodBriefDescription(
-                    otherPartner.currentMood?.label || otherPartner.currentMood?.emoji || 'inspire'
+                    safeOtherPartner.currentMood?.label || safeOtherPartner.currentMood?.emoji || 'inspire'
                   )}
                 </p>
               </div>
@@ -1041,6 +1754,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
           </div>
         </div>
       )}
+
+      {/* Schedule Planner Modal */}
+      <ScheduleModal
+        isOpen={showScheduleModal}
+        onClose={() => setShowScheduleModal(false)}
+        onOpenDateWheel={() => {
+          setShowScheduleModal(false);
+          setDatesSubTab('wheel');
+          setActiveTab('dates');
+        }}
+      />
 
     </PageLayout>
   );

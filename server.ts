@@ -43,6 +43,7 @@ import {
   aiChatMessageSchema,
   aiReportSchema,
   aiDateIdeaSchema,
+  touchEventSchema,
 } from "./src/server/schemas.ts";
 import {
   requireAuth,
@@ -60,6 +61,7 @@ import {
   upsertUser,
   getCoupleData,
   saveCoupleData,
+  mergeCoupleData,
   readEmergencyFile,
   writeEmergencyFile,
 } from "./src/server/services/storageService.ts";
@@ -87,16 +89,7 @@ const PORT = 3000;
 // Helmet configured for security
 app.use(
   helmet({
-    contentSecurityPolicy: process.env.NODE_ENV === "production" ? {
-      directives: {
-        defaultSrc: ["'self'"],
-        connectSrc: ["'self'", "https:", "wss:"],
-        imgSrc: ["'self'", "data:", "blob:", "https:"],
-        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-        fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
-      }
-    } : false,
+    contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false,
     crossOriginOpenerPolicy: false,
     crossOriginResourcePolicy: { policy: "cross-origin" },
@@ -104,24 +97,10 @@ app.use(
   })
 );
 
-// CORS handling with support for dev, preview domains, and localhost
+// CORS handling with support for dev, preview domains, *.ai.studio, and custom domains
 app.use(
   cors({
-    origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-      const appUrl = process.env.APP_URL;
-      const allowed = [...config.allowedOrigins, appUrl];
-      
-      if (
-        allowed.includes(origin) ||
-        origin.includes("run.app") ||
-        origin.includes("localhost") ||
-        origin.includes("127.0.0.1")
-      ) {
-        return callback(null, true);
-      }
-      return callback(new Error('Not allowed by CORS'));
-    },
+    origin: true,
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
@@ -185,6 +164,39 @@ interface PushSubscriptionRecord {
   subscribedAt: string;
 }
 const pushSubscriptions: PushSubscriptionRecord[] = [];
+
+// Realtime Touch Events & Server-Sent Events (SSE)
+export interface TouchRecord {
+  id: string;
+  senderLogin: string;
+  senderName: string;
+  targetLogin: string;
+  actionType: string;
+  title: string;
+  subtitle?: string;
+  icon?: string;
+  iconBg?: string;
+  iconColor?: string;
+  customNote?: string;
+  createdAt: string;
+}
+const recentTouches: TouchRecord[] = [];
+const sseClients: Map<string, express.Response[]> = new Map();
+
+function sendSSEEventToUser(login: string, eventType: string, payload: any) {
+  const cleanLogin = login.toLowerCase().replace(/^@/, "");
+  const clients = sseClients.get(cleanLogin);
+  if (clients && clients.length > 0) {
+    const data = `event: ${eventType}\ndata: ${JSON.stringify(payload)}\n\n`;
+    clients.forEach((res) => {
+      try {
+        res.write(data);
+      } catch (err) {
+        // client disconnected
+      }
+    });
+  }
+}
 
 // Password verification with timing-attack mitigation
 const DUMMY_HASH = "$2b$10$e8I8/g4P7s.Sg43L7kE8.eL39j34uV658m9m3m3m3m3m3m3m3m3m3";
@@ -799,23 +811,57 @@ app.get("/api/pair/status/:login", requireAuth, requirePairOwnership, async (req
 
 app.post("/api/couple/sync", requireAuth, requirePairOwnership, validateBody(coupleSyncSchema), async (req: AuthenticatedRequest, res) => {
   try {
-    const { login1, login2, payload } = req.body;
+    const { login1, login2, coupleId, payload } = req.body;
 
-    const key = [login1, login2].sort().join("_");
-    await saveCoupleData(key, payload);
+    let key = coupleId;
+    if (!key) {
+      if (login2) {
+        const l1 = String(login1).toLowerCase().trim().replace(/^@/, "");
+        const l2 = String(login2).toLowerCase().trim().replace(/^@/, "");
+        key = [l1, l2].sort().join("_");
+      } else {
+        key = String(login1).toLowerCase().trim().replace(/^@/, "");
+      }
+    }
+
+    // Read existing data from Neon & deep-merge to prevent overwriting partner's progress
+    const existing = await getCoupleData(key);
+    const merged = mergeCoupleData(existing, payload);
+    await saveCoupleData(key, merged);
 
     // Analytics: Record daily metrics
     try {
       const todayDate = new Date().toISOString().split("T")[0];
-      await recordDailyMetrics(key, todayDate, payload);
+      await recordDailyMetrics(key, todayDate, merged);
     } catch (err: unknown) {
       logger.warn("Сбой записи ежедневных метрик в analytics", { coupleId: key }, err);
     }
 
-    return res.json({ status: "synced", key, timestamp: new Date().toISOString() });
+    // Realtime notification to partner via SSE
+    if (login2) {
+      const senderLogin = String(req.user?.login || "").toLowerCase().trim().replace(/^@/, "");
+      const otherLogin = String(login1).toLowerCase().trim().replace(/^@/, "") === senderLogin
+        ? String(login2).toLowerCase().trim().replace(/^@/, "")
+        : String(login1).toLowerCase().trim().replace(/^@/, "");
+      sendSSEEventToUser(otherLogin, "schedule_updated", { key, timestamp: new Date().toISOString() });
+      sendSSEEventToUser(otherLogin, "couple_updated", { key, timestamp: new Date().toISOString() });
+    }
+
+    return res.json({ status: "synced", key, data: merged, timestamp: new Date().toISOString() });
   } catch (err: unknown) {
     logger.error("Ошибка синхронизации данных пары", err);
     return res.status(500).json({ error: "Ошибка сохранения данных пары" });
+  }
+});
+
+app.get("/api/couple/data/:key", requireAuth, requirePairOwnership, async (req: AuthenticatedRequest, res) => {
+  try {
+    const key = String(req.params.key || "").toLowerCase().trim();
+    const data = await getCoupleData(key);
+    return res.json({ data: data || null });
+  } catch (err: unknown) {
+    logger.error("Ошибка получения данных пары", err);
+    return res.status(500).json({ error: "Ошибка загрузки данных пары" });
   }
 });
 
@@ -1013,6 +1059,134 @@ app.post("/api/push/send-test", requireAuth, (req, res) => {
     status: "dispatched",
     title: title || "Loop • Внимание партнёра",
     body: body || "Тестовое уведомление доставлено.",
+  });
+});
+
+// ==========================================
+// 7.5. REALTIME TOUCHES & SSE STREAM
+// ==========================================
+
+// Endpoint for sending a quick touch action to partner
+app.post("/api/couple/touch", requireAuth, validateBody(touchEventSchema), async (req: AuthenticatedRequest, res) => {
+  try {
+    const {
+      senderLogin,
+      senderName,
+      targetLogin,
+      actionType,
+      title,
+      subtitle,
+      icon,
+      iconBg,
+      iconColor,
+      customNote,
+    } = req.body;
+
+    const sLogin = String(senderLogin).toLowerCase().replace(/^@/, "");
+    const tLogin = String(targetLogin).toLowerCase().replace(/^@/, "");
+
+    // 10-second anti-spam debounce check per actionType between pair
+    const now = Date.now();
+    const tenSecondsAgo = now - 10000;
+    const existingRecent = recentTouches.find(
+      (t) =>
+        t.senderLogin === sLogin &&
+        t.targetLogin === tLogin &&
+        t.actionType === actionType &&
+        new Date(t.createdAt).getTime() > tenSecondsAgo
+    );
+
+    if (existingRecent) {
+      return res.json({
+        status: "throttled",
+        throttled: true,
+        message: "Действие уже отправлено недавно",
+        touch: existingRecent,
+      });
+    }
+
+    const newTouch: TouchRecord = {
+      id: `touch-${now}-${Math.random().toString(36).slice(2, 7)}`,
+      senderLogin: sLogin,
+      senderName: senderName || sLogin,
+      targetLogin: tLogin,
+      actionType,
+      title: title || `${senderName} обратил(а) на вас внимание`,
+      subtitle: subtitle || "Только что",
+      icon: icon || "heart",
+      iconBg: iconBg || "bg-rose-500/10",
+      iconColor: iconColor || "text-rose-500",
+      customNote,
+      createdAt: new Date().toISOString(),
+    };
+
+    recentTouches.unshift(newTouch);
+    if (recentTouches.length > 200) recentTouches.pop();
+
+    // Broadcast in realtime to target partner via Server-Sent Events (SSE)
+    sendSSEEventToUser(tLogin, "touch", newTouch);
+
+    logger.info("Быстрое касание доставлено", {
+      from: sLogin,
+      to: tLogin,
+      action: actionType,
+    });
+
+    return res.json({
+      status: "dispatched",
+      throttled: false,
+      touch: newTouch,
+    });
+  } catch (err: unknown) {
+    logger.error("Ошибка отправки быстрого касания", err);
+    return res.status(500).json({ error: "Ошибка отправки касания" });
+  }
+});
+
+// Endpoint for fetching recent touches for a user (polling fallback)
+app.get("/api/couple/touches/:login", requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const login = String(req.params.login || "").toLowerCase().replace(/^@/, "");
+    const userTouches = recentTouches.filter(
+      (t) => t.targetLogin === login || t.senderLogin === login
+    );
+    return res.json({ touches: userTouches });
+  } catch (err: unknown) {
+    logger.error("Ошибка загрузки касаний", err);
+    return res.status(500).json({ error: "Ошибка загрузки касаний" });
+  }
+});
+
+// Server-Sent Events (SSE) stream for instant real-time delivery (<50ms)
+app.get("/api/couple/events-stream/:login", requireAuth, (req: AuthenticatedRequest, res) => {
+  const login = String(req.params.login || "").toLowerCase().replace(/^@/, "");
+
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache, no-transform",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+
+  res.write(": connected\n\n");
+
+  if (!sseClients.has(login)) {
+    sseClients.set(login, []);
+  }
+  sseClients.get(login)!.push(res);
+
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(": heartbeat\n\n");
+    } catch {
+      clearInterval(heartbeat);
+    }
+  }, 20000);
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    const list = sseClients.get(login) || [];
+    sseClients.set(login, list.filter((c) => c !== res));
   });
 });
 
@@ -1470,18 +1644,29 @@ async function startServer() {
   await initDatabase();
 
   if (process.env.NODE_ENV !== "production") {
+    const distAssetsPath = path.join(process.cwd(), "dist", "assets");
+    if (fs.existsSync(distAssetsPath)) {
+      app.use("/assets", express.static(distAssetsPath, { maxAge: "1d" }));
+    }
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
+    // In production bundled mode, dist/server.cjs lives inside dist/, so __dirname is dist
+    const distPath = fs.existsSync(path.join(__dirname, "index.html"))
+      ? __dirname
+      : (fs.existsSync(path.join(process.cwd(), "dist", "index.html"))
+          ? path.join(process.cwd(), "dist")
+          : path.join(process.cwd()));
+
+    const indexHtmlPath = path.join(distPath, "index.html");
 
     app.use(
       express.static(distPath, {
         setHeaders: (res, filePath) => {
-          if (filePath.endsWith("index.html") || filePath.endsWith("sw.js")) {
+          if (filePath.endsWith("index.html") || filePath.endsWith("sw.js") || filePath.endsWith("manifest.json")) {
             res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
             res.setHeader("Pragma", "no-cache");
             res.setHeader("Expires", "0");
@@ -1496,10 +1681,12 @@ async function startServer() {
       if (req.path.startsWith("/api/")) {
         return res.status(404).json({ error: "API Route Not Found" });
       }
-      if (req.path.endsWith(".js") || req.path.endsWith(".css")) {
-        return res.status(404).send("Asset not found");
-      }
-      res.sendFile(path.join(distPath, "index.html"));
+      res.sendFile(indexHtmlPath, (err) => {
+        if (err) {
+          logger.error("Failed to send index.html", err);
+          res.status(500).send("Loop Application loading error. Please refresh.");
+        }
+      });
     });
   }
 

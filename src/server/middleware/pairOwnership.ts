@@ -50,12 +50,13 @@ export function requirePairOwnership(
     return res.status(401).json({ error: "Необходима авторизация" });
   }
 
-  // 1. Проверка по параметру :coupleId в URL
-  if (req.params?.coupleId) {
-    if (!isUserInCouple(req.params.coupleId, userLogin)) {
-      logger.security("Отказ в доступе (IDOR: params.coupleId)", {
+  // 1. Проверка по параметру :coupleId или :key в URL
+  if (req.params?.coupleId || req.params?.key) {
+    const targetId = req.params.coupleId || req.params.key;
+    if (!isUserInCouple(targetId, userLogin)) {
+      logger.security("Отказ в доступе (IDOR: params.coupleId/key)", {
         userLogin,
-        targetCoupleId: req.params.coupleId,
+        targetCoupleId: targetId,
         ip: req.ip,
       });
       return res.status(403).json({ error: "Нет доступа" });
@@ -88,14 +89,14 @@ export function requirePairOwnership(
     }
   }
 
-  // 4. Проверка пары логинов в теле запроса: /api/couple/sync
-  if (req.body?.login1 && req.body?.login2) {
+  // 4. Проверка логинов в теле запроса: /api/couple/sync
+  if (req.body?.login1) {
     const l1 = String(req.body.login1).toLowerCase().trim().replace(/^@/, "");
-    const l2 = String(req.body.login2).toLowerCase().trim().replace(/^@/, "");
+    const l2 = req.body.login2 ? String(req.body.login2).toLowerCase().trim().replace(/^@/, "") : null;
     if (l1 !== userLogin && l2 !== userLogin) {
       logger.security("Отказ в доступе (IDOR: body.login1/login2)", {
         userLogin,
-        target: `${l1}_${l2}`,
+        target: l2 ? `${l1}_${l2}` : l1,
         ip: req.ip,
       });
       return res.status(403).json({ error: "Нет доступа" });

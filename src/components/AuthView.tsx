@@ -16,7 +16,7 @@ import { useCouple } from '../context/CoupleContext';
 
 export const AuthView: React.FC = () => {
   const { authLogin, authRegister, authResetPassword } = useCouple();
-  const [showLanding, setShowLanding] = useState(true);
+  const [showLanding, setShowLanding] = useState(false);
 
   const [mode, setMode] = useState<'login' | 'register' | 'reset'>('login');
   const [login, setLogin] = useState<string>('');

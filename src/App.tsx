@@ -10,16 +10,17 @@ import { DatesView } from './components/DatesView';
 import { ChatView } from './components/ChatView';
 import { SettingsView } from './components/SettingsView';
 import { TestsView } from './components/TestsView';
-import { ReportView } from './components/ReportView';
 import { CareBaseView } from './components/CareBaseView';
+import { DeepTalkView } from './components/DeepTalkView';
 import { IOSInstallPrompt } from './components/IOSInstallPrompt';
 import { AmbientBackground } from './components/AmbientBackground';
 import { NavigationTab } from './types';
 import { LoopLogo } from './components/LoopLogo';
 import { AchievementsModal } from './components/AchievementsModal';
+import { PartnerTouchToast } from './components/PartnerTouchToast';
 
 const MainLayout: React.FC = () => {
-  const { isOnboarded, currentUser, activeTab, setActiveTab } = useCouple();
+  const { isOnboarded, currentUser, activeTab, setActiveTab, activePartnerTouch, dismissPartnerTouch, sendTouchAction } = useCouple();
   const [showAchievementsModal, setShowAchievementsModal] = useState<boolean>(false);
 
   // Hook to handle visualViewport height & keyboard open state like Telegram
@@ -79,11 +80,13 @@ const MainLayout: React.FC = () => {
       case 'us':
         return <UsView />;
       case 'tests':
-        return <TestsView />;
+        return <TestsView initialMode="catalog" />;
       case 'report':
-        return <ReportView onStartTest={() => setActiveTab('tests')} />;
+        return <TestsView initialMode="report" />;
       case 'care':
         return <CareBaseView />;
+      case 'deeptalk':
+        return <DeepTalkView onBack={() => setActiveTab('us')} />;
       case 'dates':
         return <DatesView />;
       case 'chat':
@@ -150,6 +153,19 @@ const MainLayout: React.FC = () => {
       
       {/* iOS Home Screen Install Helper Banner */}
       <IOSInstallPrompt />
+
+      {/* Real-time Partner Touch In-App Toast */}
+      <PartnerTouchToast
+        touch={activePartnerTouch}
+        onDismiss={dismissPartnerTouch}
+        onSendBack={() => {
+          sendTouchAction('hug', {
+            title: `${currentUser.name} отправил(а) объятие в ответ`,
+            subtitle: 'Взаимное нежное касание ❤️',
+          });
+          dismissPartnerTouch();
+        }}
+      />
 
       <AnimatePresence>
         {showAchievementsModal && (

@@ -89,6 +89,9 @@ export interface TestCategory {
   questions: Question[];
   partner1Done: boolean;
   partner2Done: boolean;
+  partner1Answers?: Record<string, any>;
+  partner2Answers?: Record<string, any>;
+  completedAt?: string;
 }
 
 export interface TestResult {
@@ -178,12 +181,30 @@ export interface DateInvite {
   createdAt: string;
 }
 
+export type PlanCategory = 'work' | 'personal' | 'fitness' | 'study' | 'meeting' | 'date' | 'chores' | 'other';
+
+export interface ScheduleEvent {
+  id: string;
+  creatorId: PartnerId;
+  title: string;
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:mm
+  endTime: string; // HH:mm
+  isPrivate: boolean; // if true, partner sees only "Занят(а)" / "Личные планы", without details
+  category: PlanCategory;
+  note?: string;
+  isDate?: boolean; // if true, acts as a date and syncs to upcoming dates
+  createdAt: string;
+  deleted?: boolean;
+}
+
 export interface XPEntry {
   id: string;
   points: number;
   reason: string;
   category: 'date' | 'test' | 'tap' | 'mood' | 'challenge' | 'craving' | 'bonus';
   timestamp: string;
+  createdAt?: string;
   partnerId?: PartnerId;
 }
 
@@ -236,6 +257,21 @@ export interface PairRequest {
   fromAvatar: string;
   toLogin: string;
   status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+  createdAt: string;
+}
+
+export interface TouchNotificationData {
+  id: string;
+  senderLogin: string;
+  senderName: string;
+  targetLogin?: string;
+  actionType: string;
+  title: string;
+  subtitle: string;
+  icon?: string;
+  iconBg?: string;
+  iconColor?: string;
+  customNote?: string;
   createdAt: string;
 }
 
@@ -295,7 +331,7 @@ export interface Achievement {
 export type AppTheme = 'aurora' | 'night';
 export type AppFont = 'inter' | 'system' | 'golos' | 'manrope';
 export type AppScreen = 'landing' | 'app';
-export type UsSubTab = 'passport' | 'book' | 'tests' | 'challenges' | 'capsule' | 'cards' | 'photobook';
+export type UsSubTab = 'passport' | 'challenges' | 'moments' | 'book' | 'tests' | 'capsule' | 'cards' | 'photobook';
 export type DatesSubTab = 'wheel' | 'invite' | 'places' | 'history' | 'games';
 export type OwlMode = 'solo' | 'together';
 
@@ -310,7 +346,8 @@ export type NavigationTab =
   | 'settings'
   | 'tests'
   | 'report'
-  | 'care';
+  | 'care'
+  | 'deeptalk';
 
 
 

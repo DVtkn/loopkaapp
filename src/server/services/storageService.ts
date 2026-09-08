@@ -145,6 +145,125 @@ export async function upsertUser(userData: DbUserInsert): Promise<void> {
   writeEmergencyFile(store);
 }
 
+export function mergeCoupleData(existing: any, incoming: any): any {
+  if (!existing) return incoming || {};
+  if (!incoming) return existing || {};
+
+  const merged = { ...existing, ...incoming };
+
+  // 1. Tests merge: ensure each test merges questions / answers / partnerAnswers / scores
+  if (Array.isArray(existing.tests) && Array.isArray(incoming.tests)) {
+    const testMap = new Map<string, any>();
+    existing.tests.forEach((t: any) => testMap.set(t.id, t));
+    incoming.tests.forEach((t: any) => {
+      const ex = testMap.get(t.id);
+      if (ex) {
+        testMap.set(t.id, {
+          ...ex,
+          ...t,
+          questions: Array.isArray(t.questions) && t.questions.length > 0 ? t.questions : ex.questions,
+          userAnswers: { ...(ex.userAnswers || {}), ...(t.userAnswers || {}) },
+          partnerAnswers: { ...(ex.partnerAnswers || {}), ...(t.partnerAnswers || {}) },
+          partner1Answers: { ...(ex.partner1Answers || {}), ...(t.partner1Answers || {}) },
+          partner2Answers: { ...(ex.partner2Answers || {}), ...(t.partner2Answers || {}) },
+          partner1Done: !!(ex.partner1Done || t.partner1Done),
+          partner2Done: !!(ex.partner2Done || t.partner2Done),
+          score: t.score !== undefined ? t.score : ex.score,
+          completedAt: t.completedAt || ex.completedAt,
+        });
+      } else {
+        testMap.set(t.id, t);
+      }
+    });
+    merged.tests = Array.from(testMap.values());
+  }
+
+  // 2. Pulse History merge
+  if (Array.isArray(existing.pulseHistory) && Array.isArray(incoming.pulseHistory)) {
+    const pulseMap = new Map<string, any>();
+    existing.pulseHistory.forEach((p: any) => pulseMap.set(p.id || p.date, p));
+    incoming.pulseHistory.forEach((p: any) => pulseMap.set(p.id || p.date, { ...(pulseMap.get(p.id || p.date) || {}), ...p }));
+    merged.pulseHistory = Array.from(pulseMap.values()).sort((a, b) => (a.date > b.date ? -1 : 1));
+  }
+
+  // 3. Challenges merge
+  if (Array.isArray(existing.challenges) && Array.isArray(incoming.challenges)) {
+    const challMap = new Map<string, any>();
+    existing.challenges.forEach((c: any) => challMap.set(c.id, c));
+    incoming.challenges.forEach((c: any) => challMap.set(c.id, { ...(challMap.get(c.id) || {}), ...c }));
+    merged.challenges = Array.from(challMap.values());
+  }
+
+  // 4. Wishlist merge
+  if (Array.isArray(existing.wishlist) && Array.isArray(incoming.wishlist)) {
+    const wishMap = new Map<string, any>();
+    existing.wishlist.forEach((w: any) => wishMap.set(w.id, w));
+    incoming.wishlist.forEach((w: any) => wishMap.set(w.id, { ...(wishMap.get(w.id) || {}), ...w }));
+    merged.wishlist = Array.from(wishMap.values());
+  }
+
+  // 5. Date Invites merge
+  if (Array.isArray(existing.dateInvites) && Array.isArray(incoming.dateInvites)) {
+    const dateMap = new Map<string, any>();
+    existing.dateInvites.forEach((d: any) => dateMap.set(d.id, d));
+    incoming.dateInvites.forEach((d: any) => dateMap.set(d.id, { ...(dateMap.get(d.id) || {}), ...d }));
+    merged.dateInvites = Array.from(dateMap.values());
+  }
+
+  // 6. Cravings & Flowers
+  if (Array.isArray(existing.smallCravings) && Array.isArray(incoming.smallCravings)) {
+    const cMap = new Map<string, any>();
+    existing.smallCravings.forEach((c: any) => cMap.set(c.id, c));
+    incoming.smallCravings.forEach((c: any) => cMap.set(c.id, { ...(cMap.get(c.id) || {}), ...c }));
+    merged.smallCravings = Array.from(cMap.values());
+  }
+
+  if (incoming.flowerPreferences) {
+    merged.flowerPreferences = { ...(existing.flowerPreferences || {}), ...incoming.flowerPreferences };
+  }
+
+  // 7. Couple Profile & XP
+  if (incoming.coupleProfile) {
+    merged.coupleProfile = { ...(existing.coupleProfile || {}), ...incoming.coupleProfile };
+  }
+
+  if (incoming.coupleXP !== undefined || existing.coupleXP !== undefined) {
+    merged.coupleXP = Math.max(Number(existing.coupleXP) || 0, Number(incoming.coupleXP) || 0);
+  }
+
+  if (Array.isArray(existing.xpHistory) && Array.isArray(incoming.xpHistory)) {
+    const xpMap = new Map<string, any>();
+    existing.xpHistory.forEach((x: any) => xpMap.set(x.id || `${x.date}_${x.action}`, x));
+    incoming.xpHistory.forEach((x: any) => xpMap.set(x.id || `${x.date}_${x.action}`, x));
+    merged.xpHistory = Array.from(xpMap.values());
+  }
+
+  // 8. Time Capsules & Love Taps & Daily Quiz
+  if (Array.isArray(existing.timeCapsules) && Array.isArray(incoming.timeCapsules)) {
+    const tcMap = new Map<string, any>();
+    existing.timeCapsules.forEach((t: any) => tcMap.set(t.id, t));
+    incoming.timeCapsules.forEach((t: any) => tcMap.set(t.id, { ...(tcMap.get(t.id) || {}), ...t }));
+    merged.timeCapsules = Array.from(tcMap.values());
+  }
+
+  if (Array.isArray(existing.loveTaps) && Array.isArray(incoming.loveTaps)) {
+    const ltMap = new Map<string, any>();
+    existing.loveTaps.forEach((t: any) => ltMap.set(t.id, t));
+    incoming.loveTaps.forEach((t: any) => ltMap.set(t.id, { ...(ltMap.get(t.id) || {}), ...t }));
+    merged.loveTaps = Array.from(ltMap.values()).slice(-50);
+  }
+
+  // 9. Schedule Events ("Наши планы")
+  if (Array.isArray(existing.scheduleEvents) || Array.isArray(incoming.scheduleEvents)) {
+    const evMap = new Map<string, any>();
+    (existing.scheduleEvents || []).forEach((e: any) => evMap.set(e.id, e));
+    (incoming.scheduleEvents || []).forEach((e: any) => evMap.set(e.id, { ...(evMap.get(e.id) || {}), ...e }));
+    merged.scheduleEvents = Array.from(evMap.values()).filter((e: any) => !e.deleted);
+  }
+
+  return merged;
+}
+
 export async function getCoupleData(key: string): Promise<any | null> {
   if (isSqlConfigured() && db) {
     try {

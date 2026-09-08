@@ -37,27 +37,20 @@ const ConstellationHero: React.FC = () => {
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-50 z-0">
       <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-        {lines.map((l, i) => (
-          <motion.line
+        {lines.map((l) => (
+          <line
             key={l.id}
-            x1={`${l.x1}%`} y1={`${l.y1}%`} x2={`${l.x2}%`} y2={`${l.y2}%`}
+            x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2}
             stroke="var(--accent)" strokeWidth="0.3"
-            initial={{ opacity: 0, pathLength: 0 }}
-            animate={{ opacity: [0.1, 0.4, 0.1], pathLength: 1 }}
-            transition={{ duration: 4 + i, repeat: Infinity, ease: 'easeInOut' }}
+            strokeOpacity="0.25"
           />
         ))}
-        {nodes.map((n, i) => (
-          <motion.circle
+        {nodes.map((n) => (
+          <circle
             key={n.id}
-            cx={`${n.cx}%`} cy={`${n.cy}%`} r={n.r}
+            cx={n.cx} cy={n.cy} r={n.r}
             fill="var(--accent)"
-            animate={{
-              cx: [`${n.cx}%`, `${n.cx + (i % 2 === 0 ? 2 : -2)}%`, `${n.cx}%`],
-              cy: [`${n.cy}%`, `${n.cy + (i % 2 !== 0 ? 3 : -1)}%`, `${n.cy}%`],
-              opacity: [0.2, 0.7, 0.2]
-            }}
-            transition={{ duration: 5 + i, repeat: Infinity, ease: 'easeInOut' }}
+            fillOpacity="0.4"
           />
         ))}
       </svg>
@@ -81,8 +74,8 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp }) => {
   };
 
   const features = [
-    { icon: BookOpen, title: 'Хотелки и вкусы всегда под рукой.' },
-    { icon: BarChart3, title: 'Психологический радар совместимости.' },
+    { icon: BookOpen, title: 'Хотелки и вкусы в Книге заботы.' },
+    { icon: BarChart3, title: 'Карта совместимости пары.' },
     { icon: Bot, title: 'Бережные слова от ИИ-психолога.' },
     { icon: MapPin, title: 'Умная подборка идей для свиданий.' },
   ];
@@ -157,11 +150,11 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp }) => {
           <div className="flex flex-col gap-4 relative z-10">
             <div className="flex gap-3 items-center">
               <div className="w-8 h-8 rounded-full bg-[var(--surface-3)] font-bold text-xs flex items-center justify-center shrink-0 shadow-sm border border-[var(--divider)]">1</div>
-              <p className="text-sm font-medium text-[var(--text)]">Ответьте на 5 коротких тестов.</p>
+              <p className="text-sm font-medium text-[var(--text)]">Пройдите исследования пары.</p>
             </div>
             <div className="flex gap-3 items-center">
               <div className="w-8 h-8 rounded-full bg-[var(--surface-3)] font-bold text-xs flex items-center justify-center shrink-0 shadow-sm border border-[var(--divider)]">2</div>
-              <p className="text-sm font-medium text-[var(--text)]">Получите совместный радар.</p>
+              <p className="text-sm font-medium text-[var(--text)]">Откройте карту совместимости.</p>
             </div>
             <div className="flex gap-3 items-center">
               <div className="w-8 h-8 rounded-full bg-[var(--surface-3)] font-bold text-xs flex items-center justify-center shrink-0 shadow-sm border border-[var(--divider)]">3</div>

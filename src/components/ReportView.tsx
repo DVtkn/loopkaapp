@@ -25,7 +25,8 @@ import { triggerHaptic } from '../utils/haptics';
 
 export const ReportView: React.FC<{
   onStartTest?: (testId: string) => void;
-}> = ({ onStartTest }) => {
+  hideHeader?: boolean;
+}> = ({ onStartTest, hideHeader = false }) => {
   const {
     coupleProfile,
     pulseHistory,
@@ -104,13 +105,8 @@ export const ReportView: React.FC<{
     { id: 'rating', label: 'Рейтинг союза', icon: '★' },
   ];
 
-  return (
-    <PageLayout
-      title="Карта совместимости"
-      subtitle="Глубокое понимание гармонии вашей пары"
-      onBack={() => setActiveTab('us')}
-    >
-      <div className="space-y-5 pt-1 pb-10 animate-fadeIn">
+  const content = (
+    <div className="space-y-5 pt-1 pb-10 animate-fadeIn">
         
         {/* 1. Category Switcher Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 -mx-1 px-1">
@@ -223,6 +219,19 @@ export const ReportView: React.FC<{
           )}
         </div>
       </div>
+    );
+
+  if (hideHeader) {
+    return content;
+  }
+
+  return (
+    <PageLayout
+      title="Карта совместимости"
+      subtitle="Глубокое понимание гармонии вашей пары"
+      onBack={() => setActiveTab('us')}
+    >
+      {content}
     </PageLayout>
   );
 };

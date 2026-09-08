@@ -79,15 +79,15 @@ export function triggerHaptic(pattern: number[] = [100, 50, 100]) {
  * Registers Service Worker for PWA and Web Push
  */
 export async function initServiceWorker(): Promise<ServiceWorkerRegistration | null> {
-  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
-    return null;
-  }
-
   try {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator) || window.self !== window.top) {
+      return null;
+    }
+
     const registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
     return registration;
   } catch (err) {
-    console.warn('[PushManager] Service Worker registration failed:', err);
+    console.warn('[PushManager] Service Worker registration skipped or failed:', err);
     return null;
   }
 }

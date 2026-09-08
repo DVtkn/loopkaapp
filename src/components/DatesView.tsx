@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { PageLayout } from './ui/PageLayout';
 import {
   MapPin,
@@ -16,7 +16,6 @@ import {
   X,
   Award,
   ChevronRight,
-  Sparkle,
   Wine,
   Coffee,
   TreePine,
@@ -26,8 +25,10 @@ import {
   Gamepad2,
   Compass,
   MessageCircle,
+  RotateCw,
+  Share2,
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { useCouple } from '../context/CoupleContext';
 import { Venue } from '../types';
 import { ColoredIcon, IconColorTheme } from './ColoredIcon';
@@ -35,6 +36,7 @@ import { triggerHaptic } from '../utils/haptics';
 import { TRUTHS, DARES } from '../data/truthDare';
 import { DEEP_TALKS, SPICY_18, THIS_OR_THAT } from '../data/gamesData';
 import { StatTile, CarouselTile, ActionRow, PrimaryCTA, CarouselItem } from './ui/SystemBlocks';
+import { DateWheel, DateIdea } from './DateWheel';
 
 export const DatesView: React.FC = () => {
   const {
@@ -51,7 +53,6 @@ export const DatesView: React.FC = () => {
     setDatesSubTab,
     addFeedItem,
     coupleXP,
-    coupleLevelInfo,
     addCoupleXP,
     triggerConfetti,
   } = useCouple();
@@ -59,7 +60,18 @@ export const DatesView: React.FC = () => {
   const currentPartner = currentPartnerId === 'partner1' ? coupleProfile.partner1 : coupleProfile.partner2;
   const otherPartner = currentPartnerId === 'partner1' ? coupleProfile.partner2 : coupleProfile.partner1;
 
-  // --- Invite Form State ---
+  // Level 1 vs Level 2 View navigation
+  // Initialize based on datesSubTab if it was opened from outside
+  const [currentView, setCurrentView] = useState<'main' | 'places' | 'games'>(() => {
+    if (datesSubTab === 'places') return 'places';
+    if (datesSubTab === 'games') return 'games';
+    return 'main';
+  });
+
+  // Category filter for places
+  const [placesCategoryFilter, setPlacesCategoryFilter] = useState<string>('all');
+
+  // --- Invite Form State (Modal) ---
   const [showInviteModal, setShowInviteModal] = useState<boolean>(false);
   const [inviteNote, setInviteNote] = useState<string>('Приглашаю тебя провести этот особенный вечер вдвоём');
   const [selectedVenueId, setSelectedVenueId] = useState<string>('');
@@ -67,6 +79,77 @@ export const DatesView: React.FC = () => {
   const [inviteDate, setInviteDate] = useState<string>('');
   const [inviteTime, setInviteTime] = useState<string>('');
   const [inviteSentSuccess, setInviteSentSuccess] = useState<boolean>(false);
+
+  // --- Add Venue Modal State ---
+  const [showAddVenueModal, setShowAddVenueModal] = useState<boolean>(false);
+  const [newVenueName, setNewVenueName] = useState<string>('');
+  const [newVenueCategory, setNewVenueCategory] = useState<Venue['category']>('restaurant');
+  const [newVenueVibe, setNewVenueVibe] = useState<string>('Уютный романтический вечер');
+  const [newVenuePrice, setNewVenuePrice] = useState<Venue['priceLevel']>('₽₽');
+  const [newVenueAddress, setNewVenueAddress] = useState<string>('');
+  const [newVenueDescription, setNewVenueDescription] = useState<string>('');
+  const [newVenueLink, setNewVenueLink] = useState<string>('');
+
+  // --- For Accepting Invites ---
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  const [acceptDateVal, setAcceptDateVal] = useState<string>('');
+  const [acceptTimeVal, setAcceptTimeVal] = useState<string>('');
+  const [acceptVenueId, setAcceptVenueId] = useState<string>('');
+  const [acceptCustomLocation, setAcceptCustomLocation] = useState<string>('');
+  const [acceptLinkVal, setAcceptLinkVal] = useState<string>('');
+  const [acceptSaveToVenues, setAcceptSaveToVenues] = useState<boolean>(true);
+
+  // --- For Reviewing Dates ---
+  const [reviewingInviteId, setReviewingInviteId] = useState<string | null>(null);
+  const [reviewRating, setReviewRating] = useState<number>(5);
+  const [reviewNotes, setReviewNotes] = useState<string>('');
+  const [reviewPhotoUrl, setReviewPhotoUrl] = useState<string>('');
+  const [reviewPhotos, setReviewPhotos] = useState<string[]>([]);
+
+  // --- Games State ---
+  const [activeGame, setActiveGame] = useState<'truth_dare' | 'deep_talks' | 'spicy' | 'this_or_that' | null>(null);
+  const [tdCurrentPlayer, setTdCurrentPlayer] = useState<string>('');
+  const [tdAction, setTdAction] = useState<'truth' | 'dare' | null>(null);
+  const [tdCardText, setTdCardText] = useState<string>('');
+  const [simpleGameText, setSimpleGameText] = useState<string>('');
+
+  const handleDrawSimpleCard = (gameMode: 'deep_talks' | 'spicy' | 'this_or_that') => {
+    triggerHaptic('light');
+    let arr: string[] = [];
+    if (gameMode === 'deep_talks') arr = DEEP_TALKS;
+    else if (gameMode === 'spicy') arr = SPICY_18;
+    else if (gameMode === 'this_or_that') arr = THIS_OR_THAT;
+    setSimpleGameText(arr[Math.floor(Math.random() * arr.length)]);
+  };
+
+  const handleDrawCard = (type: 'truth' | 'dare') => {
+    triggerHaptic('light');
+    setTdAction(type);
+    const arr = type === 'truth' ? TRUTHS : DARES;
+    setTdCardText(arr[Math.floor(Math.random() * arr.length)]);
+  };
+
+  const handleNextPlayer = () => {
+    triggerHaptic('selection');
+    setTdAction(null);
+    setTdCurrentPlayer(tdCurrentPlayer === currentPartner?.name ? otherPartner?.name : currentPartner?.name);
+  };
+
+  // Category presets
+  const categories: {
+    id: Venue['category'];
+    label: string;
+    icon: any;
+    color: IconColorTheme;
+  }[] = [
+    { id: 'restaurant', label: 'Ресторан', icon: Wine, color: 'rose' },
+    { id: 'cafe', label: 'Кофейня', icon: Coffee, color: 'amber' },
+    { id: 'park', label: 'Парк / Прогулка', icon: TreePine, color: 'emerald' },
+    { id: 'cinema', label: 'Кино / Театр', icon: Film, color: 'indigo' },
+    { id: 'outdoor', label: 'Крыша / Панорама', icon: Sun, color: 'gold' },
+    { id: 'spa', label: 'СПА / Релакс', icon: Sparkles, color: 'teal' },
+    { id: 'other', label: 'Особенное', icon: Compass, color: 'purple' },
+  ];
 
   const dateFormats: CarouselItem[] = [
     {
@@ -131,78 +214,6 @@ export const DatesView: React.FC = () => {
     },
   ];
 
-  // --- Add Venue Modal / Form State ---
-  const [showAddVenueModal, setShowAddVenueModal] = useState<boolean>(false);
-  const [newVenueName, setNewVenueName] = useState<string>('');
-  const [newVenueCategory, setNewVenueCategory] = useState<Venue['category']>('restaurant');
-  const [newVenueVibe, setNewVenueVibe] = useState<string>('Уютный романтический вечер');
-  const [newVenuePrice, setNewVenuePrice] = useState<Venue['priceLevel']>('₽₽');
-  const [newVenueAddress, setNewVenueAddress] = useState<string>('');
-  const [newVenueDescription, setNewVenueDescription] = useState<string>('');
-  const [newVenueLink, setNewVenueLink] = useState<string>('');
-
-  // --- For Accepting Invites ---
-  const [acceptingId, setAcceptingId] = useState<string | null>(null);
-  const [acceptDateVal, setAcceptDateVal] = useState<string>('');
-  const [acceptTimeVal, setAcceptTimeVal] = useState<string>('');
-  const [acceptVenueId, setAcceptVenueId] = useState<string>('');
-  const [acceptCustomLocation, setAcceptCustomLocation] = useState<string>('');
-  const [acceptLinkVal, setAcceptLinkVal] = useState<string>('');
-  const [acceptSaveToVenues, setAcceptSaveToVenues] = useState<boolean>(true);
-
-  // --- For Reviewing Dates ---
-  const [reviewingInviteId, setReviewingInviteId] = useState<string | null>(null);
-  const [reviewRating, setReviewRating] = useState<number>(5);
-  const [reviewNotes, setReviewNotes] = useState<string>('');
-  const [reviewPhotoUrl, setReviewPhotoUrl] = useState<string>('');
-  const [reviewPhotos, setReviewPhotos] = useState<string[]>([]);
-
-  // Games State
-  const [activeGame, setActiveGame] = useState<'truth_dare' | 'deep_talks' | 'spicy' | 'this_or_that' | null>(null);
-  const [tdCurrentPlayer, setTdCurrentPlayer] = useState<string>('');
-  const [tdAction, setTdAction] = useState<'truth' | 'dare' | null>(null);
-  const [tdCardText, setTdCardText] = useState<string>('');
-  
-  const [simpleGameText, setSimpleGameText] = useState<string>('');
-
-  const handleDrawSimpleCard = (gameMode: 'deep_talks' | 'spicy' | 'this_or_that') => {
-    triggerHaptic(50);
-    let arr: string[] = [];
-    if (gameMode === 'deep_talks') arr = DEEP_TALKS;
-    else if (gameMode === 'spicy') arr = SPICY_18;
-    else if (gameMode === 'this_or_that') arr = THIS_OR_THAT;
-    
-    setSimpleGameText(arr[Math.floor(Math.random() * arr.length)]);
-  };
-  const handleDrawCard = (type: 'truth' | 'dare') => {
-    triggerHaptic(50);
-    setTdAction(type);
-    const arr = type === 'truth' ? TRUTHS : DARES;
-    setTdCardText(arr[Math.floor(Math.random() * arr.length)]);
-  };
-
-  const handleNextPlayer = () => {
-    triggerHaptic([30, 30]);
-    setTdAction(null);
-    setTdCurrentPlayer(tdCurrentPlayer === currentPartner?.name ? otherPartner?.name : currentPartner?.name);
-  };
-
-  // Category presets with custom Lucide colored icons
-  const categories: {
-    id: Venue['category'];
-    label: string;
-    icon: any;
-    color: IconColorTheme;
-  }[] = [
-    { id: 'restaurant', label: 'Ресторан', icon: Wine, color: 'rose' },
-    { id: 'cafe', label: 'Кофейня', icon: Coffee, color: 'amber' },
-    { id: 'park', label: 'Парк / Прогулка', icon: TreePine, color: 'emerald' },
-    { id: 'cinema', label: 'Кино / Театр', icon: Film, color: 'indigo' },
-    { id: 'outdoor', label: 'Крыша / Панорама', icon: Sun, color: 'gold' },
-    { id: 'spa', label: 'СПА / Релакс', icon: Sparkles, color: 'teal' },
-    { id: 'other', label: 'Особенное', icon: Compass, color: 'purple' },
-  ];
-
   const handleSendInvite = (e: React.FormEvent) => {
     e.preventDefault();
     const venueObj = venues.find((v) => v.id === selectedVenueId);
@@ -224,15 +235,18 @@ export const DatesView: React.FC = () => {
     });
 
     setInviteSentSuccess(true);
+    triggerHaptic('success');
+    triggerConfetti();
+
     setTimeout(() => {
       setInviteSentSuccess(false);
+      setShowInviteModal(false);
       setInviteNote('Приглашаю тебя провести этот особенный вечер вдвоём');
       setSelectedVenueId('');
       setCustomLocationName('');
       setInviteDate('');
       setInviteTime('');
-      setDatesSubTab('history');
-    }, 1800);
+    }, 1500);
   };
 
   const handleCreateVenue = (e: React.FormEvent) => {
@@ -243,7 +257,7 @@ export const DatesView: React.FC = () => {
       name: newVenueName.trim(),
       city: 'Москва',
       category: newVenueCategory,
-      vibe: newVenueVibe.trim() || 'Уютно и романтично',
+      vibe: newVenueVibe.trim() || 'Уютный романтический вечер',
       priceLevel: newVenuePrice,
       address: newVenueAddress.trim() || 'Центр города',
       rating: 5.0,
@@ -251,6 +265,7 @@ export const DatesView: React.FC = () => {
       bookingUrl: newVenueLink.trim() || undefined,
     });
 
+    triggerHaptic('success');
     setShowAddVenueModal(false);
     setNewVenueName('');
     setNewVenueVibe('Уютный романтический вечер');
@@ -274,23 +289,14 @@ export const DatesView: React.FC = () => {
       acceptSaveToVenues
     );
 
+    triggerHaptic('success');
+    triggerConfetti();
     setAcceptingId(null);
     setAcceptDateVal('');
     setAcceptTimeVal('');
     setAcceptVenueId('');
     setAcceptCustomLocation('');
     setAcceptLinkVal('');
-  };
-
-  const handleAddPhotoToReview = () => {
-    if (reviewPhotoUrl.trim()) {
-      setReviewPhotos((prev) => [...prev, reviewPhotoUrl.trim()]);
-      setReviewPhotoUrl('');
-    }
-  };
-
-  const handleSamplePhoto = (sampleUrl: string) => {
-    setReviewPhotos((prev) => [...prev, sampleUrl]);
   };
 
   const handleSaveReview = (inviteId: string) => {
@@ -300,284 +306,106 @@ export const DatesView: React.FC = () => {
       reviewNotes.trim() || 'Прекрасно провели время вместе!',
       reviewPhotos
     );
+    triggerHaptic('success');
+    triggerConfetti();
     setReviewingInviteId(null);
     setReviewRating(5);
     setReviewNotes('');
     setReviewPhotos([]);
   };
 
-  return (
-    <PageLayout title="Свидания" hideHeader>
-      <div className="max-w-xl mx-auto w-full space-y-4 pb-8 animate-fadeIn">
-      {/* Header */}
-      <div className="flex items-end justify-between pt-1">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--text)]">
-            Свидания & Места
-          </h1>
-          <p className="text-xs sm:text-sm text-[var(--text-2)] font-normal mt-0.5">
-            Планируйте романтику, копите XP и сохраняйте тёплые воспоминания
-          </p>
-        </div>
-        <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600">
-          <Award className="w-4 h-4" />
-          <span className="text-xs font-semibold">{coupleXP} XP</span>
-        </div>
-      </div>
+  const filteredVenues = useMemo(() => {
+    if (placesCategoryFilter === 'all') return venues;
+    return venues.filter((v) => v.category === placesCategoryFilter);
+  }, [venues, placesCategoryFilter]);
 
-      {/* Segmented Sub Tabs */}
-      <div className="flex bg-[var(--surface-2)] p-1 rounded-2xl border border-[var(--divider)] gap-1 flex-wrap">
-        <button
-          onClick={() => setDatesSubTab('invite')}
-          className={`flex-1 whitespace-nowrap py-1.5 px-1 sm:px-2 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
-            datesSubTab === 'invite'
-              ? 'bg-[var(--surface)] text-[var(--text)] shadow-xs'
-              : 'text-[var(--text-2)] hover:text-[var(--text)]'
-          }`}
-        >
-          Пригласить
-        </button>
-        <button
-          onClick={() => setDatesSubTab('places')}
-          className={`flex-1 whitespace-nowrap py-1.5 px-1 sm:px-2 rounded-xl text-xs sm:text-sm font-semibold transition-all relative cursor-pointer ${
-            datesSubTab === 'places'
-              ? 'bg-[var(--surface)] text-[var(--text)] shadow-xs'
-              : 'text-[var(--text-2)] hover:text-[var(--text)]'
-          }`}
-        >
-          Места пары
-          {venues.length > 0 && (
-            <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-xs font-semibold bg-[var(--accent)] text-white">
-              {venues.length}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setDatesSubTab('history')}
-          className={`flex-1 whitespace-nowrap py-1.5 px-1 sm:px-2 rounded-xl text-xs sm:text-sm font-semibold transition-all relative cursor-pointer ${
-            datesSubTab === 'history'
-              ? 'bg-[var(--surface)] text-[var(--text)] shadow-xs'
-              : 'text-[var(--text-2)] hover:text-[var(--text)]'
-          }`}
-        >
-          История
-        </button>
-        <button
-          onClick={() => setDatesSubTab('games')}
-          className={`flex-1 whitespace-nowrap py-1.5 px-1 sm:px-2 rounded-xl text-xs sm:text-sm font-semibold transition-all relative cursor-pointer ${
-            datesSubTab === 'games'
-              ? 'bg-[var(--surface)] text-[var(--text)] shadow-xs'
-              : 'text-[var(--text-2)] hover:text-[var(--text)]'
-          }`}
-        >
-          Игры
-
-          {dateInvites.some((d) => d.status === 'PENDING' && d.senderId !== currentPartnerId) && (
-            <span className="ml-1.5 inline-block w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-          )}
-        </button>
-      </div>
-
-      {/* ========================================================= */}
-      {/* SEGMENT 1: ПРИГЛАСИТЬ НА СВИДАНИЕ (4-BLOCK LAYOUT) */}
-      {/* ========================================================= */}
-      {datesSubTab === 'invite' && (
-        <div className="space-y-4 animate-fadeIn">
-          {/* Block 1: Stat-tile grid (facts only, not clickable) */}
-          <div className="grid grid-cols-2 gap-3">
-            <StatTile
-              icon={<Heart className="w-5 h-5" />}
-              value={String(dateInvites.filter((i) => i.status === 'CONFIRMED' || i.completed).length)}
-              label="Свиданий проведено"
-              color="warmth"
-            />
-            <StatTile
-              icon={<MapPin className="w-5 h-5" />}
-              value={String(venues.length)}
-              label="Любимых мест"
-              color="mood"
-            />
-          </div>
-
-          {/* Block 2: Action-row group (max 2 rows) */}
-          <div className="space-y-2">
-            <ActionRow
-              icon={<MapPin className="w-5 h-5" />}
-              title="Места пары"
-              value={`${venues.length} локаций`}
-              onClick={() => setDatesSubTab('places')}
-              color="warmth"
-            />
-            <ActionRow
-              icon={<Gamepad2 className="w-5 h-5" />}
-              title="Игры для двоих"
-              value="4 формата"
-              onClick={() => setDatesSubTab('games')}
-              color="gamification"
-            />
-          </div>
-
-          {/* Block 3: Primary CTA (exactly one) */}
-          <PrimaryCTA
-            icon={<Send className="w-5 h-5" />}
-            title="Пригласить на свидание"
-            subtitle={`Отправить инвайт ${otherPartner.name}`}
-            color="warmth"
-            onClick={() => setShowInviteModal(true)}
-          />
-
-          {/* Block 4: Carousel-tile (formats showcase) */}
-          <CarouselTile items={dateFormats} title="Идеи свиданий" />
-
-          {/* Modal: Invite Form */}
-          {showInviteModal && (
-            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-              <div className="bg-[var(--surface)] rounded-3xl p-6 max-w-md w-full shadow-2xl border border-[var(--divider)] space-y-4 animate-fadeIn max-h-[90vh] overflow-y-auto">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-amber-500" />
-                    <h3 className="text-base font-bold text-[var(--text)]">
-                      Приглашение на свидание
-                    </h3>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowInviteModal(false)}
-                    className="p-1 text-[var(--text-2)] hover:text-[var(--text)] rounded-lg cursor-pointer"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                <form onSubmit={(e) => { handleSendInvite(e); setShowInviteModal(false); }} className="space-y-3.5">
-                  <div>
-                    <label className="text-xs font-semibold text-[var(--text-2)] block mb-1">
-                      Романтическое послание
-                    </label>
-                    <textarea
-                      value={inviteNote}
-                      onChange={(e) => setInviteNote(e.target.value)}
-                      rows={2}
-                      className="w-full p-3 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-sm text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] resize-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-[var(--text-2)] block mb-1">
-                      Локация или формат
-                    </label>
-                    {venues.length > 0 && (
-                      <select
-                        value={selectedVenueId}
-                        onChange={(e) => {
-                          setSelectedVenueId(e.target.value);
-                          if (e.target.value) setCustomLocationName('');
-                        }}
-                        className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none mb-2"
-                      >
-                        <option value="">-- Выбрать из мест пары --</option>
-                        {venues.map((v) => (
-                          <option key={v.id} value={v.id}>
-                            {v.name} ({v.priceLevel})
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                    <input
-                      type="text"
-                      placeholder="Или введите название места..."
-                      value={customLocationName}
-                      onChange={(e) => {
-                        setCustomLocationName(e.target.value);
-                        if (e.target.value) setSelectedVenueId('');
-                      }}
-                      className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div>
-                      <label className="text-xs font-semibold text-[var(--text-2)] block mb-1">
-                        Дата
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Напр. В субботу"
-                        value={inviteDate}
-                        onChange={(e) => setInviteDate(e.target.value)}
-                        className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-[var(--text-2)] block mb-1">
-                        Время
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Напр. 19:30"
-                        value={inviteTime}
-                        onChange={(e) => setInviteTime(e.target.value)}
-                        className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowInviteModal(false)}
-                      className="w-1/2 py-2.5 rounded-xl bg-[var(--surface-2)] text-xs font-bold text-[var(--text-2)] hover:text-[var(--text)] cursor-pointer"
-                    >
-                      Отмена
-                    </button>
-                    <button
-                      type="submit"
-                      className="w-1/2 py-2.5 rounded-xl bg-[var(--accent)] text-white text-xs font-bold shadow-xs hover:opacity-95 flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      <span>Отправить</span>
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ========================================================= */}
-      {/* SEGMENT 2: ИЗБРАННЫЕ МЕСТА ДЛЯ СВИДАНИЙ */}
-      {/* ========================================================= */}
-      {datesSubTab === 'places' && (
-        <div className="space-y-4 animate-fadeIn">
+  // =========================================================================
+  // LEVEL 2: МЕСТА И ЗАВЕДЕНИЯ (PUSH VIEW)
+  // =========================================================================
+  if (currentView === 'places') {
+    return (
+      <PageLayout
+        title="Места пары"
+        subtitle="Любимые рестораны, кофейни и смотровые площадки"
+        onBack={() => {
+          setCurrentView('main');
+          setDatesSubTab('invite');
+        }}
+      >
+        <div className="space-y-4 pb-8 animate-fadeIn">
+          {/* Top Actions: Counter & Add Button */}
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-extrabold text-[var(--text-2)] uppercase tracking-wider">
-              Любимые и желанные места ({venues.length})
+            <span className="text-xs font-bold text-[var(--text-2)] uppercase tracking-wider">
+              Сохранённые места ({filteredVenues.length})
             </span>
             <button
+              type="button"
               onClick={() => setShowAddVenueModal(true)}
-              className="px-3 py-1.5 rounded-xl bg-[var(--accent)] text-white text-xs font-bold flex items-center gap-1.5 shadow-2xs hover:opacity-95 active:scale-95 transition-all"
+              className="px-3.5 py-2 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-all active:scale-95 cursor-pointer"
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Добавить место</span>
+              <Plus className="w-4 h-4" />
+              <span>Добавить место (+30 XP)</span>
             </button>
           </div>
 
-          {venues.length === 0 ? (
-            <div className="p-5 rounded-3xl bg-[var(--surface)] border border-dashed border-[var(--divider)] text-center space-y-3">
-              <div className="w-14 h-14 mx-auto rounded-3xl bg-[var(--accent)]/10 text-[var(--accent)] flex items-center justify-center">
+          {/* Category Filter Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 -mx-1 px-1">
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic('selection');
+                setPlacesCategoryFilter('all');
+              }}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                placesCategoryFilter === 'all'
+                  ? 'bg-[var(--surface-blush)] text-[var(--accent)] border border-[var(--accent)]/30 font-bold'
+                  : 'bg-[var(--surface-2)] text-[var(--text-2)] hover:text-[var(--text)] border border-[var(--divider)]'
+              }`}
+            >
+              Все ({venues.length})
+            </button>
+            {categories.map((cat) => {
+              const count = venues.filter((v) => v.category === cat.id).length;
+              const isActive = placesCategoryFilter === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    setPlacesCategoryFilter(cat.id);
+                  }}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+                    isActive
+                      ? 'bg-[var(--surface-blush)] text-[var(--accent)] border border-[var(--accent)]/30 font-bold'
+                      : 'bg-[var(--surface-2)] text-[var(--text-2)] hover:text-[var(--text)] border border-[var(--divider)]'
+                  }`}
+                >
+                  <span>{cat.label}</span>
+                  {count > 0 && <span className="opacity-70 text-[11px]">({count})</span>}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Venues Grid */}
+          {filteredVenues.length === 0 ? (
+            <div className="p-8 rounded-3xl bg-[var(--surface)] border border-dashed border-[var(--divider)] text-center space-y-3">
+              <div className="w-14 h-14 mx-auto rounded-3xl bg-[var(--surface-blush)] text-[var(--accent)] flex items-center justify-center">
                 <MapPin className="w-7 h-7" />
               </div>
-              <div>
-                <h3 className="text-sm font-bold text-[var(--text)]">Список мест пуст</h3>
-                <p className="text-xs text-[var(--text-2)] mt-1 max-w-sm mx-auto">
-                  Здесь сохраняются ваши любимые рестораны, смотровые площадки, уютные кофейни и
-                  секретные уголки для свиданий.
+              <div className="space-y-1">
+                <h3 className="text-sm sm:text-base font-bold text-[var(--text)]">
+                  {placesCategoryFilter === 'all' ? 'Список мест пуст' : 'В этой категории пока нет мест'}
+                </h3>
+                <p className="text-xs text-[var(--text-2)] max-w-sm mx-auto leading-relaxed">
+                  Сохраняйте любимые заведения, кофейни с вкусным рафом и романтические места для свиданий.
                 </p>
               </div>
               <button
+                type="button"
                 onClick={() => setShowAddVenueModal(true)}
-                className="px-4 py-2.5 rounded-xl bg-[var(--accent)] text-white text-xs font-bold inline-flex items-center gap-1.5 shadow-sm"
+                className="px-4 py-2.5 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold inline-flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 <span>Добавить первое место (+30 XP)</span>
@@ -585,15 +413,15 @@ export const DatesView: React.FC = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {venues.map((venue) => {
+              {filteredVenues.map((venue) => {
                 const categoryObj = categories.find((c) => c.id === venue.category);
                 const CategoryIcon = categoryObj?.icon || MapPin;
                 return (
                   <div
                     key={venue.id}
-                    className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--divider)] shadow-xs flex flex-col justify-between space-y-3 hover:border-[var(--accent)]/40 transition-colors"
+                    className="p-4 sm:p-5 rounded-2xl bg-[var(--surface)] border border-[var(--divider)] shadow-2xs flex flex-col justify-between space-y-3 hover:border-[var(--accent)]/40 transition-colors"
                   >
-                    <div>
+                    <div className="space-y-2">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2.5">
                           <ColoredIcon
@@ -602,17 +430,18 @@ export const DatesView: React.FC = () => {
                             size="sm"
                           />
                           <div>
-                            <h4 className="text-sm font-black text-[var(--text)] leading-tight">
+                            <h4 className="text-sm font-bold text-[var(--text)] leading-tight">
                               {venue.name}
                             </h4>
-                            <span className="text-[10px] font-semibold text-[var(--text-2)]">
+                            <span className="text-[11px] font-medium text-[var(--text-2)]">
                               {categoryObj?.label || 'Место'} • {venue.priceLevel}
                             </span>
                           </div>
                         </div>
                         <button
+                          type="button"
                           onClick={() => deleteVenue(venue.id)}
-                          className="text-[var(--text-2)] hover:text-rose-500 p-1 transition-colors"
+                          className="text-[var(--text-2)] hover:text-rose-500 p-1 transition-colors cursor-pointer"
                           title="Удалить"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -620,22 +449,22 @@ export const DatesView: React.FC = () => {
                       </div>
 
                       {venue.vibe && (
-                        <div className="mt-2.5">
-                          <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-lg bg-[var(--accent)]/10 text-[var(--accent)]">
+                        <div>
+                          <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-lg bg-[var(--surface-blush)] text-[var(--accent)]">
                             {venue.vibe}
                           </span>
                         </div>
                       )}
 
                       {venue.description && (
-                        <p className="text-xs text-[var(--text-2)] mt-2 line-clamp-2 leading-relaxed">
+                        <p className="text-xs text-[var(--text-2)] line-clamp-2 leading-relaxed">
                           {venue.description}
                         </p>
                       )}
 
                       {venue.address && (
-                        <div className="flex items-center gap-1 text-[11px] text-[var(--text-2)] mt-2 font-medium">
-                          <MapPin className="w-3 h-3 shrink-0" />
+                        <div className="flex items-center gap-1 text-[11px] text-[var(--text-2)] font-medium">
+                          <MapPin className="w-3 h-3 shrink-0 text-[var(--accent)]" />
                           <span className="truncate">{venue.address}</span>
                         </div>
                       )}
@@ -659,12 +488,13 @@ export const DatesView: React.FC = () => {
                       )}
 
                       <button
+                        type="button"
                         onClick={() => {
                           setSelectedVenueId(venue.id);
                           setInviteNote(`Приглашаю тебя в наше особенное место: «${venue.name}»`);
-                          setDatesSubTab('invite');
+                          setShowInviteModal(true);
                         }}
-                        className="px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--accent)] hover:text-white text-[var(--text)] text-[11px] font-bold transition-all flex items-center gap-1"
+                        className="px-2.5 py-1.5 rounded-xl bg-[var(--surface-2)] hover:bg-[var(--accent)] hover:text-white text-[var(--text)] text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer"
                       >
                         <Heart className="w-3 h-3" />
                         <span>Позвать сюда</span>
@@ -676,105 +506,35 @@ export const DatesView: React.FC = () => {
             </div>
           )}
         </div>
-      )}
 
-      
-      {/* ========================================================= */}
-      {/* SEGMENT 2: МЕСТА ПАРЫ (4-BLOCK LAYOUT) */}
-      {/* ========================================================= */}
-      {datesSubTab === 'places' && (
-        <div className="space-y-4 animate-fadeIn">
-          {/* Block 1: Stat-tile grid */}
-          <div className="grid grid-cols-2 gap-3">
-            <StatTile
-              icon={<MapPin className="w-5 h-5" />}
-              value={String(venues.length)}
-              label="Мест сохранено"
-              color="warmth"
-            />
-            <StatTile
-              icon={<Sparkles className="w-5 h-5" />}
-              value="+30 XP"
-              label="За каждое место"
-              color="gamification"
-            />
-          </div>
+        {/* Modal: Add Venue */}
+        {showAddVenueModal && renderAddVenueModal()}
+        {showInviteModal && renderInviteModal()}
+      </PageLayout>
+    );
+  }
 
-          {/* Block 2: Action-row group */}
-          <div className="space-y-2">
-            {venues.length > 0 ? (
-              <ActionRow
-                icon={<MapPin className="w-5 h-5" />}
-                title={venues[0].name}
-                value={venues[0].priceLevel || 'Локация'}
-                onClick={() => {
-                  setSelectedVenueId(venues[0].id);
-                  setInviteNote(`Приглашаю тебя в наше особенное место: «${venues[0].name}»`);
-                  setDatesSubTab('invite');
-                }}
-                color="warmth"
-              />
-            ) : (
-              <ActionRow
-                icon={<MapPin className="w-5 h-5" />}
-                title="Добавить первое место"
-                value="Создать"
-                onClick={() => setShowAddVenueModal(true)}
-                color="warmth"
-              />
-            )}
-          </div>
-
-          {/* Block 3: Primary CTA */}
-          <PrimaryCTA
-            icon={<Plus className="w-6 h-6" />}
-            title="Добавить любимое место"
-            subtitle="Ресторан, кофейня, парк или смотровая площадка"
-            color="warmth"
-            onClick={() => setShowAddVenueModal(true)}
-          />
-
-          {/* Block 4: Carousel-tile places */}
-          {venues.length > 0 ? (
-            <CarouselTile
-              title="Коллекция мест"
-              items={venues.map(v => {
-                const cat = categories.find(c => c.id === v.category);
-                const IconComponent = cat?.icon || MapPin;
-                return {
-                  id: v.id,
-                  icon: <IconComponent className="w-5 h-5" />,
-                  title: v.name,
-                  color: cat?.color === 'rose' ? 'warmth' : cat?.color === 'amber' ? 'mood' : cat?.color === 'emerald' ? 'care' : 'gamification',
-                  onClick: () => {
-                    setSelectedVenueId(v.id);
-                    setInviteNote(`Приглашаю тебя в наше особенное место: «${v.name}»`);
-                    setDatesSubTab('invite');
-                  }
-                };
-              })}
-            />
-          ) : (
-            <CarouselTile
-              title="Популярные форматы"
-              items={dateFormats}
-            />
-          )}
-        </div>
-      )}
-
-      {/* ========================================================= */}
-      {/* SEGMENT 4: ИГРЫ (4-BLOCK LAYOUT) */}
-      {/* ========================================================= */}
-      {datesSubTab === 'games' && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-4"
-        >
+  // =========================================================================
+  // LEVEL 2: ИГРЫ ДЛЯ СВИДАНИЙ (PUSH VIEW)
+  // =========================================================================
+  if (currentView === 'games') {
+    return (
+      <PageLayout
+        title={activeGame ? 'Игра для двоих' : 'Игры для свиданий'}
+        subtitle={activeGame ? 'Интерактивный раунд сближения' : 'Правда или Действие, глубокие темы и 18+'}
+        onBack={() => {
+          if (activeGame) {
+            setActiveGame(null);
+          } else {
+            setCurrentView('main');
+            setDatesSubTab('invite');
+          }
+        }}
+      >
+        <div className="space-y-4 pb-8 animate-fadeIn">
           {!activeGame ? (
             <div className="space-y-4">
-              {/* Block 1: Stat-tile grid */}
+              {/* Stat grid */}
               <div className="grid grid-cols-2 gap-3">
                 <StatTile
                   icon={<Gamepad2 className="w-5 h-5" />}
@@ -784,273 +544,393 @@ export const DatesView: React.FC = () => {
                 />
                 <StatTile
                   icon={<Sparkles className="w-5 h-5" />}
-                  value="100+"
-                  label="Тем и заданий"
+                  value="120+"
+                  label="Интересных тем"
                   color="mood"
                 />
               </div>
 
-              {/* Block 2: Action-row */}
-              <div className="space-y-2">
-                <ActionRow
-                  icon={<Gamepad2 className="w-5 h-5" />}
-                  title="Правда или Действие"
-                  value="Играть"
+              {/* Game Cards List */}
+              <div className="space-y-2.5">
+                <div
                   onClick={() => {
-                    triggerHaptic(50);
+                    triggerHaptic('selection');
                     setActiveGame('truth_dare');
                     setTdCurrentPlayer(currentPartner?.name || 'Я');
                   }}
-                  color="gamification"
-                />
-                <ActionRow
-                  icon={<Flame className="w-5 h-5" />}
-                  title="Пикантные вопросы 18+"
-                  value="Играть"
+                  className="p-4 sm:p-5 rounded-2xl bg-[var(--surface)] border border-[var(--divider)] shadow-2xs hover:border-emerald-500/40 transition-all cursor-pointer flex items-center justify-between gap-3 group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                      <Gamepad2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-[var(--text)] group-hover:text-emerald-600 transition-colors">
+                        Правда или Действие
+                      </h4>
+                      <p className="text-xs text-[var(--text-2)] mt-0.5">
+                        Классическая игра с честными откровениями и милыми заданиями
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-[var(--text-2)] group-hover:translate-x-0.5 transition-transform shrink-0" />
+                </div>
+
+                <div
                   onClick={() => {
-                    triggerHaptic(50);
+                    triggerHaptic('selection');
                     setActiveGame('spicy');
                     handleDrawSimpleCard('spicy');
                   }}
-                  color="warmth"
-                />
+                  className="p-4 sm:p-5 rounded-2xl bg-[var(--surface)] border border-[var(--divider)] shadow-2xs hover:border-rose-500/40 transition-all cursor-pointer flex items-center justify-between gap-3 group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-rose-500/15 text-rose-500 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                      <Flame className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-[var(--text)] group-hover:text-rose-500 transition-colors">
+                        Пикантные вопросы 18+
+                      </h4>
+                      <p className="text-xs text-[var(--text-2)] mt-0.5">
+                        Откровенные вопросы для страсти, фантазий и телесной близости
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-[var(--text-2)] group-hover:translate-x-0.5 transition-transform shrink-0" />
+                </div>
+
+                <div
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    setActiveGame('deep_talks');
+                    handleDrawSimpleCard('deep_talks');
+                  }}
+                  className="p-4 sm:p-5 rounded-2xl bg-[var(--surface)] border border-[var(--divider)] shadow-2xs hover:border-indigo-500/40 transition-all cursor-pointer flex items-center justify-between gap-3 group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-indigo-500/15 text-indigo-500 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                      <MessageCircle className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-[var(--text)] group-hover:text-indigo-500 transition-colors">
+                        Глубокие беседы
+                      </h4>
+                      <p className="text-xs text-[var(--text-2)] mt-0.5">
+                        Вопросы о ценностях, мечтах, детстве и совместном будущем
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-[var(--text-2)] group-hover:translate-x-0.5 transition-transform shrink-0" />
+                </div>
+
+                <div
+                  onClick={() => {
+                    triggerHaptic('selection');
+                    setActiveGame('this_or_that');
+                    handleDrawSimpleCard('this_or_that');
+                  }}
+                  className="p-4 sm:p-5 rounded-2xl bg-[var(--surface)] border border-[var(--divider)] shadow-2xs hover:border-amber-500/40 transition-all cursor-pointer flex items-center justify-between gap-3 group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                      <Sparkles className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-[var(--text)] group-hover:text-amber-500 transition-colors">
+                        Или / Или (Выборы)
+                      </h4>
+                      <p className="text-xs text-[var(--text-2)] mt-0.5">
+                        Быстрые весёлые дилеммы: проверьте, совпадут ли ваши вкусы
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-[var(--text-2)] group-hover:translate-x-0.5 transition-transform shrink-0" />
+                </div>
               </div>
-
-              {/* Block 3: Primary CTA */}
-              <PrimaryCTA
-                icon={<Sparkles className="w-6 h-6" />}
-                title="Случайная игра для двоих"
-                subtitle="Запустить быстрый раунд сближения"
-                color="gamification"
-                onClick={() => {
-                  triggerHaptic(50);
-                  setActiveGame('truth_dare');
-                  setTdCurrentPlayer(currentPartner?.name || 'Я');
-                }}
-              />
-
-              {/* Block 4: Carousel-tile games showcase */}
-              <CarouselTile
-                title="Все игры"
-                items={[
-                  {
-                    id: 'td',
-                    title: 'Правда',
-                    icon: <Gamepad2 className="w-5 h-5" />,
-                    color: 'gamification',
-                    onClick: () => {
-                      triggerHaptic(50);
-                      setActiveGame('truth_dare');
-                      setTdCurrentPlayer(currentPartner?.name || 'Я');
-                    }
-                  },
-                  {
-                    id: 'dt',
-                    title: 'Беседы',
-                    icon: <MessageCircle className="w-5 h-5" />,
-                    color: 'dialogue',
-                    onClick: () => {
-                      triggerHaptic(50);
-                      setActiveGame('deep_talks');
-                      handleDrawSimpleCard('deep_talks');
-                    }
-                  },
-                  {
-                    id: 'spicy',
-                    title: '18+',
-                    icon: <Flame className="w-5 h-5" />,
-                    color: 'warmth',
-                    onClick: () => {
-                      triggerHaptic(50);
-                      setActiveGame('spicy');
-                      handleDrawSimpleCard('spicy');
-                    }
-                  },
-                  {
-                    id: 'tot',
-                    title: 'Или / Или',
-                    icon: <Sparkles className="w-5 h-5" />,
-                    color: 'care',
-                    onClick: () => {
-                      triggerHaptic(50);
-                      setActiveGame('this_or_that');
-                      handleDrawSimpleCard('this_or_that');
-                    }
-                  }
-                ]}
-              />
             </div>
           ) : activeGame === 'truth_dare' ? (
-            <div className="bg-[var(--surface)] p-5 rounded-3xl border border-[var(--divider)] shadow-sm relative min-h-[400px] flex flex-col">
-              <button 
-                onClick={() => setActiveGame(null)}
-                className="absolute top-4 right-4 p-2 rounded-full hover:bg-[var(--surface-2)] transition-colors text-[var(--text-2)] cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-              
-              <div className="text-center mb-5 pt-4">
-                <span className="px-3 py-1 bg-[var(--surface-2)] text-[var(--text-2)] rounded-full text-xs font-semibold uppercase tracking-wider">
+            <div className="bg-[var(--surface)] p-5 sm:p-6 rounded-3xl border border-[var(--divider)] shadow-xs relative min-h-[420px] flex flex-col justify-between">
+              <div className="text-center pt-2">
+                <span className="px-3 py-1 bg-[var(--surface-2)] text-[var(--text-2)] rounded-full text-xs font-bold uppercase tracking-wider">
                   Правда или Действие
                 </span>
-                <h3 className="text-2xl font-bold mt-4">
+                <h3 className="text-xl sm:text-2xl font-bold text-[var(--text)] mt-3">
                   Ход игрока: <span className="text-[var(--accent)]">{tdCurrentPlayer}</span>
                 </h3>
               </div>
-              
+
               {!tdAction ? (
-                <div className="grid grid-cols-2 gap-4 mt-auto mb-auto">
-                  <button 
+                <div className="grid grid-cols-2 gap-4 my-auto py-6">
+                  <button
+                    type="button"
                     onClick={() => handleDrawCard('truth')}
-                    className="aspect-square rounded-3xl bg-emerald-500/10 border-2 border-emerald-500/20 hover:bg-emerald-500 hover:text-white text-emerald-600 transition-all flex flex-col items-center justify-center gap-2 cursor-pointer shadow-sm group"
+                    className="aspect-square rounded-3xl bg-emerald-500/10 border-2 border-emerald-500/30 hover:bg-emerald-500 hover:text-white text-emerald-600 dark:text-emerald-400 transition-all flex flex-col items-center justify-center gap-2 cursor-pointer shadow-2xs group"
                   >
                     <MessageCircle className="w-8 h-8 group-hover:scale-110 transition-transform" />
-                    <span className="font-bold text-lg">Правда</span>
+                    <span className="font-bold text-base sm:text-lg">Правда</span>
                   </button>
-                  <button 
+                  <button
+                    type="button"
                     onClick={() => handleDrawCard('dare')}
-                    className="aspect-square rounded-3xl bg-rose-500/10 border-2 border-rose-500/20 hover:bg-rose-500 hover:text-white text-rose-600 transition-all flex flex-col items-center justify-center gap-2 cursor-pointer shadow-sm group"
+                    className="aspect-square rounded-3xl bg-rose-500/10 border-2 border-rose-500/30 hover:bg-rose-500 hover:text-white text-rose-600 dark:text-rose-400 transition-all flex flex-col items-center justify-center gap-2 cursor-pointer shadow-2xs group"
                   >
                     <Flame className="w-8 h-8 group-hover:scale-110 transition-transform" />
-                    <span className="font-bold text-lg">Действие</span>
+                    <span className="font-bold text-base sm:text-lg">Действие</span>
                   </button>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center mt-auto mb-auto animate-fadeIn">
-                  <div className={`p-5 rounded-3xl border-2 w-full max-w-sm text-center shadow-lg ${tdAction === 'truth' ? 'bg-emerald-500 border-emerald-400 text-white' : 'bg-rose-500 border-rose-400 text-white'}`}>
-                    <div className="w-12 h-12 mx-auto rounded-full bg-white/20 flex items-center justify-center mb-4">
-                      {tdAction === 'truth' ? <MessageCircle className="w-6 h-6 text-white" /> : <Flame className="w-6 h-6 text-white" />}
+                <div className="flex flex-col items-center justify-center my-auto py-4 animate-fadeIn">
+                  <div
+                    className={`p-6 sm:p-7 rounded-3xl border-2 w-full max-w-sm text-center shadow-md ${
+                      tdAction === 'truth'
+                        ? 'bg-emerald-500 border-emerald-400 text-white'
+                        : 'bg-rose-500 border-rose-400 text-white'
+                    }`}
+                  >
+                    <div className="w-12 h-12 mx-auto rounded-full bg-white/20 flex items-center justify-center mb-3">
+                      {tdAction === 'truth' ? (
+                        <MessageCircle className="w-6 h-6 text-white" />
+                      ) : (
+                        <Flame className="w-6 h-6 text-white" />
+                      )}
                     </div>
-                    <p className="text-xl font-semibold leading-relaxed">
+                    <p className="text-base sm:text-lg font-bold leading-relaxed">
                       {tdCardText}
                     </p>
                   </div>
-                  <div className="flex items-center gap-3 mt-6 w-full max-w-sm">
+
+                  <div className="flex items-center gap-2.5 mt-6 w-full max-w-sm">
                     <button
+                      type="button"
                       onClick={() => {
-                        addCoupleXP(tdAction === 'truth' ? 15 : 25, `${tdCurrentPlayer} выполнил(а) задание (${tdAction === 'truth' ? 'Правда' : 'Действие'})`, 'bonus');
+                        addCoupleXP(
+                          tdAction === 'truth' ? 15 : 25,
+                          `${tdCurrentPlayer} выполнил(а) задание (${tdAction === 'truth' ? 'Правда' : 'Действие'})`,
+                          'bonus'
+                        );
                         triggerConfetti();
                         handleNextPlayer();
                       }}
-                      className="flex-1 px-4 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold transition-colors shadow-sm cursor-pointer"
+                      className="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs shadow-2xs cursor-pointer active:scale-95 transition-all"
                     >
-                      Справился
+                      Справился (+{tdAction === 'truth' ? '15' : '25'} XP)
                     </button>
                     <button
+                      type="button"
                       onClick={handleNextPlayer}
-                      className="flex-1 px-4 py-3 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] font-semibold text-[var(--text)] hover:bg-[var(--surface-3)] transition-colors shadow-sm cursor-pointer"
+                      className="py-3 px-4 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] font-semibold text-[var(--text)] hover:bg-[var(--surface-3)] text-xs cursor-pointer active:scale-95 transition-all"
                     >
-                      Отказался
+                      Пропустить
                     </button>
                   </div>
                 </div>
               )}
+
+              <div className="pt-2 text-center">
+                <button
+                  type="button"
+                  onClick={() => setActiveGame(null)}
+                  className="text-xs text-[var(--text-2)] hover:text-[var(--text)] font-semibold cursor-pointer"
+                >
+                  ← Выбрать другую игру
+                </button>
+              </div>
             </div>
           ) : (
-            <div className="bg-[var(--surface)] p-5 rounded-3xl border border-[var(--divider)] shadow-sm relative min-h-[400px] flex flex-col">
-              <button 
-                onClick={() => setActiveGame(null)}
-                className="absolute top-4 right-4 p-2 rounded-full hover:bg-[var(--surface-2)] transition-colors text-[var(--text-2)] cursor-pointer z-10"
-              >
-                <X className="w-5 h-5" />
-              </button>
-              
-              <div className="text-center mb-5 pt-4">
-                <span className="px-3 py-1 bg-[var(--surface-2)] text-[var(--text-2)] rounded-full text-xs font-semibold uppercase tracking-wider">
-                  {activeGame === 'deep_talks' ? 'Глубокие беседы' : activeGame === 'spicy' ? 'Пикантные вопросы' : 'Или / Или'}
+            <div className="bg-[var(--surface)] p-5 sm:p-6 rounded-3xl border border-[var(--divider)] shadow-xs relative min-h-[420px] flex flex-col justify-between">
+              <div className="text-center pt-2">
+                <span className="px-3 py-1 bg-[var(--surface-2)] text-[var(--text-2)] rounded-full text-xs font-bold uppercase tracking-wider">
+                  {activeGame === 'deep_talks'
+                    ? 'Глубокие беседы'
+                    : activeGame === 'spicy'
+                    ? 'Пикантные вопросы 18+'
+                    : 'Или / Или'}
                 </span>
               </div>
-              
-              <div className="flex flex-col items-center justify-center mt-auto mb-auto animate-fadeIn">
-                <div className={`p-8 rounded-3xl border w-full max-w-sm text-center shadow-lg relative overflow-hidden ${
-                  activeGame === 'deep_talks' ? 'bg-emerald-500/10 border-emerald-500/30' : 
-                  activeGame === 'spicy' ? 'bg-rose-500/10 border-rose-500/30' : 
-                  'bg-amber-500/10 border-amber-500/30'
-                }`}>
-                  <div className={`w-14 h-14 mx-auto rounded-2xl flex items-center justify-center mb-6 shadow-sm ${
-                    activeGame === 'deep_talks' ? 'bg-emerald-500 text-white' : 
-                    activeGame === 'spicy' ? 'bg-rose-500 text-white' : 
-                    'bg-amber-500 text-white'
-                  }`}>
-                    {activeGame === 'deep_talks' ? <MessageCircle className="w-7 h-7" /> : 
-                     activeGame === 'spicy' ? <Flame className="w-7 h-7" /> : 
-                     <Sparkles className="w-7 h-7" />}
+
+              <div className="flex flex-col items-center justify-center my-auto py-4 animate-fadeIn">
+                <div
+                  className={`p-6 sm:p-8 rounded-3xl border w-full max-w-sm text-center shadow-md ${
+                    activeGame === 'deep_talks'
+                      ? 'bg-indigo-500/10 border-indigo-500/30'
+                      : activeGame === 'spicy'
+                      ? 'bg-rose-500/10 border-rose-500/30'
+                      : 'bg-amber-500/10 border-amber-500/30'
+                  }`}
+                >
+                  <div
+                    className={`w-12 h-12 mx-auto rounded-2xl flex items-center justify-center mb-4 ${
+                      activeGame === 'deep_talks'
+                        ? 'bg-indigo-500 text-white'
+                        : activeGame === 'spicy'
+                        ? 'bg-rose-500 text-white'
+                        : 'bg-amber-500 text-white'
+                    }`}
+                  >
+                    {activeGame === 'deep_talks' ? (
+                      <MessageCircle className="w-6 h-6" />
+                    ) : activeGame === 'spicy' ? (
+                      <Flame className="w-6 h-6" />
+                    ) : (
+                      <Sparkles className="w-6 h-6" />
+                    )}
                   </div>
-                  
-                  <p className="text-xl font-bold text-[var(--text)] leading-relaxed min-h-[100px] flex items-center justify-center">
+
+                  <p className="text-base sm:text-lg font-bold text-[var(--text)] leading-relaxed min-h-[80px] flex items-center justify-center">
                     {simpleGameText}
                   </p>
                 </div>
-                
-                <div className="flex flex-col gap-3 mt-8 w-full max-w-sm">
+
+                <div className="flex flex-col gap-2.5 mt-6 w-full max-w-sm">
                   <button
+                    type="button"
                     onClick={() => {
                       addCoupleXP(5, 'Ответили на вопрос в игре', 'bonus');
+                      triggerHaptic('light');
                       if (activeGame !== null) {
                         handleDrawSimpleCard(activeGame as 'deep_talks' | 'spicy' | 'this_or_that');
                       }
                     }}
-                    className={`px-6 py-4 rounded-xl text-white font-bold transition-all shadow-md active:scale-95 cursor-pointer ${
-                      activeGame === 'deep_talks' ? 'bg-emerald-500 hover:bg-emerald-600' : 
-                      activeGame === 'spicy' ? 'bg-rose-500 hover:bg-rose-600' : 
-                      'bg-amber-500 hover:bg-amber-600'
+                    className={`w-full py-3.5 rounded-xl text-white font-bold text-xs shadow-2xs cursor-pointer active:scale-95 transition-all ${
+                      activeGame === 'deep_talks'
+                        ? 'bg-indigo-500 hover:bg-indigo-600'
+                        : activeGame === 'spicy'
+                        ? 'bg-rose-500 hover:bg-rose-600'
+                        : 'bg-amber-500 hover:bg-amber-600'
                     }`}
                   >
                     Следующий вопрос (+5 XP)
                   </button>
                   <button
+                    type="button"
                     onClick={() => setActiveGame(null)}
-                    className="px-6 py-3 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] font-semibold text-[var(--text)] hover:bg-[var(--surface-3)] transition-colors cursor-pointer"
+                    className="w-full py-2.5 rounded-xl bg-[var(--surface-2)] text-[var(--text-2)] hover:text-[var(--text)] text-xs font-semibold cursor-pointer transition-colors"
                   >
-                    Закончить игру
+                    Закончить раунд
                   </button>
                 </div>
               </div>
             </div>
           )}
-        </motion.div>
-      )}
+        </div>
+      </PageLayout>
+    );
+  }
 
-      {/* ========================================================= */}
-      {/* SEGMENT 3: ИСТОРИЯ СВИДАНИЙ, ОТЗЫВЫ & ФОТО */}
-      {/* ========================================================= */}
-      {datesSubTab === 'history' && (
-        <div className="space-y-4 animate-fadeIn">
+  // =========================================================================
+  // LEVEL 1: ГЛАВНЫЙ ЭКРАН СВИДАНИЙ (КОЛЕСО, CTA, PUSH-КАРТОЧКИ, ИСТОРИЯ)
+  // =========================================================================
+  return (
+    <PageLayout title="Свидания" hideHeader>
+      <div className="max-w-xl mx-auto w-full space-y-5 pb-10 animate-fadeIn">
+        {/* Header with Title & XP Badge */}
+        <div className="flex items-end justify-between pt-1">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--text)]">
+              Свидания & Романтика
+            </h1>
+            <p className="text-xs sm:text-sm text-[var(--text-2)] mt-0.5">
+              Идеи, любимые места и тёплые воспоминания пары
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400">
+            <Award className="w-4 h-4" />
+            <span className="text-xs font-bold">{coupleXP} XP</span>
+          </div>
+        </div>
+
+        {/* 1. КОЛЕСО ИДЕЙ (Интерактивный элемент на главном уровне) */}
+        <DateWheel
+          onSelectIdea={(idea: DateIdea) => {
+            setInviteNote(idea.inviteText);
+            setShowInviteModal(true);
+          }}
+        />
+
+        {/* 2. PRIMARY CTA: Пригласить на свидание (MODAL: создание) */}
+        <PrimaryCTA
+          icon={<Send className="w-5 h-5" />}
+          title="Пригласить на свидание"
+          subtitle={`Отправить инвайт для ${otherPartner.name}`}
+          color="warmth"
+          onClick={() => {
+            triggerHaptic('selection');
+            setShowInviteModal(true);
+          }}
+        />
+
+        {/* 3. PUSH NAVIGATION CARDS: Места пары & Игры для двоих */}
+        <div className="space-y-2.5">
+          <ActionRow
+            icon={<MapPin className="w-5 h-5" />}
+            title="Места и заведения пары"
+            value={`${venues.length} сохранённых локаций`}
+            onClick={() => {
+              triggerHaptic('selection');
+              setCurrentView('places');
+            }}
+            color="warmth"
+          />
+          <ActionRow
+            icon={<Gamepad2 className="w-5 h-5" />}
+            title="Игры для свиданий"
+            value="4 формата для сближения"
+            onClick={() => {
+              triggerHaptic('selection');
+              setCurrentView('games');
+            }}
+            color="gamification"
+          />
+        </div>
+
+        {/* 4. Carousel of date ideas */}
+        <CarouselTile items={dateFormats} title="Популярные форматы свиданий" />
+
+        {/* ========================================================= */}
+        {/* 5. ИСТОРИЯ СВИДАНИЙ (Секция внизу этого же экрана) */}
+        {/* ========================================================= */}
+        <section className="space-y-3 pt-2">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-extrabold text-[var(--text-2)] uppercase tracking-wider">
-              Запланированные и завершённые свидания
-            </span>
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-lg bg-rose-500/15 text-rose-500 flex items-center justify-center">
+                <Calendar className="w-3.5 h-3.5" />
+              </div>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--text-2)]">
+                История свиданий ({dateInvites.length})
+              </h3>
+            </div>
           </div>
 
           {dateInvites.length > 0 ? (
-            <div className="space-y-4">
+            <div className="space-y-3.5">
               {dateInvites.map((item) => {
                 const sender = item.senderId === 'partner1' ? coupleProfile.partner1 : coupleProfile.partner2;
                 const isMine = item.senderId === currentPartnerId;
                 const isCompleted = !!item.completed || !!item.review;
 
-                // 1. PENDING (Ожидает ответа)
+                // 1. PENDING
                 if (item.status === 'PENDING') {
                   if (isMine) {
                     return (
                       <div
                         key={item.id}
-                        className="p-4 rounded-2xl bg-[var(--surface-2)] border border-[var(--divider)] shadow-xs opacity-85"
+                        className="p-4 rounded-2xl bg-[var(--surface-2)] border border-[var(--divider)] shadow-2xs space-y-1.5 opacity-90"
                       >
                         <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-extrabold text-amber-600 uppercase tracking-wider">
-                            ⏳ Ожидает ответа от {otherPartner.name}
+                          <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1">
+                            <Clock className="w-3 h-3" /> Ожидает ответа от {otherPartner.name}
                           </span>
-                          <span className="text-[10px] text-[var(--text-2)]">
+                          <span className="text-[11px] text-[var(--text-3)]">
                             {new Date(item.createdAt).toLocaleDateString('ru-RU')}
                           </span>
                         </div>
-                        <p className="text-sm font-bold text-[var(--text)] mt-1.5">
+                        <p className="text-sm font-bold text-[var(--text)]">
                           «{item.invitationNote}»
                         </p>
                         {item.chosenLocation && (
-                          <div className="flex items-center gap-1 text-xs text-[var(--text-2)] mt-1">
-                            <MapPin className="w-3.5 h-3.5 text-[var(--accent)]" />
+                          <div className="flex items-center gap-1 text-xs text-[var(--text-2)] pt-0.5">
+                            <MapPin className="w-3.5 h-3.5 text-[var(--accent)] shrink-0" />
                             <span>{item.chosenLocation}</span>
                           </div>
                         )}
@@ -1060,13 +940,13 @@ export const DatesView: React.FC = () => {
                     return (
                       <div
                         key={item.id}
-                        className="p-5 rounded-2xl bg-[var(--surface)] border-2 border-[var(--accent)] shadow-md space-y-3 animate-pulse-subtle"
+                        className="p-4 sm:p-5 rounded-2xl bg-[var(--surface)] border-2 border-[var(--accent)] shadow-md space-y-3"
                       >
                         <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-black text-[var(--accent)] uppercase flex items-center gap-1 tracking-wider">
+                          <span className="text-[10px] font-bold text-[var(--accent)] uppercase flex items-center gap-1 tracking-wider">
                             <Sparkles className="w-3.5 h-3.5" /> Новое приглашение от {sender.name}
                           </span>
-                          <span className="text-[10px] text-[var(--text-2)] font-mono">
+                          <span className="text-[10px] text-[var(--text-3)]">
                             {new Date(item.createdAt).toLocaleTimeString('ru-RU', {
                               hour: '2-digit',
                               minute: '2-digit',
@@ -1089,7 +969,7 @@ export const DatesView: React.FC = () => {
                         {acceptingId === item.id ? (
                           <form
                             onSubmit={(e) => handleAcceptInviteSubmit(e, item.id)}
-                            className="mt-4 space-y-3 pt-3 border-t border-[var(--divider)]"
+                            className="space-y-3 pt-2 border-t border-[var(--divider)]"
                           >
                             <h4 className="text-xs font-bold text-[var(--text)]">
                               Согласование времени и локации:
@@ -1105,6 +985,7 @@ export const DatesView: React.FC = () => {
                                   required
                                   value={acceptDateVal}
                                   onChange={(e) => setAcceptDateVal(e.target.value)}
+                                  placeholder="Например: Пятница"
                                   className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
                                 />
                               </div>
@@ -1116,33 +997,11 @@ export const DatesView: React.FC = () => {
                                   type="text"
                                   value={acceptTimeVal}
                                   onChange={(e) => setAcceptTimeVal(e.target.value)}
+                                  placeholder="19:00"
                                   className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
                                 />
                               </div>
                             </div>
-
-                            {venues.length > 0 && (
-                              <div>
-                                <label className="text-[10px] font-bold text-[var(--text-2)] uppercase block mb-1">
-                                  Выбрать из списка мест пары:
-                                </label>
-                                <select
-                                  value={acceptVenueId}
-                                  onChange={(e) => {
-                                    setAcceptVenueId(e.target.value);
-                                    if (e.target.value) setAcceptCustomLocation('');
-                                  }}
-                                  className="w-full p-2 rounded-xl bg-[var(--surface-2)] text-xs border border-[var(--divider)] text-[var(--text)]"
-                                >
-                                  <option value="">-- Ввести вручную или выбрать из мест --</option>
-                                  {venues.map((v) => (
-                                    <option key={v.id} value={v.id}>
-                                      {v.name} ({v.priceLevel} • {v.vibe})
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                            )}
 
                             <div>
                               <label className="text-[10px] font-bold text-[var(--text-2)] uppercase block mb-1">
@@ -1160,7 +1019,7 @@ export const DatesView: React.FC = () => {
                                   setAcceptCustomLocation(e.target.value);
                                   setAcceptVenueId('');
                                 }}
-                                className="w-full p-2 rounded-xl bg-[var(--surface-2)] text-xs border border-[var(--divider)] text-[var(--text)]"
+                                className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] text-xs border border-[var(--divider)] text-[var(--text)]"
                               />
                             </div>
 
@@ -1172,21 +1031,21 @@ export const DatesView: React.FC = () => {
                                 className="rounded accent-[var(--accent)]"
                               />
                               <span className="text-[11px] text-[var(--text-2)] font-medium">
-                                Сохранить это место в наш список «Места пары» (+30 XP)
+                                Сохранить в список «Места пары» (+30 XP)
                               </span>
                             </label>
 
                             <div className="flex gap-2 pt-2">
                               <button
                                 type="submit"
-                                className="flex-1 py-2.5 rounded-xl bg-[var(--accent)] text-white text-xs font-bold shadow-sm"
+                                className="flex-1 py-2.5 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold shadow-2xs cursor-pointer"
                               >
                                 Подтвердить свидание (+50 XP)
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setAcceptingId(null)}
-                                className="py-2.5 px-4 rounded-xl bg-[var(--surface-2)] text-[var(--text-2)] text-xs font-bold border border-[var(--divider)]"
+                                className="py-2.5 px-4 rounded-xl bg-[var(--surface-2)] text-[var(--text-2)] text-xs font-bold border border-[var(--divider)] cursor-pointer"
                               >
                                 Отмена
                               </button>
@@ -1194,14 +1053,15 @@ export const DatesView: React.FC = () => {
                           </form>
                         ) : (
                           <button
+                            type="button"
                             onClick={() => {
                               setAcceptingId(item.id);
                               setAcceptCustomLocation(item.chosenLocation || '');
                             }}
-                            className="w-full py-3 rounded-xl bg-[var(--accent)] text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm hover:opacity-90 transition-opacity"
+                            className="w-full py-2.5 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer"
                           >
                             <Heart className="w-3.5 h-3.5 fill-current" />
-                            <span>Принять приглашение и согласовать детали</span>
+                            <span>Принять приглашение и выбрать время</span>
                           </button>
                         )}
                       </div>
@@ -1209,21 +1069,21 @@ export const DatesView: React.FC = () => {
                   }
                 }
 
-                // 2. CONFIRMED (Запланировано или Завершено)
+                // 2. CONFIRMED / COMPLETED
                 return (
                   <div
                     key={item.id}
-                    className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--divider)] shadow-xs space-y-3"
+                    className="p-4 sm:p-5 rounded-2xl bg-[var(--surface)] border border-[var(--divider)] shadow-2xs space-y-3"
                   >
-                    <div className="flex items-start justify-between">
+                    <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <div
-                          className={`w-3 h-3 rounded-full ${
+                          className={`w-2.5 h-2.5 rounded-full ${
                             isCompleted ? 'bg-emerald-500' : 'bg-[var(--accent)] animate-pulse'
                           }`}
                         />
                         <div>
-                          <span className="text-[10px] font-extrabold uppercase text-[var(--text-2)]">
+                          <span className="text-[10px] font-bold uppercase text-[var(--text-2)]">
                             {item.chosenDate || 'Свидание'}{' '}
                             {item.chosenTime ? `в ${item.chosenTime}` : ''}
                           </span>
@@ -1234,11 +1094,11 @@ export const DatesView: React.FC = () => {
                       </div>
 
                       {isCompleted ? (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                           Завершено
                         </span>
                       ) : (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--accent)]/10 text-[var(--accent)]">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--surface-blush)] text-[var(--accent)]">
                           Предстоит
                         </span>
                       )}
@@ -1248,9 +1108,9 @@ export const DatesView: React.FC = () => {
                       «{item.invitationNote}»
                     </div>
 
-                    {/* Review Block or Review Button */}
+                    {/* Review Block or Review Form */}
                     {item.review ? (
-                      <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500/5 to-rose-500/5 border border-amber-500/20 space-y-2">
+                      <div className="p-3 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] space-y-2">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-1">
                             {[1, 2, 3, 4, 5].map((star) => (
@@ -1263,22 +1123,21 @@ export const DatesView: React.FC = () => {
                                 }`}
                               />
                             ))}
-                            <span className="text-xs font-black text-amber-600 ml-1">
+                            <span className="text-xs font-bold text-amber-600 dark:text-amber-400 ml-1">
                               {item.review.rating}/5
                             </span>
                           </div>
-                          <span className="text-[10px] font-bold text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded-full">
+                          <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full">
                             +200 XP получено
                           </span>
                         </div>
 
                         {item.review.impressions && (
-                          <p className="text-xs text-[var(--text)] font-medium">
+                          <p className="text-xs text-[var(--text)] font-medium leading-relaxed">
                             {item.review.impressions}
                           </p>
                         )}
 
-                        {/* Photo gallery of date */}
                         {item.review.photos && item.review.photos.length > 0 && (
                           <div className="grid grid-cols-3 gap-2 pt-1">
                             {item.review.photos.map((ph, idx) => (
@@ -1302,8 +1161,9 @@ export const DatesView: React.FC = () => {
                                 Как прошло ваше свидание?
                               </h4>
                               <button
+                                type="button"
                                 onClick={() => setReviewingInviteId(null)}
-                                className="text-[var(--text-2)] hover:text-[var(--text)]"
+                                className="text-[var(--text-2)] hover:text-[var(--text)] cursor-pointer"
                               >
                                 <X className="w-4 h-4" />
                               </button>
@@ -1319,7 +1179,7 @@ export const DatesView: React.FC = () => {
                                   key={star}
                                   type="button"
                                   onClick={() => setReviewRating(star)}
-                                  className="p-1 hover:scale-110 transition-transform"
+                                  className="p-1 hover:scale-110 transition-transform cursor-pointer"
                                 >
                                   <Star
                                     className={`w-5 h-5 ${
@@ -1343,106 +1203,24 @@ export const DatesView: React.FC = () => {
                             <textarea
                               value={reviewNotes}
                               onChange={(e) => setReviewNotes(e.target.value)}
+                              placeholder="Поделитесь тёплыми впечатлениями..."
                               rows={2}
                               className="w-full p-2.5 rounded-xl bg-[var(--surface)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] resize-none"
                             />
 
-                            {/* Add Photos */}
-                            <div className="space-y-2">
-                              <label className="text-[10px] font-bold text-[var(--text-2)] uppercase block">
-                                Фотографии и воспоминания:
-                              </label>
-                              <div className="flex gap-2">
-                                <input
-                                  type="url"
-                                  value={reviewPhotoUrl}
-                                  onChange={(e) => setReviewPhotoUrl(e.target.value)}
-                                  className="flex-1 p-2 rounded-xl bg-[var(--surface)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={handleAddPhotoToReview}
-                                  className="px-3 py-2 rounded-xl bg-[var(--accent)] text-white text-xs font-bold"
-                                >
-                                  Добавить
-                                </button>
-                              </div>
-
-                              {/* Quick sample photos for demo */}
-                              <div className="flex items-center gap-1.5 pt-1">
-                                <span className="text-[10px] text-[var(--text-2)]">Образцы:</span>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    handleSamplePhoto(
-                                      'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&auto=format&fit=crop&q=80'
-                                    )
-                                  }
-                                  className="px-2 py-0.5 rounded text-[10px] bg-[var(--surface)] text-[var(--text-2)] hover:text-[var(--text)] border border-[var(--divider)]"
-                                >
-                                  Ресторан
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    handleSamplePhoto(
-                                      'https://images.unsplash.com/photo-1519741497674-611481863552?w=400&auto=format&fit=crop&q=80'
-                                    )
-                                  }
-                                  className="px-2 py-0.5 rounded text-[10px] bg-[var(--surface)] text-[var(--text-2)] hover:text-[var(--text)] border border-[var(--divider)]"
-                                >
-                                  Парк
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    handleSamplePhoto(
-                                      'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=400&auto=format&fit=crop&q=80'
-                                    )
-                                  }
-                                  className="px-2 py-0.5 rounded text-[10px] bg-[var(--surface)] text-[var(--text-2)] hover:text-[var(--text)] border border-[var(--divider)]"
-                                >
-                                  Кофейня
-                                </button>
-                              </div>
-
-                              {reviewPhotos.length > 0 && (
-                                <div className="grid grid-cols-3 gap-2 pt-2">
-                                  {reviewPhotos.map((ph, i) => (
-                                    <div key={i} className="relative group">
-                                      <img
-                                        src={ph}
-                                        alt="Uploaded preview"
-                                        referrerPolicy="no-referrer"
-                                        className="h-16 w-full object-cover rounded-lg border border-[var(--divider)]"
-                                      />
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setReviewPhotos((prev) => prev.filter((_, idx) => idx !== i))
-                                        }
-                                        className="absolute -top-1 -right-1 p-0.5 bg-rose-500 text-white rounded-full shadow"
-                                      >
-                                        <X className="w-3 h-3" />
-                                      </button>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-
                             <button
                               type="button"
                               onClick={() => handleSaveReview(item.id)}
-                              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 text-white font-bold text-xs shadow-md"
+                              className="w-full py-2.5 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-bold text-xs shadow-2xs cursor-pointer"
                             >
                               Сохранить отзыв и получить XP ⭐
                             </button>
                           </div>
                         ) : (
                           <button
+                            type="button"
                             onClick={() => setReviewingInviteId(item.id)}
-                            className="w-full py-2.5 rounded-xl bg-[var(--surface-2)] hover:bg-[var(--accent)] hover:text-white text-[var(--text)] text-xs font-bold border border-[var(--divider)] transition-all flex items-center justify-center gap-1.5"
+                            className="w-full py-2.5 rounded-xl bg-[var(--surface-2)] hover:bg-[var(--accent)] hover:text-white text-[var(--text)] text-xs font-bold border border-[var(--divider)] transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                           >
                             <Star className="w-3.5 h-3.5 text-amber-500" />
                             <span>Завершить свидание и оставить отзыв (+200 XP)</span>
@@ -1455,158 +1233,308 @@ export const DatesView: React.FC = () => {
               })}
             </div>
           ) : (
-            <div className="p-5 rounded-3xl bg-[var(--surface)] border border-[var(--divider)] text-center space-y-2">
+            <div className="p-6 rounded-3xl bg-[var(--surface)] border border-[var(--divider)] text-center space-y-2">
               <div className="w-12 h-12 mx-auto rounded-2xl bg-[var(--surface-2)] flex items-center justify-center text-[var(--accent)]">
                 <Calendar className="w-6 h-6" />
               </div>
               <h4 className="text-sm font-bold text-[var(--text)]">История свиданий пока пуста</h4>
-              <p className="text-xs text-[var(--text-2)] max-w-xs mx-auto">
-                Отправьте приглашение во вкладке «Пригласить», чтобы запланировать ваше первое свидание!
+              <p className="text-xs text-[var(--text-2)] max-w-xs mx-auto leading-relaxed">
+                Крутите колесо или нажмите «Пригласить на свидание», чтобы организовать первое свидание!
               </p>
               <button
-                onClick={() => setDatesSubTab('invite')}
-                className="mt-2 px-4 py-2 rounded-xl bg-[var(--accent)] text-white text-xs font-bold inline-flex items-center gap-1.5"
+                type="button"
+                onClick={() => setShowInviteModal(true)}
+                className="mt-2 px-4 py-2 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
               >
                 <Heart className="w-3.5 h-3.5" />
                 <span>Пригласить на свидание</span>
               </button>
             </div>
           )}
-        </div>
-      )}
+        </section>
 
-      {/* ========================================================= */}
-      {/* MODAL: ADD VENUE TO PLACES */}
-      {/* ========================================================= */}
-      {showAddVenueModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
-          <div className="w-full max-w-md bg-[var(--surface)] rounded-3xl p-6 border border-[var(--divider)] shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-[var(--accent)]/10 text-[var(--accent)] flex items-center justify-center">
-                  <MapPin className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-[var(--text)]">Добавить место пары</h3>
-                  <p className="text-[11px] text-[var(--text-2)] font-medium">
-                    +30 XP в копилку рейтинга пары
-                  </p>
-                </div>
+        {/* ========================================================= */}
+        {/* MODAL: CREATE DATE INVITE (ВЫЕЗД СНИЗУ ДЛЯ СОЗДАНИЯ СУЩНОСТИ) */}
+        {/* ========================================================= */}
+        {showInviteModal && renderInviteModal()}
+
+        {/* ========================================================= */}
+        {/* MODAL: ADD VENUE TO PLACES */}
+        {/* ========================================================= */}
+        {showAddVenueModal && renderAddVenueModal()}
+      </div>
+    </PageLayout>
+  );
+
+  // Helper renderers for modals to keep code clean and modular
+  function renderInviteModal() {
+    return (
+      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+        <div className="bg-[var(--surface)] rounded-3xl p-6 max-w-md w-full shadow-2xl border border-[var(--divider)] space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+                <Sparkles className="w-4 h-4" />
               </div>
-              <button
-                onClick={() => setShowAddVenueModal(false)}
-                className="p-1 rounded-lg text-[var(--text-2)] hover:text-[var(--text)]"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateVenue} className="space-y-3.5">
               <div>
-                <label className="text-[10px] font-extrabold text-[var(--text-2)] uppercase block mb-1">
-                  Название места *
+                <h3 className="text-sm sm:text-base font-bold text-[var(--text)]">
+                  Приглашение на свидание
+                </h3>
+                <p className="text-[11px] text-[var(--text-2)]">
+                  Для {otherPartner.name}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowInviteModal(false)}
+              className="p-1 text-[var(--text-2)] hover:text-[var(--text)] rounded-lg cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {inviteSentSuccess ? (
+            <div className="py-8 text-center space-y-3">
+              <div className="w-14 h-14 mx-auto rounded-3xl bg-emerald-500/15 text-emerald-500 flex items-center justify-center">
+                <CheckCircle2 className="w-8 h-8" />
+              </div>
+              <h4 className="text-base font-bold text-[var(--text)]">
+                Приглашение успешно отправлено!
+              </h4>
+              <p className="text-xs text-[var(--text-2)]">
+                Партнёр получит уведомление и сможет согласовать время
+              </p>
+            </div>
+          ) : (
+            <form onSubmit={handleSendInvite} className="space-y-3.5">
+              <div>
+                <label className="text-[10px] font-bold text-[var(--text-2)] uppercase block mb-1">
+                  Текст приглашения *
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={inviteNote}
+                  onChange={(e) => setInviteNote(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] resize-none"
+                />
+              </div>
+
+              {venues.length > 0 && (
+                <div>
+                  <label className="text-[10px] font-bold text-[var(--text-2)] uppercase block mb-1">
+                    Выбрать из списка сохранённых мест:
+                  </label>
+                  <select
+                    value={selectedVenueId}
+                    onChange={(e) => {
+                      setSelectedVenueId(e.target.value);
+                      if (e.target.value) setCustomLocationName('');
+                    }}
+                    className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] text-xs border border-[var(--divider)] text-[var(--text)] focus:outline-none"
+                  >
+                    <option value="">-- Выбрать место пары или ввести своё --</option>
+                    {venues.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.name} ({v.priceLevel})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="text-[10px] font-bold text-[var(--text-2)] uppercase block mb-1">
+                  Или укажите своё место
                 </label>
                 <input
                   type="text"
-                  required
-                  value={newVenueName}
-                  onChange={(e) => setNewVenueName(e.target.value)}
+                  value={customLocationName}
+                  onChange={(e) => {
+                    setCustomLocationName(e.target.value);
+                    setSelectedVenueId('');
+                  }}
+                  placeholder="Например: Панорамная крыша или парк"
                   className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[10px] font-extrabold text-[var(--text-2)] uppercase block mb-1">
-                    Категория
+                  <label className="text-[10px] font-bold text-[var(--text-2)] uppercase block mb-1">
+                    Желаемый день
                   </label>
-                  <select
-                    value={newVenueCategory}
-                    onChange={(e) => setNewVenueCategory(e.target.value as Venue['category'])}
-                    className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none"
-                  >
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.label}
-                      </option>
-                    ))}
-                  </select>
+                  <input
+                    type="text"
+                    value={inviteDate}
+                    onChange={(e) => setInviteDate(e.target.value)}
+                    placeholder="Пятница или 14 февраля"
+                    className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+                  />
                 </div>
                 <div>
-                  <label className="text-[10px] font-extrabold text-[var(--text-2)] uppercase block mb-1">
-                    Уровень цен
+                  <label className="text-[10px] font-bold text-[var(--text-2)] uppercase block mb-1">
+                    Время
                   </label>
-                  <select
-                    value={newVenuePrice}
-                    onChange={(e) => setNewVenuePrice(e.target.value as Venue['priceLevel'])}
-                    className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none"
-                  >
-                    <option value="₽">₽ (Демократично)</option>
-                    <option value="₽₽">₽₽ (Средний)</option>
-                    <option value="₽₽₽">₽₽₽ (Премиум)</option>
-                  </select>
+                  <input
+                    type="text"
+                    value={inviteTime}
+                    onChange={(e) => setInviteTime(e.target.value)}
+                    placeholder="19:30"
+                    className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+                  />
                 </div>
-              </div>
-
-              <div>
-                <label className="text-[10px] font-extrabold text-[var(--text-2)] uppercase block mb-1">
-                  Атмосфера / Вайб
-                </label>
-                <input
-                  type="text"
-                  value={newVenueVibe}
-                  onChange={(e) => setNewVenueVibe(e.target.value)}
-                  className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-extrabold text-[var(--text-2)] uppercase block mb-1">
-                  Адрес / Район
-                </label>
-                <input
-                  type="text"
-                  value={newVenueAddress}
-                  onChange={(e) => setNewVenueAddress(e.target.value)}
-                  className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-extrabold text-[var(--text-2)] uppercase block mb-1">
-                  Заметка / Почему сюда хочется
-                </label>
-                <textarea
-                  rows={2}
-                  value={newVenueDescription}
-                  onChange={(e) => setNewVenueDescription(e.target.value)}
-                  className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] resize-none"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-extrabold text-[var(--text-2)] uppercase block mb-1">
-                  Ссылка на сайт / меню (опционально)
-                </label>
-                <input
-                  type="url"
-                  value={newVenueLink}
-                  onChange={(e) => setNewVenueLink(e.target.value)}
-                  className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
-                />
               </div>
 
               <button
                 type="submit"
-                className="w-full py-3 rounded-2xl bg-[var(--accent)] text-white font-bold text-xs shadow-md hover:opacity-95 transition-all"
+                className="w-full py-3 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-bold text-xs shadow-2xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
               >
-                Сохранить место (+30 XP)
+                <Send className="w-3.5 h-3.5" />
+                <span>Отправить приглашение {otherPartner.name}</span>
               </button>
             </form>
-          </div>
+          )}
         </div>
-      )}
       </div>
-    </PageLayout>
-  );
+    );
+  }
+
+  function renderAddVenueModal() {
+    return (
+      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+        <div className="w-full max-w-md bg-[var(--surface)] rounded-3xl p-6 border border-[var(--divider)] shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-[var(--accent)]/10 text-[var(--accent)] flex items-center justify-center">
+                <MapPin className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-[var(--text)]">Добавить место пары</h3>
+                <p className="text-[11px] text-[var(--text-2)]">
+                  +30 XP в копилку рейтинга пары
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowAddVenueModal(false)}
+              className="p-1 rounded-lg text-[var(--text-2)] hover:text-[var(--text)] cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <form onSubmit={handleCreateVenue} className="space-y-3.5">
+            <div>
+              <label className="text-[10px] font-bold text-[var(--text-2)] uppercase block mb-1">
+                Название места *
+              </label>
+              <input
+                type="text"
+                required
+                value={newVenueName}
+                onChange={(e) => setNewVenueName(e.target.value)}
+                placeholder="Например: Кафе «Утро», ресторан «Север»"
+                className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] font-bold text-[var(--text-2)] uppercase block mb-1">
+                  Категория
+                </label>
+                <select
+                  value={newVenueCategory}
+                  onChange={(e) => setNewVenueCategory(e.target.value as Venue['category'])}
+                  className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none"
+                >
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-[var(--text-2)] uppercase block mb-1">
+                  Уровень цен
+                </label>
+                <select
+                  value={newVenuePrice}
+                  onChange={(e) => setNewVenuePrice(e.target.value as Venue['priceLevel'])}
+                  className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none"
+                >
+                  <option value="₽">₽ (Демократично)</option>
+                  <option value="₽₽">₽₽ (Средний)</option>
+                  <option value="₽₽₽">₽₽₽ (Премиум)</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[10px] font-bold text-[var(--text-2)] uppercase block mb-1">
+                Атмосфера / Вайб
+              </label>
+              <input
+                type="text"
+                value={newVenueVibe}
+                onChange={(e) => setNewVenueVibe(e.target.value)}
+                placeholder="Приглушённый свет, живая музыка, уют"
+                className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] font-bold text-[var(--text-2)] uppercase block mb-1">
+                Адрес / Район
+              </label>
+              <input
+                type="text"
+                value={newVenueAddress}
+                onChange={(e) => setNewVenueAddress(e.target.value)}
+                placeholder="Улица, дом или ориентир"
+                className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] font-bold text-[var(--text-2)] uppercase block mb-1">
+                Заметка / Почему сюда хочется
+              </label>
+              <textarea
+                rows={2}
+                value={newVenueDescription}
+                onChange={(e) => setNewVenueDescription(e.target.value)}
+                placeholder="Наши любимые десерты, красивый вид из окна..."
+                className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] resize-none"
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] font-bold text-[var(--text-2)] uppercase block mb-1">
+                Ссылка на сайт / меню (опционально)
+              </label>
+              <input
+                type="url"
+                value={newVenueLink}
+                onChange={(e) => setNewVenueLink(e.target.value)}
+                placeholder="https://..."
+                className="w-full p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] text-xs text-[var(--text)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3 rounded-2xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-bold text-xs shadow-2xs transition-all cursor-pointer"
+            >
+              Сохранить место (+30 XP)
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 };

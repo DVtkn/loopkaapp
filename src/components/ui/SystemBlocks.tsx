@@ -212,7 +212,7 @@ export const StatTile: React.FC<StatTileProps> = ({
       <div className="flex items-center justify-between mb-2">
         <div
           className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
-          style={{ background: 'var(--surface-2)', color: token.text }}
+          style={{ background: `${token.text}18`, color: token.text }}
         >
           {icon}
         </div>
@@ -220,7 +220,7 @@ export const StatTile: React.FC<StatTileProps> = ({
       <div className="text-2xl sm:text-3xl font-extrabold text-[var(--text)] leading-none tracking-tight">
         {value}
       </div>
-      <div className="text-xs text-[var(--text-2)] font-medium mt-1">
+      <div className="text-xs text-[var(--text-2)] font-medium mt-1 line-clamp-2">
         {label}
       </div>
     </div>
@@ -263,8 +263,8 @@ export const CarouselTile: React.FC<CarouselTileProps> = ({ items, title }) => {
               className="flex-none min-w-[105px] max-w-[120px] p-3 rounded-2xl bg-[var(--surface)] border border-[var(--divider)] hover:border-[var(--accent)]/40 flex flex-col items-start gap-2 transition-all snap-start cursor-pointer group text-left"
             >
               <div
-                className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 bg-[var(--surface-2)] text-[var(--text)] group-hover:text-[var(--accent)] transition-colors"
-                style={{ color: token.text }}
+                className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-colors"
+                style={{ background: `${token.text}18`, color: token.text }}
               >
                 {item.icon}
               </div>
@@ -312,13 +312,13 @@ export const ActionRow: React.FC<ActionRowProps> = ({
     >
       <div className="flex items-center gap-3 min-w-0">
         <div
-          className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 bg-[var(--surface-2)]"
-          style={{ color: token.text }}
+          className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+          style={{ background: `${token.text}18`, color: token.text }}
         >
           {icon}
         </div>
         <span
-          className={`text-sm font-semibold text-left truncate ${
+          className={`text-sm font-semibold text-left line-clamp-2 ${
             danger ? 'text-rose-500 font-bold' : 'text-[var(--text)]'
           }`}
         >

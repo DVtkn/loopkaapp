@@ -66,7 +66,8 @@ export const pairDisconnectSchema = z.object({
 
 export const coupleSyncSchema = z.object({
   login1: loginSchema,
-  login2: loginSchema,
+  login2: loginSchema.optional().nullable(),
+  coupleId: z.string().optional().nullable(),
   payload: z.record(z.string(), z.unknown()),
 });
 
@@ -97,6 +98,19 @@ export const aiDateIdeaSchema = z.object({
   vibe: z.string().max(50).optional(),
   location: z.string().max(100).optional(),
   coupleProfile: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const touchEventSchema = z.object({
+  senderLogin: loginSchema,
+  senderName: z.string().min(1).max(50),
+  targetLogin: loginSchema,
+  actionType: z.string().min(1).max(50),
+  title: z.string().min(1).max(100),
+  subtitle: z.string().max(200).optional(),
+  icon: z.string().max(50).optional(),
+  iconBg: z.string().max(100).optional(),
+  iconColor: z.string().max(100).optional(),
+  customNote: z.string().max(500).optional(),
 });
 
 export const loginParamSchema = z.object({

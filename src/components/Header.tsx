@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sun, Moon, Bell, Award, Flame, User, Heart } from 'lucide-react';
+import { Sun, Moon, Bell, Award, Flame, User, Heart, Sparkles } from 'lucide-react';
 import { useCouple } from '../context/CoupleContext';
 import { LoopLogo } from './LoopLogo';
 
@@ -19,6 +19,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAchievements, onOpenSettin
     screen,
     setScreen,
     currentUser,
+    coupleXP,
+    coupleLevelInfo,
   } = useCouple();
 
   const partner1 = coupleProfile.partner1;
@@ -39,11 +41,32 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAchievements, onOpenSettin
             <span className="font-extrabold text-base tracking-tight text-[var(--text)]">Loop</span>
           </div>
 
-          {/* Right Controls: User Avatar & Theme */}
+          {/* Right Controls: Global XP Counter, User Avatar & Theme */}
           <div className="flex items-center gap-2">
+            {/* Global XP / Level Pill */}
+            {onOpenAchievements && (
+              <button
+                id="header-xp-pill-btn"
+                onClick={onOpenAchievements}
+                className="px-2.5 py-1.5 rounded-full bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--divider)] flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer group"
+                title={`Уровень ${coupleLevelInfo.level}: ${coupleLevelInfo.levelName} • ${coupleXP} XP`}
+              >
+                <div className="w-5 h-5 rounded-full bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-3 h-3 group-hover:scale-110 transition-transform" />
+                </div>
+                <span className="text-xs font-bold text-[var(--text)]">
+                  {coupleXP} <span className="text-[10px] text-[var(--text-3)] font-medium">XP</span>
+                </span>
+                <span className="text-[10px] font-semibold text-[var(--accent)] bg-[var(--surface-blush)] px-1.5 py-0.2 rounded-full hidden sm:inline">
+                  Ур. {coupleLevelInfo.level}
+                </span>
+              </button>
+            )}
+
             {/* User Profile Pill / Pairing Status */}
             {currentUser && onOpenSettings && (
               <button
+                id="header-profile-btn"
                 onClick={onOpenSettings}
                 className="px-2.5 py-1.5 rounded-full bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--divider)] flex items-center gap-2 transition-colors cursor-pointer"
                 title="Перейти в личный кабинет"

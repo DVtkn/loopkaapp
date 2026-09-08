@@ -19,11 +19,14 @@ import {
   Layers,
   Sparkle,
   Award,
+  Activity,
 } from 'lucide-react';
 import { useCouple } from '../context/CoupleContext';
 import { TestCategory, Question } from '../types';
 import { PageLayout } from './ui/PageLayout';
+import { ReportView } from './ReportView';
 import { triggerHaptic } from '../utils/haptics';
+import { calculateCoupleAnalysis } from '../utils/psychologyEngine';
 
 // Emotional and thematic mapping for each test
 interface TestEditorialMeta {
@@ -101,11 +104,14 @@ const CATEGORIES = [
   { id: 'intimacy', label: 'Интимность', icon: '♥' },
 ];
 
-export const TestsView: React.FC = () => {
+export const TestsView: React.FC<{ initialMode?: 'catalog' | 'report' }> = ({
+  initialMode = 'catalog',
+}) => {
   const {
     currentPartnerId,
     coupleProfile,
     tests,
+    pulseHistory,
     submitTestAnswers,
     triggerConfetti,
     setActiveTab,
@@ -116,6 +122,11 @@ export const TestsView: React.FC = () => {
   const otherPartner = currentPartnerId === 'partner1' ? coupleProfile.partner2 : coupleProfile.partner1;
   const isPaired = !!currentUser?.partnerLogin;
 
+  const analysis = useMemo(() => {
+    return calculateCoupleAnalysis(coupleProfile, pulseHistory, tests);
+  }, [coupleProfile, pulseHistory, tests]);
+
+  const [subMode, setSubMode] = useState<'catalog' | 'report'>(initialMode);
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [activeTest, setActiveTest] = useState<TestCategory | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
@@ -208,8 +219,8 @@ export const TestsView: React.FC = () => {
     if (myDone && partnerDone) {
       return {
         state: 'BOTH_DONE',
-        label: 'Совпадение 92%',
-        sublabel: 'Оба прошли',
+        label: 'Оба завершили',
+        sublabel: 'Смотреть инсайты',
         isComplete: true,
         actionText: 'Результаты →',
       };
@@ -242,23 +253,75 @@ export const TestsView: React.FC = () => {
   };
 
   return (
-    <PageLayout hideHeader>
-      <div className="space-y-6 pb-8">
-        
-        {/* ============================================================ */}
-        {/* 1. EDITORIAL HEADER & INTRO */}
-        {/* ============================================================ */}
-        <div className="space-y-1 pt-1">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--accent)]">
-            Исследования пары
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-[var(--text)] tracking-tight">
-            Узнайте друг друга глубже
-          </h1>
-          <p className="text-sm text-[var(--text-2)] font-normal leading-relaxed pt-0.5 max-w-lg">
-            Короткие вопросы для двоих — чтобы понять скрытые потребности, языки заботы и точки душевного сближения.
-          </p>
-        </div>
+    <PageLayout
+      title={subMode === 'report' ? 'Радар и ИИ-отчёт' : 'Исследования пары'}
+      subtitle={
+        subMode === 'report'
+          ? 'Карта гармонии и психологический профиль союза'
+          : 'Тесты и радар гармонии союза'
+      }
+      onBack={
+        subMode === 'report'
+          ? () => setSubMode('catalog')
+          : () => setActiveTab('us')
+      }
+    >
+      <div className="space-y-5 pb-8">
+        {subMode === 'report' ? (
+          <ReportView
+            hideHeader
+            onStartTest={(testId) => {
+              setSubMode('catalog');
+              const target = tests.find((x) => x.id === testId);
+              if (target) handleStartTest(target);
+            }}
+          />
+        ) : (
+          <div className="space-y-6">
+            
+            {/* Radar Banner Teaser */}
+            <div
+              onClick={() => {
+                triggerHaptic('selection');
+                setSubMode('report');
+              }}
+              className="p-4 sm:p-5 rounded-3xl bg-[var(--surface)] border border-[var(--divider)] hover:border-[var(--accent)]/40 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-2xs group"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="w-10 h-10 rounded-2xl bg-rose-500/15 text-rose-500 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                  <Activity className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-[var(--text)] group-hover:text-[var(--accent)] transition-colors">
+                    Радар гармонии пары: {analysis.hasData && analysis.compatibilityScore > 0 ? `${analysis.compatibilityScore}%` : 'Калибровка'}
+                  </div>
+                  <div className="text-xs text-[var(--text-2)] mt-0.5">
+                    {analysis.hasData && analysis.compatibilityScore > 0
+                      ? 'Анализ 5 сфер отношений, суперсилы и ИИ-отчёт'
+                      : 'Пройдите опросники, чтобы открыть радар и ИИ-отчёт'}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 text-xs font-semibold text-[var(--accent)] shrink-0">
+                <span>Смотреть</span>
+                <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              </div>
+            </div>
+
+            {/* ============================================================ */}
+            {/* 1. EDITORIAL HEADER & INTRO */}
+            {/* ============================================================ */}
+            <div className="space-y-1 pt-1">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--accent)]">
+                Исследования пары
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-[var(--text)] tracking-tight">
+                Узнайте друг друга глубже
+              </h1>
+              <p className="text-sm text-[var(--text-2)] font-normal leading-relaxed pt-0.5 max-w-lg">
+                Короткие вопросы для двоих — чтобы понять скрытые потребности, языки заботы и точки душевного сближения.
+              </p>
+            </div>
 
         {/* ============================================================ */}
         {/* 2. CATEGORY SWITCHER (Horizontal scrollable, refined) */}
@@ -425,8 +488,9 @@ export const TestsView: React.FC = () => {
             })}
           </div>
         </div>
-
       </div>
+    )}
+    </div>
 
       {/* ============================================================ */}
       {/* 5. ACTIVE TEST RUNNER MODAL (Clean, intimate, distraction-free) */}
@@ -622,7 +686,7 @@ export const TestsView: React.FC = () => {
                   type="button"
                   onClick={() => {
                     setTestJustFinished(null);
-                    setActiveTab('report');
+                    setSubMode('report');
                   }}
                   className="w-full py-3 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-bold rounded-xl text-xs shadow-2xs transition-all cursor-pointer"
                 >

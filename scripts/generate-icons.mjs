@@ -1,4 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+import fs from 'fs';
+import path from 'path';
+import { Resvg } from '@resvg/resvg-js';
+
+const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <!-- Background iOS Coral-Red Gradient -->
     <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -90,4 +94,39 @@
       opacity="0.8"
     />
   </g>
-</svg>
+</svg>`;
+
+async function main() {
+  const publicDir = path.join(process.cwd(), 'public');
+
+  // Save SVG
+  fs.writeFileSync(path.join(publicDir, 'icon.svg'), svgContent, 'utf-8');
+  console.log('Saved public/icon.svg');
+
+  // Generate PNGs at all required resolutions
+  const targets = [
+    { name: 'apple-touch-icon.png', size: 180 },
+    { name: 'icon-180.png', size: 180 },
+    { name: 'icon-192.png', size: 192 },
+    { name: 'icon-512.png', size: 512 },
+  ];
+
+  for (const target of targets) {
+    const resvg = new Resvg(svgContent, {
+      fitTo: {
+        mode: 'width',
+        value: target.size,
+      },
+    });
+    const pngData = resvg.render();
+    const pngBuffer = pngData.asPng();
+    const outPath = path.join(publicDir, target.name);
+    fs.writeFileSync(outPath, pngBuffer);
+    console.log(`Generated ${target.name} (${target.size}x${target.size})`);
+  }
+}
+
+main().catch((err) => {
+  console.error('Error generating icons:', err);
+  process.exit(1);
+});

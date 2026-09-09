@@ -51,6 +51,57 @@ export const coupleData = pgTable('couple_data', {
   lastUpdatedAt: text('last_updated_at').notNull(),
 });
 
+export const couples = pgTable('couples', {
+  id: text('id').primaryKey(),
+  user1Id: text('user1_id').references(() => users.id, { onDelete: 'cascade' }),
+  user2Id: text('user2_id').references(() => users.id, { onDelete: 'cascade' }),
+  status: text('status').default('active').notNull(),
+  xpPoints: integer('xp_points').default(0).notNull(),
+  currentLevel: integer('current_level').default(1).notNull(),
+  streakDays: integer('streak_days').default(0).notNull(),
+  startDate: text('start_date'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const testSessions = pgTable('test_sessions', {
+  id: text('id').primaryKey(),
+  testId: text('test_id').notNull(),
+  coupleId: text('couple_id').notNull(),
+  testClass: text('test_class').default('couple').notNull(), // 'individual' | 'couple'
+  status: text('status').default('in_progress').notNull(), // 'in_progress' | 'completed'
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  coupleIdIdx: index('test_sessions_couple_id_idx').on(t.coupleId),
+  testIdIdx: index('test_sessions_test_id_idx').on(t.testId),
+  statusIdx: index('test_sessions_status_idx').on(t.status),
+}));
+
+export const testAnswers = pgTable('test_answers', {
+  id: text('id').primaryKey(),
+  sessionId: text('session_id').references(() => testSessions.id, { onDelete: 'cascade' }).notNull(),
+  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  questionId: text('question_id').notNull(),
+  selectedValue: integer('selected_value').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  uniqUserQuestion: unique('uniq_user_session_question').on(t.sessionId, t.userId, t.questionId),
+  sessionIdx: index('test_answers_session_idx').on(t.sessionId),
+  userIdIdx: index('test_answers_user_idx').on(t.userId),
+}));
+
+export const coupleReports = pgTable('couple_reports', {
+  id: text('id').primaryKey(),
+  coupleId: text('couple_id').notNull(),
+  compatibilityScore: integer('compatibility_score').notNull(),
+  archetypeTitle: text('archetype_title').notNull(),
+  summary: text('summary').notNull(),
+  reportPayload: jsonb('report_payload').notNull(),
+  generatedAt: timestamp('generated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  coupleIdIdx: index('couple_reports_couple_id_idx').on(t.coupleId),
+}));
+
 export const chatMessages = pgTable('chat_messages', {
   id: text('id').primaryKey(),
   coupleId: text('couple_id').notNull(),
@@ -105,3 +156,53 @@ export const photos = pgTable('photos', {
   coupleIdIdx: index('photos_couple_id_idx').on(t.coupleId),
   createdAtIdx: index('photos_created_at_idx').on(t.createdAt),
 }));
+
+export const dateEvents = pgTable('date_events', {
+  id: text('id').primaryKey(),
+  coupleId: text('couple_id').notNull(),
+  title: text('title').notNull(),
+  description: text('description'),
+  location: text('location'),
+  eventDate: text('event_date').notNull(),
+  status: text('status').default('planned').notNull(), // 'planned' | 'completed' | 'cancelled'
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  coupleIdIdx: index('date_events_couple_id_idx').on(t.coupleId),
+}));
+
+export const careNotes = pgTable('care_notes', {
+  id: text('id').primaryKey(),
+  coupleId: text('couple_id').notNull(),
+  authorLogin: text('author_login').notNull(),
+  targetLogin: text('target_login').notNull(),
+  content: text('content').notNull(),
+  category: text('category').default('general').notNull(),
+  isCompleted: boolean('is_completed').default(false).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  coupleIdIdx: index('care_notes_couple_id_idx').on(t.coupleId),
+}));
+
+export const timeCapsules = pgTable('time_capsules', {
+  id: text('id').primaryKey(),
+  coupleId: text('couple_id').notNull(),
+  authorLogin: text('author_login').notNull(),
+  title: text('title').notNull(),
+  content: text('content').notNull(),
+  openAt: text('open_at').notNull(),
+  isOpened: boolean('is_opened').default(false).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  coupleIdIdx: index('time_capsules_couple_id_idx').on(t.coupleId),
+}));
+
+export const pushSubscriptions = pgTable('push_subscriptions', {
+  id: text('id').primaryKey(),
+  userLogin: text('user_login').notNull(),
+  coupleId: text('couple_id'),
+  subscription: jsonb('subscription').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  userLoginIdx: index('push_subscriptions_user_idx').on(t.userLogin),
+}));
+

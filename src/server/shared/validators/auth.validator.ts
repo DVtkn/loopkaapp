@@ -16,6 +16,7 @@ export const registerSchema = z.object({
   login: loginSchema,
   password: passwordSchema,
   name: z.string().min(1, "Имя обязательно").max(50, "Имя слишком длинное").optional(),
+  gender: z.enum(["male", "female"], { message: "Пол обязателен при регистрации (male/female)" }),
 });
 
 export const loginRequestSchema = z.object({

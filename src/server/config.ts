@@ -26,16 +26,26 @@ function parseAllowedOrigins(): string[] {
 export function loadConfig(): ServerConfig {
   const port = 3000; // Strictly port 3000 as mandated by environment
   const nodeEnv = process.env.NODE_ENV || 'development';
+  const isProd = nodeEnv === 'production';
   let jwtSecret = process.env.JWT_SECRET;
 
-  if (!jwtSecret) {
-    if (process.env.NODE_ENV === 'production') {
-      const errMsg = 'FATAL: В production-режиме (NODE_ENV=production) обязательно наличие переменной JWT_SECRET. Запуск сервера отклонён для предотвращения использования уязвимых токенов.';
+  if (isProd) {
+    if (!jwtSecret || jwtSecret === 'loop_secret_fallback_12345' || jwtSecret.trim() === '') {
+      const errMsg = 'FATAL: В production-режиме (NODE_ENV=production) обязательно наличие валидной переменной JWT_SECRET (без плейсхолдеров). Запуск сервера отклонён.';
       logger.error(errMsg);
       throw new Error(errMsg);
     }
-    logger.warn('JWT_SECRET is missing from environment. Using fallback (NOT safe for production).');
-    jwtSecret = 'loop_secret_fallback_12345';
+    const hasDb = Boolean(process.env.DATABASE_URL?.trim() || process.env.MY_DATABASE_URL?.trim() || process.env.SQL_HOST?.trim());
+    if (!hasDb) {
+      const errMsg = 'FATAL: В production-режиме (NODE_ENV=production) обязательно наличие переменной DATABASE_URL / NEON_DATABASE_URL. Запуск сервера отклонён.';
+      logger.error(errMsg);
+      throw new Error(errMsg);
+    }
+  } else {
+    if (!jwtSecret) {
+      logger.warn('JWT_SECRET is missing from environment. Using fallback (NOT safe for production).');
+      jwtSecret = 'loop_secret_fallback_12345';
+    }
   }
 
   if (!process.env.GROQ_API_KEY) {

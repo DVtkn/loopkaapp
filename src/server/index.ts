@@ -22,11 +22,12 @@ import { chatRouter, aiRouter } from "./modules/chat/chat.routes.ts";
 import { analyticsRouter } from "./modules/analytics/analytics.routes.ts";
 import { photoRouter } from "./modules/photos/photos.routes.ts";
 import { realtimeRouter, pushRouter } from "./modules/realtime/realtime.routes.ts";
+import { testsRouter } from "./modules/tests/tests.routes.ts";
 
 export { logger, callGroqChat };
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 // Database schema initialization & indexes creation
 async function initDatabase() {
@@ -131,6 +132,77 @@ async function initDatabase() {
         created_at timestamp with time zone NOT NULL DEFAULT NOW()
       );
 
+      CREATE TABLE IF NOT EXISTS test_sessions (
+        id text PRIMARY KEY,
+        test_id text NOT NULL,
+        couple_id text NOT NULL,
+        test_class text NOT NULL DEFAULT 'couple',
+        status text NOT NULL DEFAULT 'in_progress',
+        completed_at timestamp with time zone,
+        created_at timestamp with time zone NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS test_answers (
+        id text PRIMARY KEY,
+        session_id text NOT NULL,
+        user_id text NOT NULL,
+        question_id text NOT NULL,
+        selected_value integer NOT NULL,
+        created_at timestamp with time zone NOT NULL DEFAULT NOW(),
+        UNIQUE (session_id, user_id, question_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS couple_reports (
+        id text PRIMARY KEY,
+        couple_id text NOT NULL,
+        compatibility_score integer NOT NULL,
+        archetype_title text NOT NULL,
+        summary text NOT NULL,
+        report_payload jsonb NOT NULL,
+        generated_at timestamp with time zone NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS date_events (
+        id text PRIMARY KEY,
+        couple_id text NOT NULL,
+        title text NOT NULL,
+        description text,
+        location text,
+        event_date text NOT NULL,
+        status text NOT NULL DEFAULT 'planned',
+        created_at timestamp with time zone NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS care_notes (
+        id text PRIMARY KEY,
+        couple_id text NOT NULL,
+        author_login text NOT NULL,
+        target_login text NOT NULL,
+        content text NOT NULL,
+        category text NOT NULL DEFAULT 'general',
+        is_completed boolean NOT NULL DEFAULT false,
+        created_at timestamp with time zone NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS time_capsules (
+        id text PRIMARY KEY,
+        couple_id text NOT NULL,
+        author_login text NOT NULL,
+        title text NOT NULL,
+        content text NOT NULL,
+        open_at text NOT NULL,
+        is_opened boolean NOT NULL DEFAULT false,
+        created_at timestamp with time zone NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id text PRIMARY KEY,
+        user_login text NOT NULL,
+        couple_id text,
+        subscription jsonb NOT NULL,
+        created_at timestamp with time zone NOT NULL DEFAULT NOW()
+      );
+
       -- Индексы производительности (Drizzle & PostgreSQL)
       CREATE INDEX IF NOT EXISTS users_partner_login_idx ON users(partner_login);
       CREATE INDEX IF NOT EXISTS pair_requests_from_to_idx ON pair_requests(from_login, to_login);
@@ -141,6 +213,15 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS ai_insights_couple_created_idx ON ai_insights(couple_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS photos_couple_id_idx ON photos(couple_id);
       CREATE INDEX IF NOT EXISTS photos_created_at_idx ON photos(created_at DESC);
+      CREATE INDEX IF NOT EXISTS test_sessions_couple_id_idx ON test_sessions(couple_id);
+      CREATE INDEX IF NOT EXISTS test_sessions_test_id_idx ON test_sessions(test_id);
+      CREATE INDEX IF NOT EXISTS test_answers_session_idx ON test_answers(session_id);
+      CREATE INDEX IF NOT EXISTS test_answers_user_idx ON test_answers(user_id);
+      CREATE INDEX IF NOT EXISTS couple_reports_couple_id_idx ON couple_reports(couple_id);
+      CREATE INDEX IF NOT EXISTS date_events_couple_id_idx ON date_events(couple_id);
+      CREATE INDEX IF NOT EXISTS care_notes_couple_id_idx ON care_notes(couple_id);
+      CREATE INDEX IF NOT EXISTS time_capsules_couple_id_idx ON time_capsules(couple_id);
+      CREATE INDEX IF NOT EXISTS push_subscriptions_user_idx ON push_subscriptions(user_login);
     `);
     logger.info("Таблицы и индексы базы данных успешно проверены/созданы в PostgreSQL");
   } catch (err: unknown) {
@@ -262,6 +343,7 @@ app.use("/api/couple", realtimeRouter);
 app.use("/api/chat", chatRouter);
 app.use("/api/ai", aiRouter);
 app.use("/api/analytics", analyticsRouter);
+app.use("/api/tests", testsRouter);
 app.use("/api/photos", photoRouter);
 app.use("/api/push", pushRouter);
 

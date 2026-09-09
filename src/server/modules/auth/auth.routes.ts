@@ -47,8 +47,8 @@ authRouter.post("/sync", async (req, res, next) => {
 
 authRouter.post("/register", registerLimiter, validateBody(registerSchema), async (req, res, next) => {
   try {
-    const { login, password, name } = req.body;
-    const result = await registerUser({ login, password, name });
+    const { login, password, name, gender } = req.body;
+    const result = await registerUser({ login, password, name, gender });
     return res.status(201).json(result);
   } catch (err) {
     next(err);

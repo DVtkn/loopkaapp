@@ -61,7 +61,7 @@ export async function getAllUsersSafe() {
   return Object.values(userMap);
 }
 
-export async function registerUser(params: { login: string; password: string; name?: string }) {
+export async function registerUser(params: { login: string; password: string; name?: string; gender: "male" | "female" }) {
   const cleanLogin = String(params.login).trim().toLowerCase().replace(/^@/, "");
 
   const existing = await findUserByLogin(cleanLogin);
@@ -79,7 +79,7 @@ export async function registerUser(params: { login: string; password: string; na
     login: cleanLogin,
     passwordHash,
     name: params.name?.trim() || cleanLogin,
-    gender: null,
+    gender: params.gender,
     avatarEmoji: "sparkles",
     partnerLogin: null,
     pairedAt: null,

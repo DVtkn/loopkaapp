@@ -15,7 +15,7 @@
       "pairedAt": "2026-09-02 15:11:00.176+00",
       "startDate": "2025-07-05",
       "gender": "male",
-      "lastActiveAt": "2026-09-07T11:27:03.440Z"
+      "lastActiveAt": "2026-09-09T08:51:43.600Z"
     },
     "vyatkin": {
       "id": "u_1787487455168",
@@ -5039,6 +5039,57 @@
       "currentMood": null,
       "lastActiveAt": "2026-09-09T05:16:52.397Z",
       "createdAt": "2026-09-09T05:16:52.397Z"
+    },
+    "u1_mttv1cg9": {
+      "id": "f76447d1-3edb-494a-bd9e-e83b6a39ebe9",
+      "login": "u1_mttv1cg9",
+      "passwordHash": "$2b$10$qBTNttkgc7cYZKcYgT48WetpJNywMQI./dHfQOwqWGSfbaszUjfj.",
+      "name": "User 1",
+      "gender": null,
+      "avatarEmoji": "sparkles",
+      "partnerLogin": "u2_mttv1cg9",
+      "pairedAt": "2026-09-09T08:52:30.930Z",
+      "startDate": null,
+      "city": null,
+      "loveLanguage": null,
+      "attachmentStyle": null,
+      "currentMood": null,
+      "lastActiveAt": "2026-09-09T08:52:28.107Z",
+      "createdAt": "2026-09-09T08:52:28.107Z"
+    },
+    "u2_mttv1cg9": {
+      "id": "543c6a8b-db28-431f-9da0-162b2d17b4f7",
+      "login": "u2_mttv1cg9",
+      "passwordHash": "$2b$10$rnwUYSONlafpXZUxkbbvcuj.hz5AE1H23T4By/mw0osSU/Edazh4u",
+      "name": "User 2",
+      "gender": null,
+      "avatarEmoji": "sparkles",
+      "partnerLogin": "u1_mttv1cg9",
+      "pairedAt": "2026-09-09T08:52:30.930Z",
+      "startDate": null,
+      "city": null,
+      "loveLanguage": null,
+      "attachmentStyle": null,
+      "currentMood": null,
+      "lastActiveAt": "2026-09-09T08:52:28.417Z",
+      "createdAt": "2026-09-09T08:52:28.417Z"
+    },
+    "u3_mttv1cg9": {
+      "id": "7df3d53d-62f7-446d-a2bb-2c509c5b38f5",
+      "login": "u3_mttv1cg9",
+      "passwordHash": "$2b$10$3u3iUnC0oCOKUzNlPqBMD.tWrMJ8KfOH.yj7TAE/rYmtgLNq1bTQy",
+      "name": "User 3",
+      "gender": null,
+      "avatarEmoji": "sparkles",
+      "partnerLogin": null,
+      "pairedAt": null,
+      "startDate": null,
+      "city": null,
+      "loveLanguage": null,
+      "attachmentStyle": null,
+      "currentMood": null,
+      "lastActiveAt": "2026-09-09T08:52:28.715Z",
+      "createdAt": "2026-09-09T08:52:28.715Z"
     }
   },
   "pairRequests": [
@@ -7962,7 +8013,7 @@
         }
       ],
       "venues": [],
-      "coupleXP": 125,
+      "coupleXP": 185,
       "loveTaps": [
         {
           "id": "tap-1788791355171",
@@ -8235,6 +8286,78 @@
           "category": "tap",
           "partnerId": "partner1",
           "timestamp": "2026-09-08T12:10:37.118Z"
+        },
+        {
+          "id": "xp-1788936972210-p74n",
+          "points": 5,
+          "reason": "Быстрое внимание: Dmitry обнял(а) вас ❤️",
+          "category": "tap",
+          "partnerId": "partner1",
+          "timestamp": "2026-09-09T06:56:12.210Z"
+        },
+        {
+          "id": "xp-1788939150287-7rw1",
+          "points": 5,
+          "reason": "Быстрое внимание: Dmitry обнял(а) вас ❤️",
+          "category": "tap",
+          "partnerId": "partner1",
+          "timestamp": "2026-09-09T07:32:30.287Z"
+        },
+        {
+          "id": "xp-1788939719715-q888",
+          "points": 5,
+          "reason": "Быстрое внимание: Anna обнял(а) вас ❤️",
+          "category": "tap",
+          "partnerId": "partner1",
+          "timestamp": "2026-09-09T07:41:59.715Z"
+        },
+        {
+          "id": "xp-1788939670051-j4vg",
+          "points": 5,
+          "reason": "Быстрое внимание: Anna: Скучаю",
+          "category": "tap",
+          "partnerId": "partner1",
+          "timestamp": "2026-09-09T07:41:10.051Z"
+        },
+        {
+          "id": "xp-1788939894260-9sie",
+          "points": 20,
+          "reason": "Создано приглашение на свидание",
+          "category": "date",
+          "partnerId": "partner1",
+          "timestamp": "2026-09-09T07:44:54.260Z"
+        },
+        {
+          "id": "xp-1788939984938-2anc",
+          "points": 5,
+          "reason": "Быстрое внимание: Dmitry обнял(а) вас ❤️",
+          "category": "tap",
+          "partnerId": "partner1",
+          "timestamp": "2026-09-09T07:46:24.940Z"
+        },
+        {
+          "id": "xp-1788940030432-fuam",
+          "points": 5,
+          "reason": "Быстрое внимание: Dmitry обнял(а) вас ❤️",
+          "category": "tap",
+          "partnerId": "partner1",
+          "timestamp": "2026-09-09T07:47:10.432Z"
+        },
+        {
+          "id": "xp-1788940032319-gb75",
+          "points": 5,
+          "reason": "Быстрое внимание: Dmitry: Поцелуй",
+          "category": "tap",
+          "partnerId": "partner1",
+          "timestamp": "2026-09-09T07:47:12.319Z"
+        },
+        {
+          "id": "xp-1788940580640-nfrx",
+          "points": 20,
+          "reason": "Создано приглашение на свидание",
+          "category": "date",
+          "partnerId": "partner1",
+          "timestamp": "2026-09-09T07:56:20.640Z"
         }
       ],
       "challenges": [
@@ -8278,6 +8401,24 @@
           "recipientId": "partner2",
           "chosenLocation": "Наше особенное свидание",
           "invitationNote": "Давай выберем классный фильм и проведём вечер в кино под тёплым пледом"
+        },
+        {
+          "id": "inv-1788939894260",
+          "status": "PENDING",
+          "senderId": "partner1",
+          "createdAt": "2026-09-09T07:44:54.260Z",
+          "recipientId": "partner2",
+          "chosenLocation": "Наше особенное свидание",
+          "invitationNote": "Приглашаю тебя на романтический ужин при свечах в красивом ресторане"
+        },
+        {
+          "id": "inv-1788940580640",
+          "status": "PENDING",
+          "senderId": "partner1",
+          "createdAt": "2026-09-09T07:56:20.640Z",
+          "recipientId": "partner2",
+          "chosenLocation": "Наше особенное свидание",
+          "invitationNote": "Пойдём погуляем в красивом парке на свежем воздухе"
         }
       ],
       "moodHistory": [
@@ -8367,7 +8508,7 @@
           "email": "",
           "login": "dmitry",
           "avatar": "✨",
-          "gender": null,
+          "gender": "male",
           "birthDate": "",
           "currentMood": {
             "note": "",
@@ -8375,7 +8516,7 @@
             "label": "Вдохновение",
             "updatedAt": "2026-09-08T09:32:34.996Z"
           },
-          "lastActiveAt": null,
+          "lastActiveAt": "2026-09-09T08:51:43.600Z",
           "loveLanguage": "Пройдите тест",
           "attachmentStyle": "Пройдите тест"
         },
@@ -9427,6 +9568,57 @@
             "emoji": "calm",
             "label": "Спокойно",
             "updatedAt": "2026-09-09T05:16:54.297Z"
+          },
+          "loveLanguage": "Пройдите тест",
+          "attachmentStyle": "Пройдите тест"
+        },
+        "levelName": "Первая искра",
+        "startDate": "2026-09-09",
+        "testsCompletedCount": 0
+      },
+      "testsCompletedCount": 0,
+      "level": 1,
+      "levelName": "Первая искра",
+      "questionOfTheDay": {
+        "id": "q1",
+        "question": "How are you?",
+        "myAnswer": "Good",
+        "partnerAnswer": null
+      }
+    },
+    "u1_mttv1cg9_u2_mttv1cg9": {
+      "coupleProfile": {
+        "id": "c-1788943951732",
+        "city": "Москва",
+        "level": 1,
+        "status": "ACTIVE",
+        "linkCode": "LOOP-4149",
+        "partner1": {
+          "id": "partner1",
+          "name": "User 2",
+          "email": "",
+          "login": "u2_mttv1cg9",
+          "avatar": "sparkles",
+          "gender": null,
+          "currentMood": {
+            "emoji": "calm",
+            "label": "Спокойно",
+            "updatedAt": "2026-09-09T08:52:30.930Z"
+          },
+          "loveLanguage": "Пройдите тест",
+          "attachmentStyle": "Пройдите тест"
+        },
+        "partner2": {
+          "id": "partner2",
+          "name": "User 1",
+          "email": "",
+          "login": "u1_mttv1cg9",
+          "avatar": "sparkles",
+          "gender": null,
+          "currentMood": {
+            "emoji": "calm",
+            "label": "Спокойно",
+            "updatedAt": "2026-09-09T08:52:30.930Z"
           },
           "loveLanguage": "Пройдите тест",
           "attachmentStyle": "Пройдите тест"

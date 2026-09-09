@@ -227,7 +227,7 @@ export function mergeCoupleData(existing: any, incoming: any): any {
   if (!incoming) return existing || {};
 
   const merged = { ...existing, ...incoming };
-  
+
   // SECURITY STRIP: Prevent client from forging calculated levels or XP
   if (incoming.level !== undefined) merged.level = existing.level || 1;
   if (incoming.levelName !== undefined) merged.levelName = existing.levelName || 'Первый шаг';

@@ -1,4 +1,4 @@
-import { users, pairRequests, coupleData, chatMessages, relationshipMetrics, aiInsights } from "../db/schema.ts";
+import { users, pairRequests, coupleData, chatMessages, relationshipMetrics, aiInsights } from "./db/schema.ts";
 
 export type DbUser = typeof users.$inferSelect;
 export type DbUserInsert = typeof users.$inferInsert;
@@ -17,6 +17,7 @@ export type DbRelationshipMetricInsert = typeof relationshipMetrics.$inferInsert
 
 export type DbAiInsight = typeof aiInsights.$inferSelect;
 export type DbAiInsightInsert = typeof aiInsights.$inferInsert;
+export type AiInsightContent = any;
 
 export interface SafeUser {
   id: string;

@@ -106,7 +106,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterApp }) => {
         
         {/* Main Pitch */}
         <motion.div variants={itemVariants} className="mb-2">
-          <p className="text-[11px] font-extrabold text-[var(--accent)] uppercase tracking-[0.15em] mb-3 ml-1 opacity-90">
+          <p className="text-[11px] font-extrabold text-[var(--accent)] tracking-[0.15em] mb-3 ml-1 opacity-90">
             Пространство для пары
           </p>
           <h1 className="text-4xl sm:text-5xl font-black tracking-tighter text-[var(--text)] leading-[1.05] mb-4">

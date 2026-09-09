@@ -275,7 +275,7 @@ export const DateWheel: React.FC<DateWheelProps> = ({ onSelectIdea }) => {
                   {selectedIdea.emoji}
                 </span>
                 <div>
-                  <span className="text-[10px] font-bold text-[var(--accent)] uppercase tracking-wider">
+                  <span className="text-[10px] font-bold text-[var(--accent)]">
                     Выбор колеса · {selectedIdea.category}
                   </span>
                   <h4 className="text-sm sm:text-base font-bold text-[var(--text)]">

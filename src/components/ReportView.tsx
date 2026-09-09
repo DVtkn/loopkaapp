@@ -137,10 +137,10 @@ export const ReportView: React.FC<{
         {analysis.hasData && (
           <div className="p-4 sm:p-5 rounded-2xl bg-[var(--surface)] border border-[var(--divider)] flex items-center justify-between gap-3 shadow-2xs">
             <div className="space-y-0.5 min-w-0">
-              <span className="text-[11px] font-bold text-[var(--accent)] uppercase tracking-wide">
+              <span className="text-[11px] font-bold text-[var(--accent)]">
                 Психологический архетип пары
               </span>
-              <h3 className="text-base font-bold text-[var(--text)] truncate">
+              <h3 className="text-base font-bold text-[var(--text)]">
                 {analysis.archetypeTitle || 'Гармоничный союз'}
               </h3>
               <p className="text-xs text-[var(--text-2)] line-clamp-1">
@@ -174,7 +174,7 @@ export const ReportView: React.FC<{
             <div className="space-y-3 animate-fadeIn">
               {analysis.strengths.length > 0 ? (
                 <div className="space-y-2.5">
-                  <div className="px-1 text-xs font-bold uppercase tracking-wider text-[var(--text-2)]">
+                  <div className="px-1 text-xs font-bold text-[var(--text-2)]">
                     Точки наибольшей близости
                   </div>
                   {analysis.strengths.map((st, i) => (

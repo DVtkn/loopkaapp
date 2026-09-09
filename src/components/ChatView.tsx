@@ -157,7 +157,7 @@ export const ChatView: React.FC = () => {
 
             <div className="leading-tight min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="text-base font-semibold text-[var(--text)] truncate">
+                <span className="text-base font-semibold text-[var(--text)]">
                   {owlMode === 'solo' ? 'Сова' : otherPartner.name}
                 </span>
                 {owlMode === 'solo' && (
@@ -166,7 +166,7 @@ export const ChatView: React.FC = () => {
                   </span>
                 )}
               </div>
-              <div className="text-xs truncate font-normal mt-0.5 flex items-center gap-1">
+              <div className="text-xs font-normal mt-0.5 flex items-center gap-1">
                 {owlMode === 'solo' ? (
                   <span className="text-[var(--text-2)]">Сеанс для {currentPartner.name}</span>
                 ) : isOnline(otherPartner.lastActiveAt) ? (

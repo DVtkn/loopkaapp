@@ -1,7 +1,8 @@
 import crypto from "crypto";
-import { createPool, isSqlConfigured } from "../../db/index.ts";
+import { createPool, isSqlConfigured } from "../db/client.ts";
 import { logger } from "../logger.ts";
 import { readEmergencyFile, writeEmergencyFile } from "./storageService.ts";
+import { DatabaseUnavailableError } from "../shared/errors/index.ts";
 
 export interface PhotoMetadata {
   id: string;
@@ -28,6 +29,8 @@ export interface SavePhotoInput {
   width?: number | null;
   height?: number | null;
 }
+
+const isProd = () => process.env.NODE_ENV === "production";
 
 /**
  * Валидация MIME-типа по реальным сигнатурам байтов (Magic Numbers)
@@ -62,9 +65,6 @@ export function detectMimeType(buffer: Buffer): 'image/jpeg' | 'image/png' | 'im
 
 /**
  * Сервис хранения фотоархива (PhotoStorageService).
- * Инкапсулирует сохранение, чтение байтов и метаданных.
- * В будущем позволяет легко мигрировать на внешнее хранилище (GCS, S3, Cloudinary)
- * без изменения клиентского API.
  */
 class PhotoStorageService {
   /**
@@ -77,8 +77,44 @@ class PhotoStorageService {
     const width = typeof input.width === 'number' ? input.width : null;
     const height = typeof input.height === 'number' ? input.height : null;
 
-    let savedInPostgres = false;
+    if (isProd()) {
+      if (!isSqlConfigured()) {
+        throw new DatabaseUnavailableError();
+      }
+      try {
+        const pool = createPool();
+        if (!pool) throw new DatabaseUnavailableError();
+        await pool.query(
+          `INSERT INTO photos (id, couple_id, uploader_login, image_bytes, mime_type, caption, width, height, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+          [
+            id,
+            input.coupleId,
+            input.uploaderLogin,
+            input.imageBytes,
+            input.mimeType,
+            caption,
+            width,
+            height,
+          ]
+        );
+        return {
+          id,
+          coupleId: input.coupleId,
+          uploaderLogin: input.uploaderLogin,
+          mimeType: input.mimeType,
+          caption,
+          width,
+          height,
+          createdAt: now,
+        };
+      } catch (err) {
+        logger.error("Ошибка сохранения фото в PostgreSQL в production (fail-fast)", err, { id, coupleId: input.coupleId });
+        throw new DatabaseUnavailableError();
+      }
+    }
 
+    // Dev mode with fallback
     if (isSqlConfigured()) {
       try {
         const pool = createPool();
@@ -97,14 +133,12 @@ class PhotoStorageService {
               height,
             ]
           );
-          savedInPostgres = true;
         }
       } catch (err) {
         logger.error("Ошибка сохранения фото в PostgreSQL, fallback на JSON", err, { id, coupleId: input.coupleId });
       }
     }
 
-    // Зеркалирование / локальный fallback для устойчивости контейнера
     try {
       const store = readEmergencyFile();
       if (!store.photos) store.photos = [];
@@ -118,11 +152,9 @@ class PhotoStorageService {
         width,
         height,
         createdAt: now,
-        // Храним base64 в json только как резерв при недоступности SQL
         base64: input.imageBytes.toString('base64'),
       });
 
-      // Ограничиваем локальный JSON резерв последними 50 фото, чтобы не раздувать файл
       if (store.photos.length > 50) {
         store.photos = store.photos.slice(0, 50);
       }
@@ -132,7 +164,7 @@ class PhotoStorageService {
       logger.warn("Не удалось записать фото в аварийный JSON-файл:", undefined, err);
     }
 
-    const metadata: PhotoMetadata = {
+    return {
       id,
       coupleId: input.coupleId,
       uploaderLogin: input.uploaderLogin,
@@ -142,8 +174,6 @@ class PhotoStorageService {
       height,
       createdAt: now,
     };
-
-    return metadata;
   }
 
   /**
@@ -153,6 +183,40 @@ class PhotoStorageService {
     const safeLimit = Math.min(Math.max(1, limit), 100);
     const safeOffset = Math.max(0, offset);
 
+    if (isProd()) {
+      if (!isSqlConfigured()) {
+        throw new DatabaseUnavailableError();
+      }
+      try {
+        const pool = createPool();
+        if (!pool) throw new DatabaseUnavailableError();
+        const res = await pool.query(
+          `SELECT id, couple_id as "coupleId", uploader_login as "uploaderLogin", 
+                  mime_type as "mimeType", caption, width, height, created_at as "createdAt"
+           FROM photos
+           WHERE couple_id = $1
+           ORDER BY created_at DESC
+           LIMIT $2 OFFSET $3`,
+          [coupleId, safeLimit, safeOffset]
+        );
+
+        return res.rows.map((r) => ({
+          id: r.id,
+          coupleId: r.coupleId,
+          uploaderLogin: r.uploaderLogin,
+          mimeType: r.mimeType,
+          caption: r.caption,
+          width: r.width,
+          height: r.height,
+          createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
+        }));
+      } catch (err) {
+        logger.error("Ошибка загрузки списка фото из PostgreSQL в production (fail-fast)", err, { coupleId });
+        throw new DatabaseUnavailableError();
+      }
+    }
+
+    // Dev mode
     if (isSqlConfigured()) {
       try {
         const pool = createPool();
@@ -183,7 +247,6 @@ class PhotoStorageService {
       }
     }
 
-    // Fallback на локальный JSON
     try {
       const store = readEmergencyFile();
       const couplePhotos = (store.photos || [])
@@ -209,6 +272,43 @@ class PhotoStorageService {
    * Получить метаданные одного фото (без байтов)
    */
   async getPhotoById(id: string): Promise<PhotoMetadata | null> {
+    if (isProd()) {
+      if (!isSqlConfigured()) {
+        throw new DatabaseUnavailableError();
+      }
+      try {
+        const pool = createPool();
+        if (!pool) throw new DatabaseUnavailableError();
+        const res = await pool.query(
+          `SELECT id, couple_id as "coupleId", uploader_login as "uploaderLogin", 
+                  mime_type as "mimeType", caption, width, height, created_at as "createdAt"
+           FROM photos
+           WHERE id = $1
+           LIMIT 1`,
+          [id]
+        );
+
+        if (res.rows.length > 0) {
+          const r = res.rows[0];
+          return {
+            id: r.id,
+            coupleId: r.coupleId,
+            uploaderLogin: r.uploaderLogin,
+            mimeType: r.mimeType,
+            caption: r.caption,
+            width: r.width,
+            height: r.height,
+            createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
+          };
+        }
+        return null;
+      } catch (err) {
+        logger.error("Ошибка поиска фото в PostgreSQL в production (fail-fast)", err, { id });
+        throw new DatabaseUnavailableError();
+      }
+    }
+
+    // Dev mode
     if (isSqlConfigured()) {
       try {
         const pool = createPool();
@@ -241,7 +341,6 @@ class PhotoStorageService {
       }
     }
 
-    // Fallback на локальный JSON
     try {
       const store = readEmergencyFile();
       const found = (store.photos || []).find((p: any) => p.id === id);
@@ -266,6 +365,43 @@ class PhotoStorageService {
    * Получить бинарные данные (Buffer) фото и MIME-тип
    */
   async getPhotoBytes(id: string): Promise<{ buffer: Buffer; mimeType: string; coupleId: string; uploaderLogin: string } | null> {
+    if (isProd()) {
+      if (!isSqlConfigured()) {
+        throw new DatabaseUnavailableError();
+      }
+      try {
+        const pool = createPool();
+        if (!pool) throw new DatabaseUnavailableError();
+        const res = await pool.query(
+          `SELECT id, couple_id as "coupleId", uploader_login as "uploaderLogin", 
+                  image_bytes as "imageBytes", mime_type as "mimeType"
+           FROM photos
+           WHERE id = $1
+           LIMIT 1`,
+          [id]
+        );
+
+        if (res.rows.length > 0) {
+          const r = res.rows[0];
+          const buffer = Buffer.isBuffer(r.imageBytes)
+            ? r.imageBytes
+            : Buffer.from(r.imageBytes);
+
+          return {
+            buffer,
+            mimeType: r.mimeType,
+            coupleId: r.coupleId,
+            uploaderLogin: r.uploaderLogin,
+          };
+        }
+        return null;
+      } catch (err) {
+        logger.error("Ошибка чтения бинарных данных фото из PostgreSQL в production (fail-fast)", err, { id });
+        throw new DatabaseUnavailableError();
+      }
+    }
+
+    // Dev mode
     if (isSqlConfigured()) {
       try {
         const pool = createPool();
@@ -298,7 +434,6 @@ class PhotoStorageService {
       }
     }
 
-    // Fallback на локальный JSON
     try {
       const store = readEmergencyFile();
       const found = (store.photos || []).find((p: any) => p.id === id);
@@ -319,8 +454,23 @@ class PhotoStorageService {
    * Удалить фото
    */
   async deletePhoto(id: string): Promise<boolean> {
-    let deleted = false;
+    if (isProd()) {
+      if (!isSqlConfigured()) {
+        throw new DatabaseUnavailableError();
+      }
+      try {
+        const pool = createPool();
+        if (!pool) throw new DatabaseUnavailableError();
+        const res = await pool.query(`DELETE FROM photos WHERE id = $1`, [id]);
+        return (res.rowCount ?? 0) > 0;
+      } catch (err) {
+        logger.error("Ошибка удаления фото из PostgreSQL в production (fail-fast)", err, { id });
+        throw new DatabaseUnavailableError();
+      }
+    }
 
+    // Dev mode
+    let deleted = false;
     if (isSqlConfigured()) {
       try {
         const pool = createPool();
@@ -335,7 +485,6 @@ class PhotoStorageService {
       }
     }
 
-    // Удаление из аварийного JSON
     try {
       const store = readEmergencyFile();
       if (store.photos) {

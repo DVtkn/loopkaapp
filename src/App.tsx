@@ -1,23 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { CoupleProvider, useCouple } from './context/CoupleContext';
-import { Header } from './components/Header';
-import { Navigation } from './components/Navigation';
-import { AuthView } from './components/AuthView';
-import { DashboardView } from './components/DashboardView';
-import { UsView } from './components/UsView';
-import { DatesView } from './components/DatesView';
-import { ChatView } from './components/ChatView';
-import { SettingsView } from './components/SettingsView';
-import { TestsView } from './components/TestsView';
-import { CareBaseView } from './components/CareBaseView';
-import { DeepTalkView } from './components/DeepTalkView';
-import { IOSInstallPrompt } from './components/IOSInstallPrompt';
-import { AmbientBackground } from './components/AmbientBackground';
-import { NavigationTab } from './types';
-import { LoopLogo } from './components/LoopLogo';
-import { AchievementsModal } from './components/AchievementsModal';
-import { PartnerTouchToast } from './components/PartnerTouchToast';
+import { CoupleProvider, useCouple } from './context/CoupleContext.tsx';
+import { Header } from './components/Header.tsx';
+import { Navigation } from './components/Navigation.tsx';
+import { AuthView } from './components/AuthView.tsx';
+import { DashboardView } from './components/DashboardView.tsx';
+import { IOSInstallPrompt } from './components/IOSInstallPrompt.tsx';
+import { AmbientBackground } from './components/AmbientBackground.tsx';
+import { NavigationTab } from './types.ts';
+import { PartnerTouchToast } from './components/PartnerTouchToast.tsx';
+
+// Code splitting / lazy loading for non-initial views
+const UsView = lazy(() => import('./components/UsView.tsx').then((m) => ({ default: m.UsView })));
+const DatesView = lazy(() => import('./components/DatesView.tsx').then((m) => ({ default: m.DatesView })));
+const ChatView = lazy(() => import('./components/ChatView.tsx').then((m) => ({ default: m.ChatView })));
+const SettingsView = lazy(() => import('./components/SettingsView.tsx').then((m) => ({ default: m.SettingsView })));
+const TestsView = lazy(() => import('./components/TestsView.tsx').then((m) => ({ default: m.TestsView })));
+const CareBaseView = lazy(() => import('./components/CareBaseView.tsx').then((m) => ({ default: m.CareBaseView })));
+const DeepTalkView = lazy(() => import('./components/DeepTalkView.tsx').then((m) => ({ default: m.DeepTalkView })));
+const AchievementsModal = lazy(() => import('./components/AchievementsModal.tsx').then((m) => ({ default: m.AchievementsModal })));
+
+const ViewLoadingFallback: React.FC = () => (
+  <div className="flex-1 flex items-center justify-center min-h-[300px] p-6 animate-pulse">
+    <div className="w-8 h-8 rounded-full border-2 border-[var(--accent)] border-t-transparent animate-spin" />
+  </div>
+);
 
 const MainLayout: React.FC = () => {
   const { isOnboarded, currentUser, activeTab, setActiveTab, activePartnerTouch, dismissPartnerTouch, sendTouchAction } = useCouple();
@@ -78,29 +85,61 @@ const MainLayout: React.FC = () => {
       case 'dashboard':
         return <DashboardView setActiveTab={setActiveTab} />;
       case 'us':
-        return <UsView />;
+        return (
+          <Suspense fallback={<ViewLoadingFallback />}>
+            <UsView />
+          </Suspense>
+        );
       case 'tests':
-        return <TestsView initialMode="catalog" />;
+        return (
+          <Suspense fallback={<ViewLoadingFallback />}>
+            <TestsView initialMode="catalog" />
+          </Suspense>
+        );
       case 'report':
-        return <TestsView initialMode="report" />;
+        return (
+          <Suspense fallback={<ViewLoadingFallback />}>
+            <TestsView initialMode="report" />
+          </Suspense>
+        );
       case 'care':
-        return <CareBaseView />;
+        return (
+          <Suspense fallback={<ViewLoadingFallback />}>
+            <CareBaseView />
+          </Suspense>
+        );
       case 'deeptalk':
-        return <DeepTalkView onBack={() => setActiveTab('us')} />;
+        return (
+          <Suspense fallback={<ViewLoadingFallback />}>
+            <DeepTalkView onBack={() => setActiveTab('us')} />
+          </Suspense>
+        );
       case 'dates':
-        return <DatesView />;
+        return (
+          <Suspense fallback={<ViewLoadingFallback />}>
+            <DatesView />
+          </Suspense>
+        );
       case 'chat':
       case 'owl':
-        return <ChatView />;
+        return (
+          <Suspense fallback={<ViewLoadingFallback />}>
+            <ChatView />
+          </Suspense>
+        );
       case 'profile':
       case 'settings':
-        return <SettingsView />;
+        return (
+          <Suspense fallback={<ViewLoadingFallback />}>
+            <SettingsView />
+          </Suspense>
+        );
       default:
         return <DashboardView setActiveTab={setActiveTab} />;
     }
   };
 
-    const isChatTab = activeTab === 'chat' || activeTab === 'owl';
+  const isChatTab = activeTab === 'chat' || activeTab === 'owl';
 
   return (
     <div className="h-full w-full text-[var(--text)] flex font-sans selection:bg-[var(--accent)]/20 selection:text-[var(--accent)] transition-colors overflow-hidden relative">
@@ -144,7 +183,7 @@ const MainLayout: React.FC = () => {
         <div className="md:hidden shrink-0 z-10">
           <Navigation 
             activeTab={activeTab} 
-            setActiveTab={setActiveTab}
+            setActiveTab={setActiveTab} 
             onTabChange={setActiveTab}
             onOpenAchievements={() => setShowAchievementsModal(true)}
           />
@@ -169,10 +208,12 @@ const MainLayout: React.FC = () => {
 
       <AnimatePresence>
         {showAchievementsModal && (
-          <AchievementsModal 
-            isOpen={showAchievementsModal} 
-            onClose={() => setShowAchievementsModal(false)} 
-          />
+          <Suspense fallback={null}>
+            <AchievementsModal 
+              isOpen={showAchievementsModal} 
+              onClose={() => setShowAchievementsModal(false)} 
+            />
+          </Suspense>
         )}
       </AnimatePresence>
     </div>

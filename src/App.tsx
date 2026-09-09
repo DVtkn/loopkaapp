@@ -1,18 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CoupleProvider, useCouple } from './context/CoupleContext';
 import { Header } from './components/Header';
 import { Navigation } from './components/Navigation';
 import { AuthView } from './components/AuthView';
 import { DashboardView } from './components/DashboardView';
-import { UsView } from './components/UsView';
-import { DatesView } from './components/DatesView';
-import { ChatView } from './components/ChatView';
-import { SettingsView } from './components/SettingsView';
-import { TestsView } from './components/TestsView';
-import { CareBaseView } from './components/CareBaseView';
-import { DeepTalkView } from './components/DeepTalkView';
 import { IOSInstallPrompt } from './components/IOSInstallPrompt';
+
+// Dynamic Lazy Imports for Heavy Views (Code Splitting)
+const UsView = lazy(() => import('./components/UsView').then(m => ({ default: m.UsView })));
+const DatesView = lazy(() => import('./components/DatesView').then(m => ({ default: m.DatesView })));
+const ChatView = lazy(() => import('./components/ChatView').then(m => ({ default: m.ChatView })));
+const SettingsView = lazy(() => import('./components/SettingsView').then(m => ({ default: m.SettingsView })));
+const TestsView = lazy(() => import('./components/TestsView').then(m => ({ default: m.TestsView })));
+const CareBaseView = lazy(() => import('./components/CareBaseView').then(m => ({ default: m.CareBaseView })));
+const DeepTalkView = lazy(() => import('./components/DeepTalkView').then(m => ({ default: m.DeepTalkView })));
+
+const ViewFallback = () => (
+  <div className="flex-1 flex flex-col items-center justify-center p-8 text-center min-h-[300px]">
+    <div className="w-8 h-8 border-3 border-[var(--accent)] border-t-transparent rounded-full animate-spin mb-3"></div>
+    <p className="text-sm text-[var(--text-2)] font-medium">Загрузка модуля...</p>
+  </div>
+);
 import { AmbientBackground } from './components/AmbientBackground';
 import { NavigationTab } from './types';
 import { LoopLogo } from './components/LoopLogo';
@@ -136,7 +145,9 @@ const MainLayout: React.FC = () => {
             transition={{ duration: 0.2, ease: [0.25, 1, 0.5, 1] }}
             className="flex-1 flex flex-col min-h-0 h-full w-full"
           >
-            {renderActiveView()}
+            <Suspense fallback={<ViewFallback />}>
+              {renderActiveView()}
+            </Suspense>
           </motion.div>
         </AnimatePresence>
         

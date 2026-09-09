@@ -45,6 +45,7 @@ import {
 import { safeGetStorage, safeSetStorage } from '../utils/safeStorage.ts';
 import { getCoupleLevelInfo } from '../utils/rankingEngine.ts';
 import { dispatchInAppNotification, playNotificationSound } from '../utils/pushManager.ts';
+import { getPartnerStatusDetails } from '../components/dashboard/PartnerStatusCard.tsx';
 
 // Modular sub-hooks
 import { useCoupleAuth } from './hooks/useCoupleAuth.ts';
@@ -198,6 +199,7 @@ export interface CoupleContextType {
   sendAIMessage: (text: string) => Promise<void>;
   partnerMessages: ChatMessage[];
   sendPartnerMessage: (text: string, isAi?: boolean) => Promise<void>;
+  fetchPartnerMessages: () => Promise<void>;
   isAITyping: boolean;
   unreadChatCount: number;
   clearUnreadChatCount: () => void;
@@ -205,6 +207,12 @@ export interface CoupleContextType {
   triggerConfetti: () => void;
   daysTogether: number;
   formattedTimeTogether: string;
+  isPartnerOnline: boolean;
+  partnerStatusDetails: {
+    isOnline: boolean;
+    statusText: string;
+    badgeText: string;
+  };
 }
 
 const CoupleContext = createContext<CoupleContextType | undefined>(undefined);
@@ -217,7 +225,12 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [activeTab, setActiveTabState] = useState<NavigationTab>(() => safeGetStorage('together_active_tab', 'home'));
   const [usSubTab, setUsSubTab] = useState<UsSubTab>('passport');
   const [datesSubTab, setDatesSubTab] = useState<DatesSubTab>('wheel');
-  const [owlMode, setOwlMode] = useState<OwlMode>('solo');
+  const [owlMode, setOwlModeState] = useState<OwlMode>(() => safeGetStorage('together_owl_mode', 'together'));
+
+  const setOwlMode = useCallback((m: OwlMode) => {
+    setOwlModeState(m);
+    safeSetStorage('together_owl_mode', m);
+  }, []);
 
   const setActiveTab = useCallback((tab: NavigationTab) => {
     setActiveTabState(tab);
@@ -312,7 +325,9 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   });
 
   // Chat & AI Messages
-  const [partnerMessages, setPartnerMessages] = useState<ChatMessage[]>([]);
+  const [partnerMessages, setPartnerMessages] = useState<ChatMessage[]>(() => {
+    return safeGetStorage<ChatMessage[]>('together_partner_messages', []);
+  });
   const [aiMessages, setAIMessages] = useState<AIMessage[]>(() => {
     const fallbackMessages: AIMessage[] = [
       {
@@ -390,6 +405,28 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   );
 
+  const fetchPartnerMessages = useCallback(async () => {
+    if (!currentUser) return;
+    const cleanMyLogin = currentUser.login.toLowerCase().trim().replace(/^@/, '');
+    const cleanPartnerLogin = currentUser.partnerLogin
+      ? currentUser.partnerLogin.toLowerCase().trim().replace(/^@/, '')
+      : null;
+    const coupleId = cleanPartnerLogin ? [cleanMyLogin, cleanPartnerLogin].sort().join('_') : cleanMyLogin;
+
+    try {
+      const msgsRes = await apiFetch(`/api/chat/messages?mode=together&coupleId=${encodeURIComponent(coupleId)}`);
+      if (msgsRes.ok) {
+        const msgsData = await msgsRes.json();
+        if (Array.isArray(msgsData.messages)) {
+          setPartnerMessages(msgsData.messages);
+          safeSetStorage('together_partner_messages', msgsData.messages);
+        }
+      }
+    } catch {
+      // safe fallback
+    }
+  }, [currentUser]);
+
   // Determine current partner ID dynamically
   const currentPartnerId = useMemo<PartnerId>(() => {
     if (!currentUser || !coupleProfile) return 'partner1';
@@ -398,6 +435,34 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (p2Login && myLogin === p2Login) return 'partner2';
     return 'partner1';
   }, [currentUser, coupleProfile]);
+
+  const otherPartner = useMemo(() => {
+    return currentPartnerId === 'partner1' ? coupleProfile?.partner2 : coupleProfile?.partner1;
+  }, [currentPartnerId, coupleProfile]);
+
+  const partnerStatusDetails = useMemo(() => {
+    const safeOther = otherPartner || {
+      id: currentPartnerId === 'partner1' ? 'partner2' : 'partner1',
+      name: 'Анна',
+      avatar: 'heart',
+      login: currentUser?.partnerLogin || 'anna',
+      gender: 'female',
+      lastActiveAt: new Date().toISOString(),
+    };
+    const partnerName =
+      safeOther.name && safeOther.name !== 'Партнёр не подключён'
+        ? safeOther.name
+        : currentUser?.partnerLogin || safeOther.login || 'Анна';
+
+    return getPartnerStatusDetails({
+      name: partnerName,
+      lastActiveAt: safeOther.lastActiveAt,
+      gender: safeOther.gender,
+      login: safeOther.login,
+    });
+  }, [otherPartner, currentPartnerId, currentUser]);
+
+  const isPartnerOnline = partnerStatusDetails.isOnline;
 
   const setCurrentPartnerId = useCallback((_id: PartnerId) => {
     // No-op in real backend mode
@@ -707,6 +772,49 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           const data = JSON.parse(event.data);
           if (data && data.senderLogin !== cleanLogin) {
             handleIncomingTouch(data);
+          }
+        } catch {
+          // ignore
+        }
+      });
+      eventSource.addEventListener('chat_message', (event: MessageEvent) => {
+        if (!isSubscribed) return;
+        try {
+          const data = JSON.parse(event.data);
+          const newMsg = data?.message || data;
+          if (newMsg && newMsg.id) {
+            setPartnerMessages((prev) => {
+              if (prev.some((m) => m.id === newMsg.id)) return prev;
+              const next = [...prev, newMsg];
+              safeSetStorage('together_partner_messages', next);
+              return next;
+            });
+            if (newMsg.senderLogin !== cleanLogin) {
+              dispatchInAppNotification({
+                title: newMsg.senderLogin === 'ai' ? 'Сова' : `@${newMsg.senderLogin}`,
+                body: newMsg.content,
+                icon: newMsg.senderLogin === 'ai' ? 'bot' : 'chat',
+              });
+              playNotificationSound();
+              setUnreadChatCount((c) => c + 1);
+            }
+          }
+        } catch {
+          // ignore
+        }
+      });
+      eventSource.addEventListener('new_message', (event: MessageEvent) => {
+        if (!isSubscribed) return;
+        try {
+          const data = JSON.parse(event.data);
+          const newMsg = data?.message || data;
+          if (newMsg && newMsg.id) {
+            setPartnerMessages((prev) => {
+              if (prev.some((m) => m.id === newMsg.id)) return prev;
+              const next = [...prev, newMsg];
+              safeSetStorage('together_partner_messages', next);
+              return next;
+            });
           }
         } catch {
           // ignore
@@ -1098,33 +1206,56 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const cleanPartnerLogin = partnerLogin ? partnerLogin.toLowerCase().replace(/^@/, '') : '';
     const targetCoupleId = cleanPartnerLogin
       ? [cleanMyLogin, cleanPartnerLogin].sort().join('_')
-      : coupleProfile?.id || 'default_couple';
+      : cleanMyLogin;
+
+    const tempId = crypto.randomUUID();
+    const msg: ChatMessage = {
+      id: tempId,
+      coupleId: targetCoupleId,
+      senderLogin: isAi ? 'ai' : currentUser.login,
+      role: isAi ? 'ai' : currentPartnerId === 'partner1' ? 'partner1' : 'partner2',
+      content: text,
+      isRead: true,
+      createdAt: new Date().toISOString(),
+    };
+
+    setPartnerMessages((prev) => {
+      const next = [...prev, msg];
+      safeSetStorage('together_partner_messages', next);
+      return next;
+    });
 
     try {
-      const msg = {
-        id: crypto.randomUUID(),
-        coupleId: targetCoupleId,
-        senderLogin: isAi ? 'ai' : currentUser.login,
-        role: isAi ? 'ai' : currentPartnerId === 'partner1' ? 'partner1' : 'partner2',
-        content: text,
-        createdAt: new Date().toISOString(),
-      };
-
-      setPartnerMessages((prev) => [...prev, msg as ChatMessage]);
-
-      await apiFetch('/api/chat/messages', {
+      const res = await apiFetch('/api/chat/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(msg),
+        body: JSON.stringify({
+          coupleId: targetCoupleId,
+          senderLogin: isAi ? 'ai' : cleanMyLogin,
+          role: isAi ? 'ai' : currentPartnerId === 'partner1' ? 'partner1' : 'partner2',
+          content: text,
+          mode: 'together',
+        }),
       });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.message) {
+          setPartnerMessages((prev) => {
+            const next = prev.map((m) => (m.id === tempId ? data.message : m));
+            safeSetStorage('together_partner_messages', next);
+            return next;
+          });
+        }
+      }
 
       if (!isAi && text.toLowerCase().includes('сов')) {
         setTimeout(() => {
           sendPartnerMessage('Я здесь! Слышу вас. Как я могу помочь?', true);
-        }, 1500);
+        }, 1200);
       }
     } catch (err) {
-      console.error(err);
+      console.error('Ошибка отправки сообщения партнёру', err);
     }
   };
 
@@ -1362,6 +1493,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         sendAIMessage,
         partnerMessages,
         sendPartnerMessage,
+        fetchPartnerMessages,
         isAITyping,
         unreadChatCount,
         clearUnreadChatCount,
@@ -1369,6 +1501,8 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         triggerConfetti,
         daysTogether,
         formattedTimeTogether,
+        isPartnerOnline,
+        partnerStatusDetails,
       }}
     >
       {children}

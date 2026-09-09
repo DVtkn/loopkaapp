@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { validateBody } from "../../shared/middleware/validation.ts";
 import { requireAuth, AuthenticatedRequest } from "../../shared/middleware/auth.middleware.ts";
-import { requirePairOwnership } from "../../shared/middleware/requirePairOwnership.ts";
+import { requirePairOwnership, isUserInCouple } from "../../shared/middleware/requirePairOwnership.ts";
 import { aiLimiter } from "../../shared/middleware/rateLimiter.ts";
+import { findUserByLogin } from "../../services/storageService.ts";
 import {
   chatMessageCreateSchema,
   aiChatMessageSchema,
@@ -17,15 +18,42 @@ import {
   generateSmartPsychologistReply,
   saveAIMessageToDb,
 } from "./chat.service.ts";
+import { sendSSEEventToUser } from "../../shared/utils/sse.ts";
 import { evaluateSafetyRisk } from "./safety.filter.ts";
 import { calculateCoupleAnalysis } from "../../../utils/psychologyEngine.ts";
 import { logger } from "../../shared/utils/logger.ts";
 
 export const chatRouter = Router();
 
-chatRouter.get("/messages/:coupleId", requireAuth, requirePairOwnership, async (req: AuthenticatedRequest, res, next) => {
+// 1. GET chat history (supports both /api/chat/messages, /api/chat/messages/:coupleId, and mode=together|solo)
+chatRouter.get(["/messages", "/messages/:coupleId", "/message"], requireAuth, async (req: AuthenticatedRequest, res, next) => {
   try {
-    const coupleId = String(req.params.coupleId || "");
+    const userLogin = req.user?.login;
+    if (!userLogin) {
+      return res.status(401).json({ error: "Необходима авторизация" });
+    }
+
+    const cleanUser = userLogin.toLowerCase().trim().replace(/^@/, "");
+    const mode = String(req.query.mode || "").toLowerCase();
+
+    // If solo mode requested
+    if (mode === "solo") {
+      const messages = await getAIMessages(cleanUser);
+      return res.json({ messages });
+    }
+
+    let coupleId = String(req.params.coupleId || req.query.coupleId || "").trim();
+    if (!coupleId) {
+      const userInDb = await findUserByLogin(cleanUser);
+      const partner = userInDb?.partnerLogin ? userInDb.partnerLogin.toLowerCase().trim().replace(/^@/, "") : null;
+      coupleId = partner ? [cleanUser, partner].sort().join("_") : cleanUser;
+    }
+
+    // IDOR protection
+    if (!isUserInCouple(coupleId, userLogin)) {
+      return res.status(403).json({ error: "Нет доступа к данной переписке" });
+    }
+
     const messages = await getCoupleChatMessages(coupleId);
     return res.json({ messages });
   } catch (err) {
@@ -34,17 +62,63 @@ chatRouter.get("/messages/:coupleId", requireAuth, requirePairOwnership, async (
   }
 });
 
-chatRouter.post("/messages", requireAuth, requirePairOwnership, validateBody(chatMessageCreateSchema), async (req: AuthenticatedRequest, res, next) => {
+// 2. POST send chat message (supports /api/chat/messages and /api/chat/message + real-time SSE broadcast)
+chatRouter.post(["/messages", "/message"], requireAuth, async (req: AuthenticatedRequest, res, next) => {
   try {
-    const { coupleId, senderLogin, content, role } = req.body;
     const userLogin = req.user?.login;
+    if (!userLogin) {
+      return res.status(401).json({ error: "Необходима авторизация" });
+    }
 
-    if (senderLogin !== userLogin) {
+    const cleanUser = userLogin.toLowerCase().trim().replace(/^@/, "");
+    let { coupleId, senderLogin, content, role, mode } = req.body || {};
+
+    if (!content || typeof content !== "string" || !content.trim()) {
+      return res.status(400).json({ error: "Сообщение не может быть пустым" });
+    }
+
+    if (!coupleId) {
+      const userInDb = await findUserByLogin(cleanUser);
+      const partner = userInDb?.partnerLogin ? userInDb.partnerLogin.toLowerCase().trim().replace(/^@/, "") : null;
+      coupleId = partner ? [cleanUser, partner].sort().join("_") : cleanUser;
+    }
+
+    // IDOR protection
+    if (!isUserInCouple(coupleId, userLogin)) {
+      return res.status(403).json({ error: "Нет доступа к данной переписке" });
+    }
+
+    const cleanSender = String(senderLogin || cleanUser).toLowerCase().trim().replace(/^@/, "");
+    const isAiRole = role === "ai" || cleanSender === "ai" || cleanSender === "ai_owl";
+
+    if (!isAiRole && cleanSender !== cleanUser) {
       return res.status(403).json({ error: "Нельзя отправлять сообщения от чужого имени" });
     }
 
-    const message = await saveChatMessage({ coupleId, senderLogin, content, role });
-    return res.status(201).json({ message });
+    const assignedSender = isAiRole ? "ai" : cleanUser;
+    const assignedRole = isAiRole ? "ai" : (role || "partner1");
+
+    const message = await saveChatMessage({
+      coupleId,
+      senderLogin: assignedSender,
+      content: content.trim(),
+      role: assignedRole,
+    });
+
+    // Realtime broadcast via SSE to all parties in this couple
+    try {
+      const targets = coupleId.split("_").map((p: string) => p.toLowerCase().trim().replace(/^@/, ""));
+      targets.forEach((targetLogin: string) => {
+        if (targetLogin && targetLogin !== "ai") {
+          sendSSEEventToUser(targetLogin, "chat_message", { message, coupleId, mode: mode || "together" });
+          sendSSEEventToUser(targetLogin, "new_message", { message, coupleId, mode: mode || "together" });
+        }
+      });
+    } catch (sseErr) {
+      logger.warn("Сбой SSE бродкаста сообщения чата", { error: String(sseErr) });
+    }
+
+    return res.status(201).json({ message, status: "sent" });
   } catch (err) {
     logger.error("Ошибка сохранения сообщения чата", err);
     return res.status(500).json({ error: "Ошибка отправки сообщения" });

@@ -136,12 +136,18 @@ export async function acceptPair(cleanMe: string, cleanPartner: string) {
     partner2: cleanPartner,
   });
   const store = readEmergencyFile();
-  if (store.users[cleanMe]) {
-    store.users[cleanMe] = { ...store.users[cleanMe], partnerLogin: cleanPartner, pairedAt: now };
-  }
-  if (store.users[cleanPartner]) {
-    store.users[cleanPartner] = { ...store.users[cleanPartner], partnerLogin: cleanMe, pairedAt: now };
-  }
+  store.users[cleanMe] = {
+    ...(store.users[cleanMe] || {}),
+    login: cleanMe,
+    partnerLogin: cleanPartner,
+    pairedAt: now,
+  } as DbUser;
+  store.users[cleanPartner] = {
+    ...(store.users[cleanPartner] || {}),
+    login: cleanPartner,
+    partnerLogin: cleanMe,
+    pairedAt: now,
+  } as DbUser;
   if (store.pairRequests) {
     store.pairRequests = store.pairRequests.filter(
       (r) =>

@@ -205,9 +205,31 @@ export async function runLifecycleSuite() {
   );
 
   // -------------------------------------------------------------
-  // MODULE 7: CARE NOTES & PRIVACY ISOLATION
+  // MODULE 7: CHAT PERSISTENCE & PRIVACY
   // -------------------------------------------------------------
-  console.log("\n▶ MODULE 7: Care Notes & Privacy");
+  console.log("\n▶ MODULE 7: Chat Persistence & Realtime");
+
+  // 7.1 Send message in Together mode
+  const sendMsgRes = await fetchApi("/api/chat/messages", maleToken, "POST", {
+    coupleId,
+    senderLogin: maleLogin,
+    content: "Привет, любимая! Как прошёл твой день?",
+    role: "partner1",
+    mode: "together",
+  });
+  assert(
+    sendMsgRes.status === 201 && sendMsgRes.data?.message?.content === "Привет, любимая! Как прошёл твой день?",
+    "7.1 Chat message saved to database via POST /api/chat/messages"
+  );
+
+  // 7.2 Fetch chat history for couple
+  const getMsgsRes = await fetchApi(`/api/chat/messages/${coupleId}`, femaleToken, "GET");
+  assert(
+    getMsgsRes.status === 200 &&
+      Array.isArray(getMsgsRes.data?.messages) &&
+      getMsgsRes.data.messages.some((m: any) => m.content === "Привет, любимая! Как прошёл твой день?"),
+    "7.2 Partner retrieves persisted chat history via GET /api/chat/messages/:coupleId"
+  );
 
   // -------------------------------------------------------------
   // MODULE 8 & 9: ANTI-CHEAT & IDOR PROTECTION

@@ -19,33 +19,8 @@ import {
 import { useCouple } from '../context/CoupleContext';
 import { LoopLogo } from './LoopLogo';
 import { triggerHaptic } from '../utils/haptics';
-import { UserPartner } from '../types';
+import { getPartnerStatusDetails } from './dashboard/PartnerStatusCard';
 import { getSemanticToken, SemanticColorType } from './ui/SystemBlocks';
-
-const isOnline = (lastActiveAt?: string) => {
-  if (!lastActiveAt) return false;
-  const time = new Date(lastActiveAt).getTime();
-  return Date.now() - time < 5 * 60 * 1000; // 5 minutes
-};
-
-const getOnlineStatusText = (partner: UserPartner) => {
-  if (!partner.lastActiveAt) {
-    return partner.gender === 'female' ? 'Была недавно' : 'Был недавно';
-  }
-  const date = new Date(partner.lastActiveAt);
-  const now = new Date();
-  
-  const isToday = date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
-  const timeStr = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-  const dateStr = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
-  
-  const prefix = partner.gender === 'female' ? 'Была в сети:' : (partner.gender === 'male' ? 'Был в сети:' : 'Был(а) в сети:');
-  
-  if (isToday) {
-    return `${prefix} ${timeStr}`;
-  }
-  return `${prefix} ${dateStr} в ${timeStr}`;
-};
 
 export const ChatView: React.FC = () => {
   const {
@@ -55,16 +30,34 @@ export const ChatView: React.FC = () => {
     sendAIMessage,
     partnerMessages,
     sendPartnerMessage,
+    fetchPartnerMessages,
     isAITyping,
     owlMode,
     setOwlMode,
     currentUser,
     clearUnreadChatCount,
     setActiveTab,
+    isPartnerOnline,
+    partnerStatusDetails,
   } = useCouple();
 
   const currentPartner = currentPartnerId === 'partner1' ? coupleProfile.partner1 : coupleProfile.partner2;
   const otherPartner = currentPartnerId === 'partner1' ? coupleProfile.partner2 : coupleProfile.partner1;
+
+  // Safe partner fallback aligned with Dashboard
+  const safeOtherPartner = otherPartner || {
+    id: currentPartnerId === 'partner1' ? 'partner2' : 'partner1',
+    name: 'Анна',
+    avatar: 'heart',
+    login: currentUser?.partnerLogin || 'anna',
+    gender: 'female',
+    lastActiveAt: new Date().toISOString(),
+  };
+
+  const partnerDisplayName =
+    safeOtherPartner.name && safeOtherPartner.name !== 'Партнёр не подключён'
+      ? safeOtherPartner.name
+      : currentUser?.partnerLogin || safeOtherPartner.login || 'Анна';
 
   const [inputMessage, setInputMessage] = useState<string>('');
   const [isRecording, setIsRecording] = useState<boolean>(false);
@@ -78,6 +71,17 @@ export const ChatView: React.FC = () => {
   useEffect(() => {
     clearUnreadChatCount();
   }, [clearUnreadChatCount]);
+
+  // Load chat history from backend database on mount and when switching modes
+  useEffect(() => {
+    fetchPartnerMessages();
+  }, [fetchPartnerMessages]);
+
+  useEffect(() => {
+    if (owlMode === 'together') {
+      fetchPartnerMessages();
+    }
+  }, [owlMode, fetchPartnerMessages]);
 
   const scrollToBottom = (smooth = true) => {
     if (listRef.current) {
@@ -158,7 +162,7 @@ export const ChatView: React.FC = () => {
             <div className="leading-tight min-w-0">
               <div className="flex items-center gap-1.5">
                 <span className="text-base font-semibold text-[var(--text)]">
-                  {owlMode === 'solo' ? 'Сова' : otherPartner.name}
+                  {owlMode === 'solo' ? 'Сова' : partnerDisplayName}
                 </span>
                 {owlMode === 'solo' && (
                   <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-[var(--accent-light)] text-[var(--accent)] border border-[var(--accent)]/20 shrink-0">
@@ -169,14 +173,14 @@ export const ChatView: React.FC = () => {
               <div className="text-xs font-normal mt-0.5 flex items-center gap-1">
                 {owlMode === 'solo' ? (
                   <span className="text-[var(--text-2)]">Сеанс для {currentPartner.name}</span>
-                ) : isOnline(otherPartner.lastActiveAt) ? (
+                ) : isPartnerOnline ? (
                   <span className="text-emerald-500 font-medium flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     В сети
                   </span>
                 ) : (
                   <span className="text-[var(--text-2)]">
-                    {getOnlineStatusText(otherPartner)}
+                    {partnerStatusDetails.statusText || (safeOtherPartner.gender === 'female' ? 'Была недавно' : 'Был недавно')}
                   </span>
                 )}
               </div>
@@ -213,6 +217,7 @@ export const ChatView: React.FC = () => {
         <div className="grid grid-cols-2 gap-1 mt-2 p-1 bg-[var(--surface-2)] rounded-xl border border-[var(--divider)]">
           <button
             type="button"
+            id="chat-mode-solo"
             onClick={() => setOwlMode('solo')}
             className={`py-1.5 px-2 rounded-lg text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 ${
               owlMode === 'solo'
@@ -225,6 +230,7 @@ export const ChatView: React.FC = () => {
           </button>
           <button
             type="button"
+            id="chat-mode-together"
             onClick={() => setOwlMode('together')}
             className={`py-1.5 px-2 rounded-lg text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 ${
               owlMode === 'together'
@@ -297,8 +303,10 @@ export const ChatView: React.FC = () => {
           })
         ) : (
           partnerMessages.map((msg) => {
-            const isMe = msg.senderLogin === currentUser?.login;
-            const isBot = msg.senderLogin === 'ai';
+            const cleanMsgSender = (msg.senderLogin || '').toLowerCase().trim().replace(/^@/, '');
+            const cleanMyLogin = (currentUser?.login || '').toLowerCase().trim().replace(/^@/, '');
+            const isBot = cleanMsgSender === 'ai' || cleanMsgSender === 'ai_owl' || msg.role === 'ai';
+            const isMe = !isBot && (cleanMsgSender === cleanMyLogin || (!cleanMsgSender && msg.role === (currentPartnerId === 'partner1' ? 'partner1' : 'partner2')));
             return (
               <div
                 key={msg.id}
@@ -322,7 +330,7 @@ export const ChatView: React.FC = () => {
                   )}
                 </div>
                 <span className="text-xs text-[var(--text-2)] mt-0.5 px-1 font-normal">
-                  {isBot ? 'Сова' : isMe ? currentPartner.name : otherPartner.name}
+                  {isBot ? 'Сова' : isMe ? currentPartner.name : partnerDisplayName}
                 </span>
               </div>
             );

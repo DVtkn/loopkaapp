@@ -17,6 +17,8 @@ import {
   generateSmartPsychologistReply,
   saveAIMessageToDb,
 } from "./chat.service.ts";
+import { evaluateSafetyRisk } from "./safety.filter.ts";
+import { calculateCoupleAnalysis } from "../../../utils/psychologyEngine.ts";
 import { logger } from "../../shared/utils/logger.ts";
 
 export const chatRouter = Router();
@@ -72,6 +74,33 @@ aiRouter.post("/chat", aiLimiter, requireAuth, validateBody(aiChatMessageSchema)
     const partnerName = currentPartner?.name || "Партнёр";
     const partner2Name = coupleContext?.user2?.name || "Второй партнёр";
 
+    const lastUserMessage = messages[messages.length - 1];
+    const lastUserText = lastUserMessage?.content || "";
+
+    // 1. P0 Safety Intervention Filter (Emergency, Suicide, Violence)
+    const safetyCheck = evaluateSafetyRisk(lastUserText);
+    if (safetyCheck.hasRisk) {
+      const notice = safetyCheck.systemNotice || "Кризисная помощь";
+      await saveAIMessageToDb(callerLogin, lastUserText, notice);
+      return res.status(200).json({
+        reply: notice,
+        isSafetyIntervention: true,
+        mode: "crisis_intervention",
+      });
+    }
+
+    // 2. Off-topic Guardrail check
+    const offTopicKeywords = [
+      "шкаф", "код", "программ", "python", "javascript", "машин", "ремонт",
+      "рецепт", "пирог", "президент", "политик", "забудь", "игнорируй"
+    ];
+    if (offTopicKeywords.some((k) => lastUserText.toLowerCase().includes(k))) {
+      return res.json({
+        reply: "Я семейный психолог Сова и специализируюсь исключительно на отношениях, чувствах и гармонии в паре.\n\nФизические и технические инструкции лучше посмотреть в руководстве пользователя. А если в процессе совместного дела возникло недопонимание — я с радостью помогу всё экологично уладить! О чём в отношениях вы хотите поговорить?",
+        mode: "fallback_guardrail",
+      });
+    }
+
     const systemPrompt = `Ты — Сова, опытный, бережный и доказательный семейный психолог приложения для пар Loop.
 
 ТВОЙ СТИЛЬ:
@@ -100,21 +129,6 @@ aiRouter.post("/chat", aiLimiter, requireAuth, validateBody(aiChatMessageSchema)
 - Дней вместе: ${coupleContext?.daysTogether || 1}
 - Язык любви ${partnerName}: ${coupleContext?.user1?.loveLanguage || "не указан"}
 - Язык любви ${partner2Name}: ${coupleContext?.user2?.loveLanguage || "не указан"}`;
-
-    const lastUserMessage = messages[messages.length - 1];
-    const lastUserText = lastUserMessage?.content || "";
-
-    // Guardrail off-topic check
-    const offTopicKeywords = [
-      "шкаф", "код", "программ", "python", "javascript", "машин", "ремонт",
-      "рецепт", "пирог", "президент", "политик", "забудь", "игнорируй"
-    ];
-    if (offTopicKeywords.some((k) => lastUserText.toLowerCase().includes(k))) {
-      return res.json({
-        reply: "Я семейный психолог Сова и специализируюсь исключительно на отношениях, чувствах и гармонии в паре.\n\nФизические и технические инструкции лучше посмотреть в руководстве пользователя. А если в процессе совместного дела возникло недопонимание — я с радостью помогу всё экологично уладить! О чём в отношениях вы хотите поговорить?",
-        mode: "fallback_guardrail",
-      });
-    }
 
     const groqMessages = [
       { role: "system", content: systemPrompt },
@@ -150,48 +164,34 @@ aiRouter.post("/chat", aiLimiter, requireAuth, validateBody(aiChatMessageSchema)
   }
 });
 
-aiRouter.post("/generate-report", aiLimiter, requireAuth, validateBody(aiReportSchema), async (req, res, next) => {
+aiRouter.post("/generate-report", aiLimiter, requireAuth, async (req: AuthenticatedRequest, res, next) => {
   try {
-    const { coupleProfile, radarScores } = req.body;
-    const prompt = `Проанализируй данные пары для приложения Loop и составь глубокий психологический отчёт:
-Данные пары: ${JSON.stringify({ coupleProfile, radarScores })}
+    const coupleProfile = req.body?.coupleProfile || req.body?.coupleData?.coupleProfile || {
+      partner1: { name: "Партнёр 1" },
+      partner2: { name: "Партнёр 2" },
+    };
+    const pulseHistory = req.body?.pulseHistory || req.body?.coupleData?.pulseHistory || [];
+    const tests = req.body?.tests || req.body?.coupleData?.tests || [];
 
-Верни строго JSON:
-{
-  "title": "краткий вдохновляющий заголовок архетипа пары",
-  "summary": "вывод на 3-4 предложения",
-  "strengths": ["сильная сторона 1", "сильная сторона 2", "сильная сторона 3"],
-  "growthZones": ["зона роста 1", "зона роста 2"],
-  "gottmanTips": "рекомендация по методу Готтмана с упражнением"
-}`;
+    // 100% Deterministic Rule-based Psychology Engine (Zero LLM Hallucinations, <10ms response)
+    const report = calculateCoupleAnalysis(coupleProfile, pulseHistory, tests);
 
-    const groqReply = await callGroqChat([
-      { role: "system", content: "Ты — эксперт семейной психологии. Отвечай строго валидным JSON без markdown." },
-      { role: "user", content: prompt },
-    ]);
-
-    if (groqReply) {
-      try {
-        const clean = groqReply.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-        const parsed = JSON.parse(clean);
-        return res.json(parsed);
-      } catch (err: unknown) {
-        logger.warn("Сбой парсинга JSON ответа Groq для отчета", undefined, err);
-      }
-    }
-
-    return res.json({
-      title: "Гармоничный союз глубокой привязанности",
-      summary: "Ваша пара демонстрирует высокий уровень взаимного уважения и эмоциональной поддержки. Ключевая сила союза — готовность слышать переживания партнёра.",
-      strengths: ["Чуткое отношение к эмоциональному состоянию", "Открытость к диалогу", "Общие базовые ценности"],
-      growthZones: ["Уделять больше времени совместному спонтанному отдыху", "Синхронизация бытовых ожиданий"],
-      gottmanTips: "Практикуйте ежедневный 15-минутный ритуал «Разгрузка после рабочего дня»: слушайте партнёра без критики и советов, проявляя чистую эмпатию.",
+    return res.status(200).json({
+      success: true,
+      title: report.archetypeTitle,
+      summary: report.summary,
+      strengths: report.strengths.map((s) => s.title),
+      growthZones: report.growthZones.map((g) => g.title),
+      gottmanTips: report.growthZones[0]?.gottmanExercise || "Практикуйте ежедневный 15-минутный ритуал «Разгрузка после рабочего дня».",
+      report,
+      source: "deterministic_engine",
     });
   } catch (err: unknown) {
-    logger.error("Ошибка генерации отчета пары", err);
-    return res.status(500).json({ error: "Ошибка генерации отчета" });
+    logger.error("Ошибка детерминированной генерации отчета пары", err);
+    return res.status(500).json({ error: "FAILED_TO_GENERATE_DETERMINISTIC_REPORT" });
   }
 });
+
 
 aiRouter.post("/date-idea", aiLimiter, requireAuth, validateBody(aiDateIdeaSchema), async (req, res, next) => {
   try {

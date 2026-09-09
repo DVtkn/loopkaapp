@@ -413,3 +413,20 @@ export interface PhotoMetadata {
   createdAt: string;
 }
 
+export type User = UserAccount;
+
+export interface CoupleData {
+  coupleProfile?: CoupleProfile;
+  pulseHistory?: PulseEntry[];
+  moodHistory?: any[];
+  challenges?: Challenge[];
+  tests?: any[];
+  dates?: any[];
+  memories?: any[];
+  timeCapsules?: any[];
+  careRules?: any[];
+  deepQuestionsHistory?: any[];
+  dailyQuiz?: any;
+  ranking?: any;
+  [key: string]: any;
+}

@@ -97,7 +97,7 @@ export const Navigation: React.FC<NavigationProps> = ({
               <div>
                 <div className="flex items-center gap-1.5">
                   <span className="font-bold text-base tracking-tight text-[var(--text)]">Loop</span>
-                  <span className="text-[11px] uppercase font-semibold px-2 py-0.5 whitespace-nowrap rounded-full bg-[var(--surface-2)] text-[var(--accent)] border border-[var(--divider)] shadow-2xs">
+                  <span className="text-[11px] font-semibold px-2 py-0.5 whitespace-nowrap rounded-full bg-[var(--surface-2)] text-[var(--accent)] border border-[var(--divider)] shadow-2xs">
                     Pro
                   </span>
                 </div>
@@ -120,7 +120,7 @@ export const Navigation: React.FC<NavigationProps> = ({
             className="p-3 mx-3 my-3 rounded-2xl bg-[var(--surface-2)] border border-[var(--divider)] cursor-pointer hover:border-[var(--accent)] hover:shadow-xs transition-all group shadow-2xs"
           >
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-xs font-semibold uppercase text-[var(--text-2)] tracking-wider">
+              <span className="text-xs font-semibold text-[var(--text-2)]">
                 Мой профиль
               </span>
               <span className="text-xs font-semibold text-[var(--accent)] group-hover:underline">
@@ -133,10 +133,10 @@ export const Navigation: React.FC<NavigationProps> = ({
                 {currentUser?.name ? currentUser.name[0].toUpperCase() : 'U'}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-semibold text-[var(--text)] truncate">
+                <div className="text-sm font-semibold text-[var(--text)]">
                   {currentUser?.name || partner1.name}
                 </div>
-                <div className="text-xs text-[var(--text-2)] truncate font-mono">
+                <div className="text-xs text-[var(--text-2)] font-mono">
                   @{currentUser?.login || 'user'}
                 </div>
               </div>

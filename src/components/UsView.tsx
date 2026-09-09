@@ -127,7 +127,7 @@ export const UsView: React.FC = () => {
             <div className="p-6 sm:p-7 rounded-[28px] bg-[var(--surface)] border border-[var(--divider)] relative overflow-hidden space-y-5 shadow-2xs">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <div className="text-xs font-bold uppercase tracking-wider text-[var(--accent)] mb-1">
+                  <div className="text-xs font-bold text-[var(--accent)] mb-1">
                     История союза
                   </div>
                   <h1 className="text-2xl sm:text-3xl font-extrabold text-[var(--text)] tracking-tight">
@@ -189,7 +189,7 @@ export const UsView: React.FC = () => {
                             <span className="text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full">
                               {analysis.compatibilityScore}% Совместимость
                             </span>
-                            <span className="text-xs text-[var(--text-3)] font-medium truncate max-w-[140px] sm:max-w-[200px]">
+                            <span className="text-xs text-[var(--text-3)] font-medium max-w-[140px] sm:max-w-[200px]">
                               {analysis.archetypeTitle}
                             </span>
                           </>
@@ -363,7 +363,7 @@ export const UsView: React.FC = () => {
                       </div>
                       <div className="min-w-0">
                         <div
-                          className={`text-sm font-bold truncate ${
+                          className={`text-sm font-bold ${
                             myDone
                               ? 'line-through text-[var(--text-2)]'
                               : 'text-[var(--text)]'

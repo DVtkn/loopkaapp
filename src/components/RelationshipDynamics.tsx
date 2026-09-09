@@ -223,7 +223,7 @@ export const RelationshipDynamics: React.FC<DynamicsProps> = ({ coupleId }) => {
           {/* Key Changes Section Orig */}
           {deltas.length > 0 && (
             <div className="border-t border-[var(--divider)] pt-4">
-              <h4 className="text-xs font-bold text-[var(--text-2)] uppercase tracking-wider mb-3">Ключевые изменения за период</h4>
+              <h4 className="text-xs font-bold text-[var(--text-2)] mb-3">Ключевые изменения за период</h4>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {deltas.map(d => {
                   const isPositive = d.delta > 0;

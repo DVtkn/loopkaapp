@@ -30,6 +30,68 @@ Loop — приложение для пар, основная цель кото�
 - Иконки всегда с цветной заливкой-подложкой (pastel-фоны: bg-rose-500/10 и т.д.).
 - Никаких декоративных бейджей или текстов без функционала за ними.
 
+## Модульная архитектура проекта
+
+### Структура бэкенда (`src/server/`)
+```
+src/server/
+├── index.ts                     # Точка входа Express-сервера и монтирование модульных роутеров
+├── config.ts                    # Конфигурация окружения
+├── logger.ts                    # Логирование
+├── aiService.ts                 # Интеграция с Groq и локальный движок психолога Совы
+├── analytics.ts                 # Расчёт трендов и сохранение ежедневных метрик
+├── insights.ts                  # Генерация недельных инсайтов
+├── db/
+│   ├── schema.ts                # Drizzle ORM схемы PostgreSQL таблиц
+│   ├── client.ts                # Neon PostgreSQL пул и Drizzle клиент
+│   └── migrations/              # Файлы миграций
+├── shared/
+│   ├── middleware/
+│   │   ├── auth.middleware.ts   # JWT аутентификация
+│   │   ├── requirePairOwnership.ts # Защита от IDOR
+│   │   ├── rateLimiter.ts       # Rate limiters
+│   │   ├── validation.ts        # Zod валидация тела и параметров
+│   │   └── errorHandler.ts      # Глобальный обработчик ошибок
+│   ├── utils/
+│   │   ├── logger.ts            # Общий логгер
+│   │   └── sse.ts               # Управление Server-Sent Events и касаниями
+│   └── validators/              # Zod схемы валидации для каждого домена
+└── modules/
+    ├── auth/                    # Модуль авторизации, профилей и синхронизации аккаунтов
+    │   ├── auth.service.ts
+    │   ├── auth.routes.ts
+    │   └── auth.middleware.ts
+    ├── pairing/                 # Модуль связывания пары, отправки/принятия заявок
+    │   ├── pairing.service.ts
+    │   └── pairing.routes.ts
+    ├── couple-data/             # Модуль синхронизации данных пары и прогресса
+    │   ├── couple.service.ts
+    │   └── couple.routes.ts
+    ├── chat/                    # Модуль чата пары и ИИ-психолога Совы
+    │   ├── chat.service.ts
+    │   └── chat.routes.ts
+    ├── analytics/               # Модуль трендов и инсайтов
+    │   ├── analytics.service.ts
+    │   └── analytics.routes.ts
+    ├── photos/                  # Модуль фотоархива (BYTEA / PostgreSQL)
+    │   ├── photos.service.ts
+    │   └── photos.routes.ts
+    └── realtime/                # Модуль мгновенных касаний (Touches) и Push
+        ├── realtime.service.ts
+        └── realtime.routes.ts
+```
+
+### Структура фронтенда (`src/`)
+```
+src/
+├── api/                         # Типизированные API-клиенты (auth, pair, couple, chat, photos)
+├── context/                     # CoupleContext (состояние пользователя, пары, XP)
+├── components/                  # UI-компоненты экранов (Dashboard, Us, Dates, Tests, Chat, Profile)
+├── utils/                       # Психологический движок, ранги, хранилище
+├── data/                        # Пресеты вопросов, тестов и бейджей
+└── types.ts                     # Глобальные TypeScript типы
+```
+
 ## Технический стек
 - **Фронтенд**: React 18, TypeScript, Vite, Tailwind CSS, Framer Motion, Recharts.
 - **Бэкенд**: Собственный Node.js / Express сервер (`server.ts`). (Без использования Firebase / Supabase).
@@ -41,3 +103,20 @@ Loop — приложение для пар, основная цель кото�
 - Не социальная сеть (никакой ленты новостей от других пар).
 - Не дневник для одного пользователя (приложение требует партнёра для раскрытия ценности).
 - Не универсальный календарь/таск-менеджер для не-пар.
+
+## Статус верификации и тестирования
+- **Backend P0 verified**: 2026-09-08, see `test-reports/2026-09-08/full-green-run.log`
+  - Подтверждено сырыми логами: регистрация, связывание пары (транзакции в Neon PostgreSQL), изоляция данных (IDOR защита), мгновенные касания (Touches/SSE), серверный пересчёт уровня и защита от подделки прогресса (`POST /api/couple/sync`).
+  - Проверено намеренной поломкой (Red/Green цикл): `acceptPair` (см. `test-reports/2026-09-08/red-run.log`) и клиентская инъекция `level: 999` (см. `tests/test-sync-vuln.ts`).
+
+## Открытые пункты и план реализации (Roadmap)
+1. **Live Groq AI Verification (Pre-Production Gate)**:
+   - Перед первым продакшн-запуском выполнить тестовый прогон эндпоинта `/api/ai/chat` с реальным боевым ключом `GROQ_API_KEY`.
+   - Критерии приемки: успешный ответ от модели `llama-3.3-70b-versatile`, время ответа < 10 секунд, парсинг структурированного формата Совы (Взгляд психолога, Практика / Готовая фраза, Вопрос для вас) без сбоев. Зафиксировать результат в `test-reports/live-groq-run.log`.
+2. **Frontend E2E тестирование (Playwright / Chromium)**:
+   - Запланировать запуск сценариев `e2e/loop.spec.ts` в CI/CD (GitHub Actions с образом `playwright/test`) или на локальной рабочей станции разработчика с поддержкой Chromium.
+   - Цель: полная верификация визуального рендера, кликов, мобильного таббара и корректности изменения UI-состояний обоих партнеров.
+3. **План тестирования Web Push и медиа/аватаров**:
+   - Вынести в отдельный тестовый план проверку подписок Service Worker Web Push (VAPID) и сжатия/загрузки аватаров и фото в хранилище.
+4. **Безопасность и управление секретами (SECURITY.md)**:
+   - Настроена Fail-Fast политика для `DATABASE_URL` и `JWT_SECRET`. При развёртывании в `NODE_ENV=production` без явного указания данных переменных запуск сервера блокируется с фатальной ошибкой. Подробности см. в `SECURITY.md`.

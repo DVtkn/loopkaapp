@@ -1,9 +1,10 @@
-import { db } from "../db/index.ts";
-import { aiInsights, relationshipMetrics } from "../db/schema.ts";
+import { db } from "./db/client.ts";
+import { aiInsights, relationshipMetrics } from "./db/schema.ts";
 import { eq, and, gte, lte } from "drizzle-orm";
 import crypto from "crypto";
-import { callGroqChat, logger } from "../../server.ts";
-import { AiInsightContent } from "../types.ts";
+import { logger } from "./logger.ts";
+import { callGroqChat } from "./aiService.ts";
+import { AiInsightContent } from "./types.ts";
 import { getTrends } from "./analytics.ts";
 
 export async function detectRiskZones(metrics: any[]): Promise<string[]> {

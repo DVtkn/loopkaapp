@@ -73,7 +73,7 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2 mb-0.5">
-                  <h4 className="text-xs sm:text-sm font-bold text-[var(--text)] truncate">
+                  <h4 className="text-xs sm:text-sm font-bold text-[var(--text)]">
                     {ach.title}
                   </h4>
                   {ach.unlocked ? (

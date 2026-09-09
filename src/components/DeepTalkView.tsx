@@ -317,7 +317,7 @@ export const DeepTalkView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                 className="p-4 rounded-2xl bg-[var(--surface)] hover:bg-[var(--surface-2)] border border-[var(--divider)] cursor-pointer transition-all active:scale-[0.99] shadow-2xs space-y-1.5"
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-[var(--accent)] uppercase tracking-wider">
+                  <span className="text-[11px] font-bold text-[var(--accent)]">
                     {card.categoryLabel}
                   </span>
                   <span className="text-[11px] text-[var(--text-3)]">#{idx + 1}</span>

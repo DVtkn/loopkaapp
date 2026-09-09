@@ -74,11 +74,11 @@ export const PartnerTouchToast: React.FC<PartnerTouchToastProps> = ({
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <h4 className="text-xs sm:text-sm font-bold text-[var(--text)] leading-tight truncate">
+                <h4 className="text-xs sm:text-sm font-bold text-[var(--text)] leading-tight">
                   {touch.title}
                 </h4>
               </div>
-              <p className="text-[11px] sm:text-xs text-[var(--text-2)] mt-0.5 truncate font-normal">
+              <p className="text-[11px] sm:text-xs text-[var(--text-2)] mt-0.5 font-normal">
                 {touch.customNote || touch.subtitle || 'Только что • Нежное внимание'}
               </p>
             </div>

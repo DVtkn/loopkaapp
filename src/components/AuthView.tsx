@@ -222,7 +222,7 @@ export const AuthView: React.FC = () => {
           <div>
             <label
               htmlFor="auth-login-input"
-              className="block text-[11px] font-bold uppercase tracking-wider text-[var(--text-2)] mb-1.5"
+              className="block text-[11px] font-bold text-[var(--text-2)] mb-1.5"
             >
               Логин
             </label>
@@ -258,7 +258,7 @@ export const AuthView: React.FC = () => {
               <div>
                 <label
                   htmlFor="auth-name-input"
-                  className="block text-[11px] font-bold uppercase tracking-wider text-[var(--text-2)] mb-1.5"
+                  className="block text-[11px] font-bold text-[var(--text-2)] mb-1.5"
                 >
                   Как к вам обращаться (Имя)
                 </label>
@@ -279,7 +279,7 @@ export const AuthView: React.FC = () => {
 
               {/* Gender Selector */}
               <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-[var(--text-2)] mb-1.5">
+                <label className="block text-[11px] font-bold text-[var(--text-2)] mb-1.5">
                   Тип аккаунта (Пол)
                 </label>
                 <div className="grid grid-cols-2 gap-2">
@@ -323,7 +323,7 @@ export const AuthView: React.FC = () => {
             <div className="flex items-center justify-between mb-1.5">
               <label
                 htmlFor="auth-password-input"
-                className="block text-[11px] font-bold uppercase tracking-wider text-[var(--text-2)]"
+                className="block text-[11px] font-bold text-[var(--text-2)]"
               >
                 {mode === 'reset' ? 'Новый пароль' : 'Пароль'}
               </label>

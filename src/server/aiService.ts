@@ -1,5 +1,5 @@
-import { db, isSqlConfigured } from '../db/index.ts';
-import { chatMessages } from '../db/schema.ts';
+import { db, isSqlConfigured } from './db/client.ts';
+import { chatMessages } from './db/schema.ts';
 import { logger } from './logger.ts';
 import { readEmergencyFile, writeEmergencyFile } from './services/storageService.ts';
 import crypto from 'crypto';

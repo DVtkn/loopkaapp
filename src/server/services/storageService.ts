@@ -1,13 +1,16 @@
 import fs from 'fs';
 import path from 'path';
 import { sql, eq, or } from 'drizzle-orm';
-import { db, isSqlConfigured } from '../../db/index.ts';
-import { users, coupleData } from '../../db/schema.ts';
+import { db, isSqlConfigured } from '../db/client.ts';
+import { users, coupleData } from '../db/schema.ts';
 import { logger } from '../logger.ts';
 import { DbUser, DbUserInsert, JsonStoreShape } from '../types.ts';
+import { DatabaseUnavailableError } from '../shared/errors/index.ts';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'db_store.json');
+
+const isProd = () => process.env.NODE_ENV === 'production';
 
 function ensureDataDir(): void {
   try {
@@ -20,6 +23,9 @@ function ensureDataDir(): void {
 }
 
 export function readEmergencyFile(): JsonStoreShape {
+  if (isProd()) {
+    return { users: {}, pairRequests: [], coupleData: {}, chatMessages: [], rateLimits: {}, photos: [] };
+  }
   ensureDataDir();
   try {
     if (fs.existsSync(DB_FILE)) {
@@ -41,9 +47,8 @@ export function readEmergencyFile(): JsonStoreShape {
 }
 
 export function writeEmergencyFile(data: JsonStoreShape): void {
-  if (process.env.NODE_ENV === "production") {
-    // В Cloud Run контейнер эфемерен. Запись в файл бесполезна и может
-    // скрыть проблему с БД. В production этот фолбэк полностью отключён.
+  if (isProd()) {
+    // В Cloud Run контейнер эфемерен. В production этот фолбэк полностью отключён.
     return;
   }
   ensureDataDir();
@@ -58,6 +63,25 @@ export async function findUserByLogin(login: string): Promise<DbUser | undefined
   const clean = login.trim().toLowerCase().replace(/^@/, '');
   if (!clean) return undefined;
 
+  if (isProd()) {
+    if (!isSqlConfigured() || !db) {
+      throw new DatabaseUnavailableError();
+    }
+    try {
+      const res = await db
+        .select()
+        .from(users)
+        .where(sql`LOWER(${users.login}) = ${clean}`)
+        .limit(1);
+      return res && res.length > 0 ? (res[0] as DbUser) : undefined;
+    } catch (err: unknown) {
+      logger.error('SQL запрос findUserByLogin завершился сбоем в production (fail-fast)', err, { login: clean });
+      throw new DatabaseUnavailableError();
+    }
+  }
+
+  // Dev / Test mode with fallback
+  let sqlUser: DbUser | undefined;
   if (isSqlConfigured() && db) {
     try {
       const res = await db
@@ -66,22 +90,57 @@ export async function findUserByLogin(login: string): Promise<DbUser | undefined
         .where(sql`LOWER(${users.login}) = ${clean}`)
         .limit(1);
       if (res && res.length > 0) {
-        return res[0];
+        sqlUser = res[0] as DbUser;
       }
-      return undefined;
     } catch (err: unknown) {
       logger.warn('SQL запрос findUserByLogin завершился с ошибкой, переключение на резервный файл', { login: clean }, err);
     }
   }
 
   const store = readEmergencyFile();
-  return store.users[clean] || Object.values(store.users).find((u) => u && String(u.login).toLowerCase() === clean);
+  const jsonUser = store.users[clean] || Object.values(store.users).find((u) => u && String(u.login).toLowerCase() === clean);
+
+  if (sqlUser && jsonUser) {
+    return {
+      ...sqlUser,
+      ...jsonUser,
+      partnerLogin: jsonUser.partnerLogin || sqlUser.partnerLogin,
+      pairedAt: jsonUser.pairedAt || sqlUser.pairedAt,
+    } as DbUser;
+  }
+
+  return sqlUser || jsonUser;
 }
 
 export async function findUserByQuery(query: string): Promise<DbUser | undefined> {
   const clean = query.trim().toLowerCase().replace(/^@/, '');
   if (!clean) return undefined;
 
+  if (isProd()) {
+    if (!isSqlConfigured() || !db) {
+      throw new DatabaseUnavailableError();
+    }
+    try {
+      const res = await db
+        .select()
+        .from(users)
+        .where(
+          or(
+            eq(users.login, clean),
+            sql`LOWER(${users.login}) = ${clean}`,
+            sql`LOWER(${users.name}) = ${clean}`
+          )
+        )
+        .limit(1);
+      return res && res.length > 0 ? (res[0] as DbUser) : undefined;
+    } catch (err: unknown) {
+      logger.error('SQL запрос findUserByQuery завершился сбоем в production (fail-fast)', err, { query: clean });
+      throw new DatabaseUnavailableError();
+    }
+  }
+
+  // Dev / Test mode with fallback
+  let sqlUser: DbUser | undefined;
   if (isSqlConfigured() && db) {
     try {
       const res = await db
@@ -96,28 +155,38 @@ export async function findUserByQuery(query: string): Promise<DbUser | undefined
         )
         .limit(1);
       if (res && res.length > 0) {
-        return res[0];
+        sqlUser = res[0] as DbUser;
       }
-      return undefined;
     } catch (err: unknown) {
       logger.warn('SQL запрос findUserByQuery завершился с ошибкой, переключение на резервный файл', { query: clean }, err);
     }
   }
 
   const store = readEmergencyFile();
-  return (
-    store.users[clean] ||
-    Object.values(store.users).find(
-      (u) => u && (String(u.login).toLowerCase() === clean || String(u.name || '').toLowerCase() === clean)
-    )
+  const jsonUser = store.users[clean] || Object.values(store.users).find(
+    (u) => u && (String(u.login).toLowerCase() === clean || String(u.name || '').toLowerCase() === clean)
   );
+
+  if (sqlUser && jsonUser) {
+    return {
+      ...sqlUser,
+      ...jsonUser,
+      partnerLogin: jsonUser.partnerLogin || sqlUser.partnerLogin,
+      pairedAt: jsonUser.pairedAt || sqlUser.pairedAt,
+    } as DbUser;
+  }
+
+  return sqlUser || jsonUser;
 }
 
 export async function upsertUser(userData: DbUserInsert): Promise<void> {
   const cleanLogin = userData.login.trim().toLowerCase().replace(/^@/, '');
   const normalizedData = { ...userData, login: cleanLogin };
 
-  if (isSqlConfigured() && db) {
+  if (isProd()) {
+    if (!isSqlConfigured() || !db) {
+      throw new DatabaseUnavailableError();
+    }
     try {
       await db
         .insert(users)
@@ -128,16 +197,24 @@ export async function upsertUser(userData: DbUserInsert): Promise<void> {
         });
       return;
     } catch (err: unknown) {
-      if (process.env.NODE_ENV === "production") {
-        logger.error('CRITICAL: SQL upsertUser failed in production. File fallback is disabled.', err, { login: cleanLogin });
-        throw err;
-      }
-      logger.error('SQL запись пользователя завершилась сбоем, сохранение в аварийное хранилище', err, { login: cleanLogin });
+      logger.error('SQL запись пользователя завершилась сбоем в production (fail-fast)', err, { login: cleanLogin });
+      throw new DatabaseUnavailableError();
     }
   }
 
-  if (process.env.NODE_ENV === "production") {
-     throw new Error("Cannot save user: Database is not configured and file fallback is disabled in production.");
+  // Dev / Test mode with fallback
+  if (isSqlConfigured() && db) {
+    try {
+      await db
+        .insert(users)
+        .values(normalizedData)
+        .onConflictDoUpdate({
+          target: users.login,
+          set: normalizedData,
+        });
+    } catch (err: unknown) {
+      logger.error('SQL запись пользователя завершилась сбоем, сохранение в аварийное хранилище', err, { login: cleanLogin });
+    }
   }
 
   const store = readEmergencyFile();
@@ -150,6 +227,17 @@ export function mergeCoupleData(existing: any, incoming: any): any {
   if (!incoming) return existing || {};
 
   const merged = { ...existing, ...incoming };
+
+  // SECURITY STRIP: Prevent client from forging calculated levels or XP
+  if (incoming.level !== undefined) merged.level = existing.level || 1;
+  if (incoming.levelName !== undefined) merged.levelName = existing.levelName || 'Первый шаг';
+  if (incoming.testsCompletedCount !== undefined) merged.testsCompletedCount = existing.testsCompletedCount || 0;
+
+  if (merged.coupleProfile) {
+    if (incoming.coupleProfile?.level !== undefined) merged.coupleProfile.level = existing.coupleProfile?.level || 1;
+    if (incoming.coupleProfile?.levelName !== undefined) merged.coupleProfile.levelName = existing.coupleProfile?.levelName || 'Первый шаг';
+    if (incoming.coupleProfile?.testsCompletedCount !== undefined) merged.coupleProfile.testsCompletedCount = existing.coupleProfile?.testsCompletedCount || 0;
+  }
 
   // 1. Tests merge: ensure each test merges questions / answers / partnerAnswers / scores
   if (Array.isArray(existing.tests) && Array.isArray(incoming.tests)) {
@@ -261,17 +349,72 @@ export function mergeCoupleData(existing: any, incoming: any): any {
     merged.scheduleEvents = Array.from(evMap.values()).filter((e: any) => !e.deleted);
   }
 
+  // 10. Mood History & Achievements
+  if (Array.isArray(existing.moodHistory) || Array.isArray(incoming.moodHistory)) {
+    const mdMap = new Map<string, any>();
+    (existing.moodHistory || []).forEach((m: any) => mdMap.set(m.id || m.date, m));
+    (incoming.moodHistory || []).forEach((m: any) => mdMap.set(m.id || m.date, { ...(mdMap.get(m.id || m.date) || {}), ...m }));
+    merged.moodHistory = Array.from(mdMap.values());
+  }
+
+  if (Array.isArray(existing.achievements) || Array.isArray(incoming.achievements)) {
+    const achMap = new Map<string, any>();
+    (existing.achievements || []).forEach((a: any) => achMap.set(a.id, a));
+    (incoming.achievements || []).forEach((a: any) => achMap.set(a.id, { ...(achMap.get(a.id) || {}), ...a }));
+    merged.achievements = Array.from(achMap.values());
+  }
+
+  // 11. Daily Quiz
+  if (existing.dailyQuiz || incoming.dailyQuiz) {
+    const exQuiz = existing.dailyQuiz || {};
+    const inQuiz = incoming.dailyQuiz || {};
+    if (exQuiz.id === inQuiz.id) {
+      merged.dailyQuiz = {
+        ...exQuiz,
+        ...inQuiz,
+        partner1Answer: inQuiz.partner1Answer || exQuiz.partner1Answer,
+        partner2Answer: inQuiz.partner2Answer || exQuiz.partner2Answer,
+        isMatch: inQuiz.isMatch || exQuiz.isMatch
+      };
+    } else if (inQuiz.id && (!exQuiz.id || inQuiz.id > exQuiz.id)) {
+      merged.dailyQuiz = inQuiz;
+    } else {
+      merged.dailyQuiz = exQuiz;
+    }
+  }
+
+  // 12. Feed Items
+  if (Array.isArray(existing.feedItems) || Array.isArray(incoming.feedItems)) {
+    const fMap = new Map<string, any>();
+    (existing.feedItems || []).forEach((f: any) => fMap.set(f.id || f.title, f));
+    (incoming.feedItems || []).forEach((f: any) => fMap.set(f.id || f.title, { ...(fMap.get(f.id || f.title) || {}), ...f }));
+    merged.feedItems = Array.from(fMap.values()).slice(-50);
+  }
+
   return merged;
 }
 
 export async function getCoupleData(key: string): Promise<any | null> {
+  if (isProd()) {
+    if (!isSqlConfigured() || !db) {
+      throw new DatabaseUnavailableError();
+    }
+    try {
+      const rows = await db.select().from(coupleData).where(eq(coupleData.id, key)).limit(1);
+      return rows && rows.length > 0 ? rows[0].data : null;
+    } catch (err: unknown) {
+      logger.error('SQL чтение coupleData завершилось сбоем в production (fail-fast)', err, { key });
+      throw new DatabaseUnavailableError();
+    }
+  }
+
+  // Dev / Test mode with fallback
   if (isSqlConfigured() && db) {
     try {
       const rows = await db.select().from(coupleData).where(eq(coupleData.id, key)).limit(1);
       if (rows && rows.length > 0) {
         return rows[0].data;
       }
-      return null;
     } catch (err: unknown) {
       logger.warn('SQL чтение coupleData сбоит, попытка чтения аварийного файла', { key }, err);
     }
@@ -284,7 +427,10 @@ export async function getCoupleData(key: string): Promise<any | null> {
 export async function saveCoupleData(key: string, data: any): Promise<void> {
   const now = new Date().toISOString();
 
-  if (isSqlConfigured() && db) {
+  if (isProd()) {
+    if (!isSqlConfigured() || !db) {
+      throw new DatabaseUnavailableError();
+    }
     try {
       await db
         .insert(coupleData)
@@ -302,16 +448,31 @@ export async function saveCoupleData(key: string, data: any): Promise<void> {
         });
       return;
     } catch (err: unknown) {
-      if (process.env.NODE_ENV === "production") {
-        logger.error('CRITICAL: SQL saveCoupleData failed in production. File fallback is disabled.', err, { key });
-        throw err;
-      }
-      logger.error('SQL запись coupleData сбоит, сохранение в аварийный файл', err, { key });
+      logger.error('SQL запись coupleData завершилась сбоем в production (fail-fast)', err, { key });
+      throw new DatabaseUnavailableError();
     }
   }
 
-  if (process.env.NODE_ENV === "production") {
-     throw new Error("Cannot save couple data: Database is not configured and file fallback is disabled in production.");
+  // Dev / Test mode with fallback
+  if (isSqlConfigured() && db) {
+    try {
+      await db
+        .insert(coupleData)
+        .values({
+          id: key,
+          data,
+          lastUpdatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: coupleData.id,
+          set: {
+            data,
+            lastUpdatedAt: now,
+          },
+        });
+    } catch (err: unknown) {
+      logger.error('SQL запись coupleData сбоит, сохранение в аварийный файл', err, { key });
+    }
   }
 
   const store = readEmergencyFile();

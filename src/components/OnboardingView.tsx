@@ -133,7 +133,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ onComplete }) =>
         {step === 'create_step1' && (
           <div className="space-y-5 animate-fadeIn">
             <div>
-              <span className="text-xs font-bold text-rose-500 uppercase tracking-wider">Шаг 1 из 3</span>
+              <span className="text-xs font-bold text-rose-500">Шаг 1 из 3</span>
               <h2 className="text-xl sm:text-2xl font-bold text-[var(--text)] mt-1">Как вас зовут?</h2>
               <p className="text-xs text-[var(--text-2)] mt-1">Имя, под которым вас будет видеть ваш партнёр</p>
             </div>
@@ -198,7 +198,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ onComplete }) =>
         {step === 'create_step2' && (
           <div className="space-y-5 animate-fadeIn">
             <div>
-              <span className="text-xs font-bold text-rose-500 uppercase tracking-wider">Шаг 2 из 3</span>
+              <span className="text-xs font-bold text-rose-500">Шаг 2 из 3</span>
               <h2 className="text-xl sm:text-2xl font-bold text-[var(--text)] mt-1">Имя вашего партнёра</h2>
               <p className="text-xs text-[var(--text-2)] mt-1">Кому вы отправите приглашение в пару?</p>
             </div>
@@ -263,7 +263,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ onComplete }) =>
         {step === 'create_step3' && (
           <div className="space-y-5 animate-fadeIn">
             <div>
-              <span className="text-xs font-bold text-rose-500 uppercase tracking-wider">Шаг 3 из 3</span>
+              <span className="text-xs font-bold text-rose-500">Шаг 3 из 3</span>
               <h2 className="text-xl sm:text-2xl font-bold text-[var(--text)] mt-1">Когда началась ваша история?</h2>
               <p className="text-xs text-[var(--text-2)] mt-1">Мы будем считать ваши дни вместе и напоминать о годовщинах</p>
             </div>
@@ -342,7 +342,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ onComplete }) =>
 
             {/* Invite Box */}
             <div className="p-4 rounded-2xl bg-[var(--surface-2)] border border-[var(--divider)] text-left space-y-2">
-              <span className="text-[11px] font-semibold text-[var(--text-2)] uppercase tracking-wider">Код для {partner2Name}:</span>
+              <span className="text-[11px] font-semibold text-[var(--text-2)]">Код для {partner2Name}:</span>
               <div className="flex items-center justify-between bg-[var(--surface)] p-3 rounded-xl border border-[var(--divider)] font-mono font-bold text-lg text-rose-500">
                 <span>{createdLinkCode || coupleProfile.linkCode}</span>
                 <button
@@ -375,7 +375,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ onComplete }) =>
         {step === 'join' && (
           <div className="space-y-5 animate-fadeIn">
             <div>
-              <span className="text-xs font-bold text-rose-500 uppercase tracking-wider">Подключение</span>
+              <span className="text-xs font-bold text-rose-500">Подключение</span>
               <h2 className="text-xl sm:text-2xl font-bold text-[var(--text)] mt-1">Присоединиться к паре</h2>
               <p className="text-xs text-[var(--text-2)] mt-1">Введите 6-значный код сопряжения от вашего партнёра</p>
             </div>
@@ -389,7 +389,7 @@ export const OnboardingView: React.FC<OnboardingViewProps> = ({ onComplete }) =>
                   value={joinCode}
                   onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                   autoFocus
-                  className="w-full px-4 py-3 bg-[var(--surface-2)] border border-[var(--divider)] rounded-xl font-mono text-center text-lg text-rose-500 font-bold uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-rose-500"
+                  className="w-full px-4 py-3 bg-[var(--surface-2)] border border-[var(--divider)] rounded-xl font-mono text-center text-lg text-rose-500 font-boldst focus:outline-none focus:ring-2 focus:ring-rose-500"
                 />
               </div>
 

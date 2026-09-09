@@ -91,7 +91,7 @@ export const DynamicsGamificationWidget: React.FC = () => {
         <div className="absolute -top-10 -right-10 w-32 h-32 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="flex items-center gap-2">
           <Trophy className="w-5 h-5 text-amber-500" />
-          <h3 className="text-sm font-extrabold text-[var(--text)] uppercase tracking-wider">
+          <h3 className="text-sm font-extrabold text-[var(--text)]">
             Динамический движок Loop
           </h3>
         </div>
@@ -128,7 +128,7 @@ export const DynamicsGamificationWidget: React.FC = () => {
             {/* The 5:1 Marker */}
             <div className="absolute top-0 bottom-0 left-[100%] w-0.5 bg-[var(--text)] z-10 hidden" />
           </div>
-          <div className="flex justify-between items-center text-[10px] font-bold text-[var(--text-2)] uppercase tracking-wider">
+          <div className="flex justify-between items-center text-[10px] font-bold text-[var(--text-2)]">
             <span>+{stats.gottman.totalPositive} Действий</span>
             <span className={stats.gottman.isOptimal ? 'text-emerald-500' : ''}>
               {stats.gottman.isOptimal ? 'Супер-буст активен!' : 'Цель: 5 к 1'}
@@ -152,14 +152,14 @@ export const DynamicsGamificationWidget: React.FC = () => {
               </div>
             </div>
             <div className="text-right">
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--divider)] text-[var(--text)]">
+              <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--divider)] text-[var(--text)]">
                 {stats.are.isSynced ? 'Синхронизировано' : 'Дисбаланс'}
               </span>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-[var(--accent-blue)] w-8 truncate">{p1.name}</span>
+            <span className="text-xs font-bold text-[var(--accent-blue)] w-8">{p1.name}</span>
             <div className="flex-1 h-2.5 rounded-full bg-[var(--divider)] overflow-hidden flex shadow-inner">
               <div 
                 className="h-full bg-[var(--accent-blue)] transition-all duration-1000"
@@ -170,7 +170,7 @@ export const DynamicsGamificationWidget: React.FC = () => {
                 style={{ width: `${stats.are.p2Share}%` }}
               />
             </div>
-            <span className="text-xs font-bold text-[var(--accent)] w-8 text-right truncate">{p2.name}</span>
+            <span className="text-xs font-bold text-[var(--accent)] w-8 text-right">{p2.name}</span>
           </div>
           
           <p className="text-[10px] leading-relaxed text-[var(--text-2)] font-medium text-center">

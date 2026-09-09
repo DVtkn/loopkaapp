@@ -24,6 +24,10 @@ export async function requestPairConnection(fromLogin: string, toLogin: string) 
   if (fromUser.partnerLogin) throw { status: 400, message: "Вы уже состоите в паре", code: "ALREADY_PAIRED" };
   if (toUser.partnerLogin) throw { status: 400, message: "Пользователь уже состоит в паре", code: "TARGET_ALREADY_PAIRED" };
 
+  if (fromUser.gender && toUser.gender && fromUser.gender === toUser.gender) {
+    throw { status: 400, message: "Регистрация однополых пар временно не поддерживается системой. Loop спроектирован для гетеросексуальных пар." };
+  }
+
   const reqObj = await createPairRequest(fromUser, toUser);
   return reqObj;
 }

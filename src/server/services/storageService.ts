@@ -227,17 +227,6 @@ export function mergeCoupleData(existing: any, incoming: any): any {
   if (!incoming) return existing || {};
 
   const merged = { ...existing, ...incoming };
-  
-  // SECURITY STRIP: Prevent client from forging calculated levels or XP
-  if (incoming.level !== undefined) merged.level = existing.level || 1;
-  if (incoming.levelName !== undefined) merged.levelName = existing.levelName || 'Первый шаг';
-  if (incoming.testsCompletedCount !== undefined) merged.testsCompletedCount = existing.testsCompletedCount || 0;
-  
-  if (merged.coupleProfile) {
-    if (incoming.coupleProfile?.level !== undefined) merged.coupleProfile.level = existing.coupleProfile?.level || 1;
-    if (incoming.coupleProfile?.levelName !== undefined) merged.coupleProfile.levelName = existing.coupleProfile?.levelName || 'Первый шаг';
-    if (incoming.coupleProfile?.testsCompletedCount !== undefined) merged.coupleProfile.testsCompletedCount = existing.coupleProfile?.testsCompletedCount || 0;
-  }
 
   // SECURITY STRIP: Prevent client from forging calculated levels or XP
   if (incoming.level !== undefined) merged.level = existing.level || 1;

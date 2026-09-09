@@ -183,7 +183,7 @@ const MainLayout: React.FC = () => {
         <div className="md:hidden shrink-0 z-10">
           <Navigation 
             activeTab={activeTab} 
-            setActiveTab={setActiveTab} 
+            setActiveTab={setActiveTab}
             onTabChange={setActiveTab}
             onOpenAchievements={() => setShowAchievementsModal(true)}
           />

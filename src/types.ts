@@ -430,4 +430,3 @@ export interface CoupleData {
   ranking?: any;
   [key: string]: any;
 }
-

@@ -53,7 +53,7 @@ async function runDevFallbackTests() {
     });
     const regBody = await regRes.json();
     console.log(`[API RESPONSE] Status: ${regRes.status}`);
-    
+
     if (regRes.status !== 201) {
       console.log(`[API RESPONSE] Body:`, JSON.stringify(regBody));
       throw new Error(`Expected HTTP 201 but got ${regRes.status}`);

@@ -239,6 +239,17 @@ export function mergeCoupleData(existing: any, incoming: any): any {
     if (incoming.coupleProfile?.testsCompletedCount !== undefined) merged.coupleProfile.testsCompletedCount = existing.coupleProfile?.testsCompletedCount || 0;
   }
 
+  // SECURITY STRIP: Prevent client from forging calculated levels or XP
+  if (incoming.level !== undefined) merged.level = existing.level || 1;
+  if (incoming.levelName !== undefined) merged.levelName = existing.levelName || 'Первый шаг';
+  if (incoming.testsCompletedCount !== undefined) merged.testsCompletedCount = existing.testsCompletedCount || 0;
+
+  if (merged.coupleProfile) {
+    if (incoming.coupleProfile?.level !== undefined) merged.coupleProfile.level = existing.coupleProfile?.level || 1;
+    if (incoming.coupleProfile?.levelName !== undefined) merged.coupleProfile.levelName = existing.coupleProfile?.levelName || 'Первый шаг';
+    if (incoming.coupleProfile?.testsCompletedCount !== undefined) merged.coupleProfile.testsCompletedCount = existing.coupleProfile?.testsCompletedCount || 0;
+  }
+
   // 1. Tests merge: ensure each test merges questions / answers / partnerAnswers / scores
   if (Array.isArray(existing.tests) && Array.isArray(incoming.tests)) {
     const testMap = new Map<string, any>();

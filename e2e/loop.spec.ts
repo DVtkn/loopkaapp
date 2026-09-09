@@ -12,7 +12,7 @@ test.describe('Loop E2E Scenarios', () => {
   let page2: any;
 
   // Очистка БД до и после тестов должна выполняться через API или DB драйвер (здесь мокается)
-  
+
   test.beforeAll(async ({ browser }) => {
     context1 = await browser.newContext();
     context2 = await browser.newContext();
@@ -30,10 +30,10 @@ test.describe('Loop E2E Scenarios', () => {
     await page1.goto(`${BASE_URL}/`);
     // ... UI регистрация ...
     // Проверка БД: select * from users where login='testuser1'
-    
+
     // 1.2 Экран "Сегодня" без пары
     // ... ожидание пустого состояния ...
-    
+
     // 1.6 Чат с ИИ
     // ... ожидание ответа ...
   });
@@ -46,7 +46,7 @@ test.describe('Loop E2E Scenarios', () => {
   test('СЦЕНАРИЙ 3: Полный цикл образования пары', async () => {
     // 3.1 Принятие заявки
     // ...
-    
+
     // 3.2 Действия в паре (Синхронизация)
     // ...
   });

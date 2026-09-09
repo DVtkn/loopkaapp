@@ -6,13 +6,13 @@ const BASE_URL = "http://localhost:3000";
 async function fetchApi(path: string, token: string | null, method = "GET", body?: any) {
   const headers: any = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  
+
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined
   });
-  
+
   const data = await res.json().catch(() => null);
   return { status: res.status, data };
 }
@@ -20,7 +20,7 @@ async function fetchApi(path: string, token: string | null, method = "GET", body
 async function run() {
   const u1 = "u1_v_" + Date.now().toString(36);
   const u2 = "u2_v_" + Date.now().toString(36);
-  
+
   const token1 = (await fetchApi("/api/auth/register", null, "POST", { login: u1, password: "pw", name: "User 1" })).data.token;
   const token2 = (await fetchApi("/api/auth/register", null, "POST", { login: u2, password: "pw", name: "User 2" })).data.token;
 
@@ -52,7 +52,7 @@ async function run() {
   const data = res.data?.data;
   console.log(`Server saved root level: ${data?.level}`);
   console.log(`Server saved profile level: ${data?.coupleProfile?.level}`);
-  
+
   if (data?.level === 999 || data?.coupleProfile?.level === 999) {
     console.error("❌ VULNERABLE: Server accepted client-forged level 999!");
   } else {

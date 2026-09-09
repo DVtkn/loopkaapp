@@ -191,7 +191,7 @@ class PhotoStorageService {
         const pool = createPool();
         if (!pool) throw new DatabaseUnavailableError();
         const res = await pool.query(
-          `SELECT id, couple_id as "coupleId", uploader_login as "uploaderLogin", 
+          `SELECT id, couple_id as "coupleId", uploader_login as "uploaderLogin",
                   mime_type as "mimeType", caption, width, height, created_at as "createdAt"
            FROM photos
            WHERE couple_id = $1
@@ -280,7 +280,7 @@ class PhotoStorageService {
         const pool = createPool();
         if (!pool) throw new DatabaseUnavailableError();
         const res = await pool.query(
-          `SELECT id, couple_id as "coupleId", uploader_login as "uploaderLogin", 
+          `SELECT id, couple_id as "coupleId", uploader_login as "uploaderLogin",
                   mime_type as "mimeType", caption, width, height, created_at as "createdAt"
            FROM photos
            WHERE id = $1
@@ -373,7 +373,7 @@ class PhotoStorageService {
         const pool = createPool();
         if (!pool) throw new DatabaseUnavailableError();
         const res = await pool.query(
-          `SELECT id, couple_id as "coupleId", uploader_login as "uploaderLogin", 
+          `SELECT id, couple_id as "coupleId", uploader_login as "uploaderLogin",
                   image_bytes as "imageBytes", mime_type as "mimeType"
            FROM photos
            WHERE id = $1

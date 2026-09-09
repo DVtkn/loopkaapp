@@ -209,9 +209,9 @@ const MainLayout: React.FC = () => {
       <AnimatePresence>
         {showAchievementsModal && (
           <Suspense fallback={null}>
-            <AchievementsModal 
-              isOpen={showAchievementsModal} 
-              onClose={() => setShowAchievementsModal(false)} 
+            <AchievementsModal
+              isOpen={showAchievementsModal}
+              onClose={() => setShowAchievementsModal(false)}
             />
           </Suspense>
         )}

@@ -7,13 +7,13 @@ const BASE_URL = "http://localhost:3000";
 async function fetchApi(path: string, token: string | null, method = "GET", body?: any) {
   const headers: any = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  
+
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined
   });
-  
+
   const data = await res.json().catch(() => null);
   return { status: res.status, data };
 }
@@ -27,14 +27,14 @@ async function run() {
   const u1 = `u1_${ts}`;
   const u2 = `u2_${ts}`;
   const u3 = `u3_${ts}`;
-  
+
   let token1: string | null = null;
   let token2: string | null = null;
   let token3: string | null = null;
 
   try {
     console.log("--- SCENARIO 1: SOLO USERS & BOUNDARIES ---");
-    
+
     // 1.1 Registrations
     let res = await fetchApi("/api/auth/register", null, "POST", { login: u1, password: "password123", name: "User 1" });
     console.log(`[API] POST /api/auth/register (u1) -> Status: ${res.status}, Body:`, res.data);
@@ -42,7 +42,7 @@ async function run() {
 
     res = await fetchApi("/api/auth/register", null, "POST", { login: u2, password: "password123", name: "User 2" });
     token2 = res.data?.token;
-    
+
     res = await fetchApi("/api/auth/register", null, "POST", { login: u3, password: "password123", name: "User 3" });
     token3 = res.data?.token;
 
@@ -62,12 +62,12 @@ async function run() {
     // 1.5 Duplicate Request (Boundary)
     res = await fetchApi("/api/pair/request", token1, "POST", { fromLogin: u1, toLogin: u2 });
     console.log(`[API] POST /api/pair/request (Duplicate) -> Status: ${res.status}, Body:`, res.data);
-    
+
     let reqs = await db.select().from(pairRequests).where(eq(pairRequests.fromLogin, u1));
     console.log(`[DB] SELECT * FROM pair_requests WHERE fromLogin = '${u1}' -> Count: ${reqs.length}, Status: ${reqs[0]?.status}`);
 
     console.log("\n--- SCENARIO 2: PAIRING PROCESS ---");
-    
+
     // 2.1 Accept Request
     res = await fetchApi("/api/pair/accept", token2, "POST", { fromLogin: u1, toLogin: u2 });
     console.log(`[API] POST /api/pair/accept (u2 accepts u1) -> Status: ${res.status}, Body:`, res.data);
@@ -76,7 +76,7 @@ async function run() {
     u1Db = await db.select().from(users).where(eq(users.login, u1));
     let u2Db = await db.select().from(users).where(eq(users.login, u2));
     console.log(`[DB] SELECT * FROM users -> u1.partnerLogin: ${u1Db[0]?.partnerLogin}, u2.partnerLogin: ${u2Db[0]?.partnerLogin}`);
-    
+
     if (u1Db[0]?.partnerLogin !== u2 || u2Db[0]?.partnerLogin !== u1) {
        console.log("❌ CRITICAL FAILURE: DB state does not reflect pairing!");
        process.exit(1);
@@ -91,7 +91,7 @@ async function run() {
 
     // 3.1 Send Touch
     const coupleId = [u1, u2].sort().join('_');
-    res = await fetchApi("/api/couple/touch", token1, "POST", { 
+    res = await fetchApi("/api/couple/touch", token1, "POST", {
       senderLogin: u1,
       senderName: "User 1",
       targetLogin: u2,
@@ -103,7 +103,7 @@ async function run() {
     // 3.2 Read Touch (u2 should see it)
     res = await fetchApi(`/api/couple/data/${coupleId}`, token2);
     console.log(`[API] GET /api/couple/data (by u2) -> Status: ${res.status}, Body:`, res.data);
-    
+
     const cData = await db.select().from(coupleData).where(eq(coupleData.id, coupleId));
     console.log(`[DB] SELECT * FROM couple_data -> Found: ${cData.length > 0}`);
 

@@ -7,13 +7,13 @@ const BASE_URL = "http://localhost:3000";
 async function fetchApi(path: string, token: string | null, method = "GET", body?: any) {
   const headers: any = { "Content-Type": "application/json", "x-test-suite": "true" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  
+
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined
   });
-  
+
   const data = await res.json().catch(() => null);
   return { status: res.status, data };
 }
@@ -27,14 +27,14 @@ async function run() {
   const u1 = `u1_${ts}`;
   const u2 = `u2_${ts}`;
   const u3 = `u3_${ts}`;
-  
+
   let token1: string | null = null;
   let token2: string | null = null;
   let token3: string | null = null;
 
   try {
     console.log("--- SCENARIO 1: SOLO USERS & BOUNDARIES ---");
-    
+
     // 1.1 Registrations
     let res = await fetchApi("/api/auth/register", null, "POST", { login: u1, password: "password123", name: "User 1" });
     console.log(`[API] POST /api/auth/register (u1) -> Status: ${res.status}, Body:`, JSON.stringify(res.data));
@@ -93,9 +93,9 @@ async function run() {
         partnerAnswer: null
       }
     };
-    
-    res = await fetchApi("/api/couple/sync", token1, "POST", { 
-      login1: u1, login2: u2, coupleId, payload: syncPayload 
+
+    res = await fetchApi("/api/couple/sync", token1, "POST", {
+      login1: u1, login2: u2, coupleId, payload: syncPayload
     });
     console.log(`[API] POST /api/couple/sync (u1 sends test/XP data) -> Status: ${res.status}, Body:`, JSON.stringify(res.data));
 
@@ -104,7 +104,7 @@ async function run() {
     console.log(`[API] GET /api/couple/data (by u2) -> Status: ${res.status}, Body:`, JSON.stringify(res.data));
 
     // Send touch
-    res = await fetchApi("/api/couple/touch", token1, "POST", { 
+    res = await fetchApi("/api/couple/touch", token1, "POST", {
       senderLogin: u1,
       senderName: "User 1",
       targetLogin: u2,

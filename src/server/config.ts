@@ -29,6 +29,11 @@ export function loadConfig(): ServerConfig {
   let jwtSecret = process.env.JWT_SECRET;
 
   if (!jwtSecret) {
+    if (process.env.NODE_ENV === 'production') {
+      const errMsg = 'FATAL: В production-режиме (NODE_ENV=production) обязательно наличие переменной JWT_SECRET. Запуск сервера отклонён для предотвращения использования уязвимых токенов.';
+      logger.error(errMsg);
+      throw new Error(errMsg);
+    }
     logger.warn('JWT_SECRET is missing from environment. Using fallback (NOT safe for production).');
     jwtSecret = 'loop_secret_fallback_12345';
   }

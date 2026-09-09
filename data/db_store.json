@@ -4920,6 +4920,125 @@
       "currentMood": null,
       "lastActiveAt": "2026-09-09T04:13:17.325Z",
       "createdAt": "2026-09-09T04:13:17.325Z"
+    },
+    "dev_mttmne1y": {
+      "id": "7a3a6e3b-00a2-437e-aabb-72ff41627f53",
+      "login": "dev_mttmne1y",
+      "passwordHash": "$2b$10$tdZpWNCEOcB2vbIiMniqc.5pH0r1qkQVY3gg/Uo4sbu6O5rhRbI6W",
+      "name": "Dev Fallback User",
+      "gender": null,
+      "avatarEmoji": "sparkles",
+      "partnerLogin": null,
+      "pairedAt": null,
+      "startDate": null,
+      "city": null,
+      "loveLanguage": null,
+      "attachmentStyle": null,
+      "currentMood": null,
+      "lastActiveAt": "2026-09-09T04:57:40.010Z",
+      "createdAt": "2026-09-09T04:57:40.010Z"
+    },
+    "u1_mttmv1ha": {
+      "id": "a57e2ec0-6afa-49b4-bf1d-6e15dcb40b51",
+      "login": "u1_mttmv1ha",
+      "passwordHash": "$2b$10$Tk1kSh/zYImbZHHGbbWULOP/kDhFUtVCk6PRVkdyyB4LO3psLx3.i",
+      "name": "User 1",
+      "gender": null,
+      "avatarEmoji": "sparkles",
+      "partnerLogin": "u2_mttmv1ha",
+      "pairedAt": "2026-09-09T05:03:39.869Z",
+      "startDate": null,
+      "city": null,
+      "loveLanguage": null,
+      "attachmentStyle": null,
+      "currentMood": null,
+      "lastActiveAt": "2026-09-09T05:03:37.350Z",
+      "createdAt": "2026-09-09T05:03:37.350Z"
+    },
+    "u2_mttmv1ha": {
+      "id": "143affba-7b48-4bcb-88aa-76c5ab4578d9",
+      "login": "u2_mttmv1ha",
+      "passwordHash": "$2b$10$pSwx9Lf3sO0.a1qmh/yOT.f.aU/bb6vwD.Iv9Qh8jR4pu48v0oVay",
+      "name": "User 2",
+      "gender": null,
+      "avatarEmoji": "sparkles",
+      "partnerLogin": "u1_mttmv1ha",
+      "pairedAt": "2026-09-09T05:03:39.869Z",
+      "startDate": null,
+      "city": null,
+      "loveLanguage": null,
+      "attachmentStyle": null,
+      "currentMood": null,
+      "lastActiveAt": "2026-09-09T05:03:37.686Z",
+      "createdAt": "2026-09-09T05:03:37.686Z"
+    },
+    "u3_mttmv1ha": {
+      "id": "6248c78a-d25d-4fce-ab20-c9df44516b74",
+      "login": "u3_mttmv1ha",
+      "passwordHash": "$2b$10$kJ3an8D5gZqns.NVTLIE5ORDQj8pWUcowA4cGsDOmsnCAmgRgA6OO",
+      "name": "User 3",
+      "gender": null,
+      "avatarEmoji": "sparkles",
+      "partnerLogin": null,
+      "pairedAt": null,
+      "startDate": null,
+      "city": null,
+      "loveLanguage": null,
+      "attachmentStyle": null,
+      "currentMood": null,
+      "lastActiveAt": "2026-09-09T05:03:37.987Z",
+      "createdAt": "2026-09-09T05:03:37.987Z"
+    },
+    "u1_mttnc2oz": {
+      "id": "30d81dec-33da-458d-b06a-0d1bb77de567",
+      "login": "u1_mttnc2oz",
+      "passwordHash": "$2b$10$YD6/fHIyXpxbvhQSiV.KfOR8X9Jt8t1hSfJcgdfN1h9Z6lzef.Qt2",
+      "name": "User 1",
+      "gender": null,
+      "avatarEmoji": "sparkles",
+      "partnerLogin": "u2_mttnc2oz",
+      "pairedAt": "2026-09-09T05:16:54.297Z",
+      "startDate": null,
+      "city": null,
+      "loveLanguage": null,
+      "attachmentStyle": null,
+      "currentMood": null,
+      "lastActiveAt": "2026-09-09T05:16:51.783Z",
+      "createdAt": "2026-09-09T05:16:51.783Z"
+    },
+    "u2_mttnc2oz": {
+      "id": "9ae155ba-affc-477c-b262-53193bbdd949",
+      "login": "u2_mttnc2oz",
+      "passwordHash": "$2b$10$5rMtBecDcfAxzJAiVcoVHeGQ3D6PqmCjnKNtz3clYgK4oSUOSAos2",
+      "name": "User 2",
+      "gender": null,
+      "avatarEmoji": "sparkles",
+      "partnerLogin": "u1_mttnc2oz",
+      "pairedAt": "2026-09-09T05:16:54.297Z",
+      "startDate": null,
+      "city": null,
+      "loveLanguage": null,
+      "attachmentStyle": null,
+      "currentMood": null,
+      "lastActiveAt": "2026-09-09T05:16:52.096Z",
+      "createdAt": "2026-09-09T05:16:52.096Z"
+    },
+    "u3_mttnc2oz": {
+      "id": "5dc007d2-d831-41d7-bfd9-efe9bfeea4a0",
+      "login": "u3_mttnc2oz",
+      "passwordHash": "$2b$10$UDq3bCI1VIGxquwpvkHTz.qnwuQ6kB.5l5uj5La7z9mZ8U2SvfFsG",
+      "name": "User 3",
+      "gender": null,
+      "avatarEmoji": "sparkles",
+      "partnerLogin": null,
+      "pairedAt": null,
+      "startDate": null,
+      "city": null,
+      "loveLanguage": null,
+      "attachmentStyle": null,
+      "currentMood": null,
+      "lastActiveAt": "2026-09-09T05:16:52.397Z",
+      "createdAt": "2026-09-09T05:16:52.397Z"
     }
   },
   "pairRequests": [
@@ -9206,6 +9325,108 @@
             "emoji": "calm",
             "label": "Спокойно",
             "updatedAt": "2026-09-09T04:05:55.302Z"
+          },
+          "loveLanguage": "Пройдите тест",
+          "attachmentStyle": "Пройдите тест"
+        },
+        "levelName": "Первая искра",
+        "startDate": "2026-09-09",
+        "testsCompletedCount": 0
+      },
+      "testsCompletedCount": 0,
+      "level": 1,
+      "levelName": "Первая искра",
+      "questionOfTheDay": {
+        "id": "q1",
+        "question": "How are you?",
+        "myAnswer": "Good",
+        "partnerAnswer": null
+      }
+    },
+    "u1_mttmv1ha_u2_mttmv1ha": {
+      "coupleProfile": {
+        "id": "c-1788930220669",
+        "city": "Москва",
+        "level": 1,
+        "status": "ACTIVE",
+        "linkCode": "LOOP-1864",
+        "partner1": {
+          "id": "partner1",
+          "name": "User 2",
+          "email": "",
+          "login": "u2_mttmv1ha",
+          "avatar": "sparkles",
+          "gender": null,
+          "currentMood": {
+            "emoji": "calm",
+            "label": "Спокойно",
+            "updatedAt": "2026-09-09T05:03:39.869Z"
+          },
+          "loveLanguage": "Пройдите тест",
+          "attachmentStyle": "Пройдите тест"
+        },
+        "partner2": {
+          "id": "partner2",
+          "name": "User 1",
+          "email": "",
+          "login": "u1_mttmv1ha",
+          "avatar": "sparkles",
+          "gender": null,
+          "currentMood": {
+            "emoji": "calm",
+            "label": "Спокойно",
+            "updatedAt": "2026-09-09T05:03:39.869Z"
+          },
+          "loveLanguage": "Пройдите тест",
+          "attachmentStyle": "Пройдите тест"
+        },
+        "levelName": "Первая искра",
+        "startDate": "2026-09-09",
+        "testsCompletedCount": 0
+      },
+      "testsCompletedCount": 0,
+      "level": 1,
+      "levelName": "Первая искра",
+      "questionOfTheDay": {
+        "id": "q1",
+        "question": "How are you?",
+        "myAnswer": "Good",
+        "partnerAnswer": null
+      }
+    },
+    "u1_mttnc2oz_u2_mttnc2oz": {
+      "coupleProfile": {
+        "id": "c-1788931015103",
+        "city": "Москва",
+        "level": 1,
+        "status": "ACTIVE",
+        "linkCode": "LOOP-1646",
+        "partner1": {
+          "id": "partner1",
+          "name": "User 2",
+          "email": "",
+          "login": "u2_mttnc2oz",
+          "avatar": "sparkles",
+          "gender": null,
+          "currentMood": {
+            "emoji": "calm",
+            "label": "Спокойно",
+            "updatedAt": "2026-09-09T05:16:54.297Z"
+          },
+          "loveLanguage": "Пройдите тест",
+          "attachmentStyle": "Пройдите тест"
+        },
+        "partner2": {
+          "id": "partner2",
+          "name": "User 1",
+          "email": "",
+          "login": "u1_mttnc2oz",
+          "avatar": "sparkles",
+          "gender": null,
+          "currentMood": {
+            "emoji": "calm",
+            "label": "Спокойно",
+            "updatedAt": "2026-09-09T05:16:54.297Z"
           },
           "loveLanguage": "Пройдите тест",
           "attachmentStyle": "Пройдите тест"

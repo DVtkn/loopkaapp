@@ -136,6 +136,48 @@ chatRouter.post(["/messages", "/message"], requireAuth, async (req: Authenticate
 
 export const aiRouter = Router();
 
+aiRouter.get("/health", async (req, res) => {
+  const GROQ_API_KEY = process.env.GROQ_API_KEY;
+  if (!GROQ_API_KEY) {
+    return res.status(503).json({ status: "error", message: "GROQ_API_KEY is not configured" });
+  }
+
+  try {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${GROQ_API_KEY}`,
+      },
+      body: JSON.stringify({
+        messages: [{ role: "user", content: "ping" }],
+        model: "qwen/qwen3.8-27b",
+        max_tokens: 10,
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error("[Groq Health Check Failed]:", response.status, errText);
+      return res.status(503).json({
+        status: "error",
+        message: "Groq API is currently unavailable",
+        upstreamStatus: response.status,
+      });
+    }
+
+    const data = await response.json();
+    if (data.choices?.[0]?.message?.content) {
+      return res.json({ status: "ok", provider: data.model || "groq" });
+    } else {
+      return res.status(503).json({ status: "error", message: "Empty response from Groq" });
+    }
+  } catch (error) {
+    console.error("[Groq Error during health check]:", error);
+    return res.status(503).json({ status: "error", message: "Network error reaching Groq" });
+  }
+});
+
 aiRouter.get("/messages/:login", requireAuth, requirePairOwnership, async (req: AuthenticatedRequest, res, next) => {
   try {
     const login = String(req.params.login || "").toLowerCase().replace(/^@/, "");
@@ -232,7 +274,7 @@ aiRouter.post("/chat", aiLimiter, requireAuth, validateBody(aiChatMessageSchema)
       mode: "error",
     });
   } catch (err: unknown) {
-    logger.error("Ошибка в AI чате Совы", err);
+    console.error("[OpenRouter Gemma Error]:", err);
     return res.status(503).json({
       error: "ИИ временно недоступен. Попробуйте позже.",
       mode: "error",

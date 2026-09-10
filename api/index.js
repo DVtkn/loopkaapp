@@ -415,16 +415,15 @@ function loadConfig() {
       jwtSecret = "loop_secret_fallback_12345";
     }
   }
-  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-  if (!OPENROUTER_API_KEY) {
-    logger.warn("OPENROUTER_API_KEY is not configured in .env. AI psychologist (Sova) will return 503.");
+  const GROQ_API_KEY = process.env.GROQ_API_KEY;
+  if (!GROQ_API_KEY) {
+    logger.warn("GROQ_API_KEY is not configured in .env. AI psychologist (Sova) will return 503.");
   }
   return {
     port,
     nodeEnv,
     jwtSecret,
-    openrouterApiKey: OPENROUTER_API_KEY,
-    groqApiKey: process.env.GROQ_API_KEY,
+    groqApiKey: GROQ_API_KEY,
     geminiApiKey: process.env.GEMINI_API_KEY,
     allowedOrigins: parseAllowedOrigins()
   };
@@ -849,22 +848,20 @@ async function saveCoupleData(key, data) {
 
 // src/server/aiService.ts
 import crypto from "crypto";
-var OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
-var MODEL_NAME = "thinkingmachines/inkling-small:free";
+var GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
+var MODEL_NAME = "qwen/qwen3.8-27b";
 async function callGroqChat(messages) {
-  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-  if (!OPENROUTER_API_KEY) {
-    logger.warn("OPENROUTER_API_KEY \u043D\u0435 \u0437\u0430\u0434\u0430\u043D \u0432 \u043E\u043A\u0440\u0443\u0436\u0435\u043D\u0438\u0438 (.env)");
+  const GROQ_API_KEY = process.env.GROQ_API_KEY;
+  if (!GROQ_API_KEY) {
+    logger.warn("GROQ_API_KEY \u043D\u0435 \u0437\u0430\u0434\u0430\u043D \u0432 \u043E\u043A\u0440\u0443\u0436\u0435\u043D\u0438\u0438 (.env)");
     return null;
   }
   try {
-    const response = await fetch(OPENROUTER_ENDPOINT, {
+    const response = await fetch(GROQ_ENDPOINT, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        "HTTP-Referer": "https://loopkaapp.vercel.app",
-        "X-Title": "Loop Couples App"
+        Authorization: `Bearer ${GROQ_API_KEY}`
       },
       body: JSON.stringify({
         messages,
@@ -878,14 +875,14 @@ async function callGroqChat(messages) {
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content;
       if (content) {
-        logger.info(`\u041E\u0442\u0432\u0435\u0442 OpenRouter \u0443\u0441\u043F\u0435\u0448\u043D\u043E \u043F\u043E\u043B\u0443\u0447\u0435\u043D (\u043C\u043E\u0434\u0435\u043B\u044C: ${MODEL_NAME})`);
+        logger.info(`\u041E\u0442\u0432\u0435\u0442 Groq \u0443\u0441\u043F\u0435\u0448\u043D\u043E \u043F\u043E\u043B\u0443\u0447\u0435\u043D (\u043C\u043E\u0434\u0435\u043B\u044C: ${MODEL_NAME})`);
         return content;
       }
     }
     const errText = await response.text();
-    logger.warn(`OpenRouter ${MODEL_NAME} \u0441\u0442\u0430\u0442\u0443\u0441 ${response.status}: ${errText.slice(0, 200)}`);
+    logger.warn(`Groq ${MODEL_NAME} \u0441\u0442\u0430\u0442\u0443\u0441 ${response.status}: ${errText.slice(0, 200)}`);
   } catch (err) {
-    logger.error(`\u0421\u0435\u0442\u0435\u0432\u0430\u044F \u043E\u0448\u0438\u0431\u043A\u0430 \u043F\u0440\u0438 \u0437\u0430\u043F\u0440\u043E\u0441\u0435 \u043A OpenRouter (${MODEL_NAME})`, err);
+    console.error("[Groq API Error]:", err);
   }
   return null;
 }
@@ -3227,6 +3224,44 @@ chatRouter.post(["/messages", "/message"], requireAuth, async (req, res, next) =
   }
 });
 var aiRouter = Router4();
+aiRouter.get("/health", async (req, res) => {
+  const GROQ_API_KEY = process.env.GROQ_API_KEY;
+  if (!GROQ_API_KEY) {
+    return res.status(503).json({ status: "error", message: "GROQ_API_KEY is not configured" });
+  }
+  try {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${GROQ_API_KEY}`
+      },
+      body: JSON.stringify({
+        messages: [{ role: "user", content: "ping" }],
+        model: "qwen/qwen3.8-27b",
+        max_tokens: 10
+      })
+    });
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error("[Groq Health Check Failed]:", response.status, errText);
+      return res.status(503).json({
+        status: "error",
+        message: "Groq API is currently unavailable",
+        upstreamStatus: response.status
+      });
+    }
+    const data = await response.json();
+    if (data.choices?.[0]?.message?.content) {
+      return res.json({ status: "ok", provider: data.model || "groq" });
+    } else {
+      return res.status(503).json({ status: "error", message: "Empty response from Groq" });
+    }
+  } catch (error) {
+    console.error("[Groq Error during health check]:", error);
+    return res.status(503).json({ status: "error", message: "Network error reaching Groq" });
+  }
+});
 aiRouter.get("/messages/:login", requireAuth, requirePairOwnership, async (req, res, next) => {
   try {
     const login = String(req.params.login || "").toLowerCase().replace(/^@/, "");
@@ -3323,7 +3358,7 @@ aiRouter.post("/chat", aiLimiter, requireAuth, validateBody(aiChatMessageSchema)
       mode: "error"
     });
   } catch (err) {
-    logger.error("\u041E\u0448\u0438\u0431\u043A\u0430 \u0432 AI \u0447\u0430\u0442\u0435 \u0421\u043E\u0432\u044B", err);
+    console.error("[OpenRouter Gemma Error]:", err);
     return res.status(503).json({
       error: "\u0418\u0418 \u0432\u0440\u0435\u043C\u0435\u043D\u043D\u043E \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D. \u041F\u043E\u043F\u0440\u043E\u0431\u0443\u0439\u0442\u0435 \u043F\u043E\u0437\u0436\u0435.",
       mode: "error"

@@ -4,26 +4,24 @@ import { logger } from './logger.ts';
 import { readEmergencyFile, writeEmergencyFile } from './services/storageService.ts';
 import crypto from 'crypto';
 
-const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
-const MODEL_NAME = 'thinkingmachines/inkling-small:free';
+const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
+const MODEL_NAME = 'qwen/qwen3.8-27b';
 
 export async function callGroqChat(
   messages: Array<{ role: string; content: string }>
 ): Promise<string | null> {
-  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-  if (!OPENROUTER_API_KEY) {
-    logger.warn('OPENROUTER_API_KEY не задан в окружении (.env)');
+  const GROQ_API_KEY = process.env.GROQ_API_KEY;
+  if (!GROQ_API_KEY) {
+    logger.warn('GROQ_API_KEY не задан в окружении (.env)');
     return null;
   }
 
   try {
-    const response = await fetch(OPENROUTER_ENDPOINT, {
+    const response = await fetch(GROQ_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        'HTTP-Referer': 'https://loopkaapp.vercel.app',
-        'X-Title': 'Loop Couples App',
+        Authorization: `Bearer ${GROQ_API_KEY}`,
       },
       body: JSON.stringify({
         messages,
@@ -38,15 +36,15 @@ export async function callGroqChat(
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content;
       if (content) {
-        logger.info(`Ответ OpenRouter успешно получен (модель: ${MODEL_NAME})`);
+        logger.info(`Ответ Groq успешно получен (модель: ${MODEL_NAME})`);
         return content;
       }
     }
 
     const errText = await response.text();
-    logger.warn(`OpenRouter ${MODEL_NAME} статус ${response.status}: ${errText.slice(0, 200)}`);
+    logger.warn(`Groq ${MODEL_NAME} статус ${response.status}: ${errText.slice(0, 200)}`);
   } catch (err: unknown) {
-    logger.error(`Сетевая ошибка при запросе к OpenRouter (${MODEL_NAME})`, err);
+    console.error('[Groq API Error]:', err);
   }
 
   return null;

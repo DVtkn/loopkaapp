@@ -7,7 +7,6 @@ export interface ServerConfig {
   port: number;
   nodeEnv: string;
   jwtSecret: string;
-  openrouterApiKey?: string;
   groqApiKey?: string;
   geminiApiKey?: string;
   allowedOrigins: string[];
@@ -54,17 +53,16 @@ export function loadConfig(): ServerConfig {
     }
   }
 
-  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-  if (!OPENROUTER_API_KEY) {
-    logger.warn('OPENROUTER_API_KEY is not configured in .env. AI psychologist (Sova) will return 503.');
+  const GROQ_API_KEY = process.env.GROQ_API_KEY;
+  if (!GROQ_API_KEY) {
+    logger.warn('GROQ_API_KEY is not configured in .env. AI psychologist (Sova) will return 503.');
   }
 
   return {
     port,
     nodeEnv,
     jwtSecret,
-    openrouterApiKey: OPENROUTER_API_KEY,
-    groqApiKey: process.env.GROQ_API_KEY,
+    groqApiKey: GROQ_API_KEY,
     geminiApiKey: process.env.GEMINI_API_KEY,
     allowedOrigins: parseAllowedOrigins(),
   };

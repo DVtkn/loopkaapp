@@ -11,6 +11,7 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "test": "tsc --noEmit",
+    "test:groq": "node scripts/verify-groq.js",
     "test:integration": "tsx tests/run-lifecycle-suite.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"

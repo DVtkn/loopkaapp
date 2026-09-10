@@ -1299,19 +1299,23 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
 
       const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'ИИ временно недоступен');
+      }
+
       const aiReply: AIMessage = {
         id: `ai-${Date.now()}`,
         role: 'model',
-        content: data.reply || 'Я рядом и готова вас выслушать.',
+        content: data.reply,
         timestamp: new Date().toISOString(),
       };
       setAIMessages((prev) => [...prev, aiReply]);
-    } catch {
+    } catch (err: any) {
+      console.error('[OpenRouter Gemma Error]:', err);
       const fallbackReply: AIMessage = {
         id: `ai-err-${Date.now()}`,
         role: 'model',
-        content:
-          '**Взгляд психолога**: Любые переживания в паре — это точка роста для вашего эмоционального контакта.\n\n**Практика / Готовая фраза**: Попробуйте сказать партнёру: «Мне очень важно то, что между нами происходит, и я хочу лучше тебя понять».\n\n**Вопрос для вас**: Что прямо сейчас поможет вам обоим почувствовать поддержку?',
+        content: err.message || 'ИИ временно недоступен. Попробуйте позже.',
         timestamp: new Date().toISOString(),
       };
       setAIMessages((prev) => [...prev, fallbackReply]);

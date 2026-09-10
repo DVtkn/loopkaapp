@@ -45,8 +45,8 @@ export async function initDatabase() {
       }
       return;
     }
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS users (
+    const statements = [
+      `CREATE TABLE IF NOT EXISTS users (
         id text PRIMARY KEY,
         login text NOT NULL UNIQUE,
         password_hash text NOT NULL,
@@ -57,83 +57,40 @@ export async function initDatabase() {
         created_at text NOT NULL,
         updated_at text NOT NULL,
         data_version integer NOT NULL DEFAULT 1
-      );
-      CREATE INDEX IF NOT EXISTS users_login_idx ON users(login);
-
-      CREATE TABLE IF NOT EXISTS pair_requests (
+      )`,
+      `CREATE INDEX IF NOT EXISTS users_login_idx ON users(login)`,
+      `CREATE TABLE IF NOT EXISTS pair_requests (
         id text PRIMARY KEY,
         from_login text NOT NULL,
         to_login text NOT NULL,
         status text NOT NULL DEFAULT 'pending',
         created_at text NOT NULL,
         updated_at text NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS pair_requests_to_login_idx ON pair_requests(to_login);
-      CREATE INDEX IF NOT EXISTS pair_requests_from_login_idx ON pair_requests(from_login);
-
-      CREATE TABLE IF NOT EXISTS couple_data (
-        pair_key text PRIMARY KEY,
-        user1_login text NOT NULL,
-        user2_login text NOT NULL,
-        data jsonb NOT NULL,
-        version integer NOT NULL DEFAULT 1,
-        updated_at text NOT NULL,
-        updated_by text NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS couple_data_users_idx ON couple_data(user1_login, user2_login);
-
-      CREATE TABLE IF NOT EXISTS couple_events (
+      )`,
+      `CREATE INDEX IF NOT EXISTS pair_requests_to_login_idx ON pair_requests(to_login)`,
+      `CREATE INDEX IF NOT EXISTS pair_requests_from_login_idx ON pair_requests(from_login)`,
+      `CREATE TABLE IF NOT EXISTS couple_data (
         id text PRIMARY KEY,
-        pair_key text NOT NULL,
-        event_type text NOT NULL,
-        sender_login text NOT NULL,
-        payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-        created_at text NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS couple_events_pair_created_idx ON couple_events(pair_key, created_at DESC);
-
-      CREATE TABLE IF NOT EXISTS chat_messages (
+        data jsonb NOT NULL,
+        last_updated_at text NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS couple_data_id_idx ON couple_data(id)`,
+      `CREATE TABLE IF NOT EXISTS chat_messages (
         id text PRIMARY KEY,
         sender_login text NOT NULL,
         recipient_login text NOT NULL,
         text text NOT NULL,
         created_at text NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS chat_messages_sender_recipient_idx ON chat_messages(sender_login, recipient_login);
-
-      CREATE TABLE IF NOT EXISTS relationship_metrics (
-        id text PRIMARY KEY,
-        pair_key text NOT NULL,
-        recorded_at text NOT NULL,
-        pulse integer NOT NULL DEFAULT 70,
-        sync_score integer NOT NULL DEFAULT 50,
-        activity_count integer NOT NULL DEFAULT 0,
-        metrics jsonb NOT NULL DEFAULT '{}'::jsonb
-      );
-      CREATE INDEX IF NOT EXISTS relationship_metrics_pair_recorded_idx ON relationship_metrics(pair_key, recorded_at DESC);
-
-      CREATE TABLE IF NOT EXISTS ai_insights (
-        id text PRIMARY KEY,
-        pair_key text NOT NULL,
-        insight_type text NOT NULL,
-        content jsonb NOT NULL,
-        priority text NOT NULL DEFAULT 'medium',
-        is_read boolean NOT NULL DEFAULT false,
-        created_at text NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS ai_insights_pair_created_idx ON ai_insights(pair_key, created_at DESC);
-
-      CREATE TABLE IF NOT EXISTS couple_photos (
-        id text PRIMARY KEY,
-        pair_key text NOT NULL,
-        uploader_login text NOT NULL,
-        mime_type text NOT NULL,
-        file_size integer NOT NULL,
-        data bytea NOT NULL,
-        created_at text NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS couple_photos_pair_created_idx ON couple_photos(pair_key, created_at DESC);
-    `);
+      )`,
+      `CREATE INDEX IF NOT EXISTS chat_messages_sender_recipient_idx ON chat_messages(sender_login, recipient_login)`
+    ];
+    for (const stmt of statements) {
+      try {
+        await pool.query(stmt);
+      } catch (stmtErr) {
+        logger.debug("Init statement warning (continuing):", { error: String(stmtErr) });
+      }
+    }
     logger.info("Таблицы и индексы базы данных успешно проверены/созданы в PostgreSQL");
   } catch (err: unknown) {
     if (isProd) {

@@ -84,4 +84,7 @@ export const logger = {
   security: (message: string, context?: Record<string, unknown>) => {
     winstonLogger.log("security", message, { context });
   },
+  debug: (message: string, context?: Record<string, unknown>) => {
+    winstonLogger.log("debug", message, { context });
+  },
 };

@@ -257,10 +257,12 @@ export async function processTestCompletion(
   coupleId: string
 ) {
   // 1. СЛОЙ 2: Агрегируем личный профиль текущего пользователя (24 шкалы)
-  const rawUserAnswers = await tx
-    .select()
-    .from(testAnswers)
-    .where(eq(testAnswers.sessionId, sessionId));
+  const allSessionsForCouple = await tx.select().from(testSessions).where(eq(testSessions.coupleId, coupleId));
+  const sessionIds = allSessionsForCouple.map((s: any) => s.id);
+  
+  const rawUserAnswers = sessionIds.length > 0 
+    ? await tx.select().from(testAnswers).where(inArray(testAnswers.sessionId, sessionIds))
+    : [];
 
   const userAnswers = rawUserAnswers.filter((a: any) => a.userId === userId);
   const individualVector = calculateIndividualVector(userAnswers);

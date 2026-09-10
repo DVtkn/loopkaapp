@@ -3619,8 +3619,15 @@ async function getDetailedCoupleAnalytics(coupleId, currentUserIdOrLogin) {
   const [couple] = await db.select().from(couples).where(eq7(couples.id, coupleId)).limit(1);
   const profiles = await db.select().from(userPsychProfiles).where(eq7(userPsychProfiles.coupleId, coupleId));
   const [report] = await db.select().from(coupleReports).where(eq7(coupleReports.coupleId, coupleId)).limit(1);
-  const sessions = await db.select().from(testSessions).where(eq7(testSessions.coupleId, coupleId));
-  const completedSessions = sessions.filter((s) => s.status === "completed");
+  let completedTestsCount = 0;
+  if (currentUserIdOrLogin) {
+    const allUsers2 = await db.select().from(users);
+    const currentUser2 = allUsers2.find((u) => u.id === currentUserIdOrLogin || u.login === currentUserIdOrLogin);
+    if (currentUser2) {
+      const userCompletedSessions = await db.select({ testId: testSessions.testId }).from(testSessions).innerJoin(testAnswers, eq7(testAnswers.sessionId, testSessions.id)).where(eq7(testAnswers.userId, currentUser2.id)).groupBy(testSessions.testId);
+      completedTestsCount = userCompletedSessions.length;
+    }
+  }
   const allUsers = await db.select().from(users);
   let currentUser = allUsers.find((u) => u.id === currentUserIdOrLogin || u.login === currentUserIdOrLogin);
   let partnerUser;
@@ -3641,7 +3648,7 @@ async function getDetailedCoupleAnalytics(coupleId, currentUserIdOrLogin) {
   if (!isReady || !report) {
     return {
       isCoupleReportReady: false,
-      completedTestsCount: completedSessions.length > 0 ? completedSessions.length : profiles.length > 0 ? 1 : 0,
+      completedTestsCount: completedTestsCount || (profiles.length > 0 ? 1 : 0),
       totalTestsCount: 7,
       waitingFor: partnerProfile ? null : partnerName,
       userProfile: currentUserProfile,
@@ -3657,7 +3664,7 @@ async function getDetailedCoupleAnalytics(coupleId, currentUserIdOrLogin) {
   const overallMatch = validScores.length ? Math.round(validScores.reduce((a, b) => a + b, 0) / validScores.length) : 85;
   return {
     isCoupleReportReady: true,
-    completedTestsCount: completedSessions.length || 7,
+    completedTestsCount: completedTestsCount || 7,
     totalTestsCount: 7,
     waitingFor: null,
     userProfile: currentUserProfile,
@@ -4467,7 +4474,7 @@ import { z as z6 } from "zod";
 
 // src/server/modules/tests/tests.service.ts
 import crypto8 from "crypto";
-import { eq as eq8, sql as sql3, and as and5, or as or5, inArray } from "drizzle-orm";
+import { eq as eq8, sql as sql3, and as and5, or as or5, inArray as inArray2 } from "drizzle-orm";
 
 // src/server/modules/tests/psychometrics.calc.ts
 function calculateIndividualVector(userAnswers) {
@@ -4950,7 +4957,7 @@ async function getTestsStatusForUser(userLogin, authUserId) {
     if (coupleRecord && coupleRecord.id) {
       possibleCoupleIds.push(coupleRecord.id);
     }
-    const sessions = await db.select().from(testSessions).where(inArray(testSessions.coupleId, possibleCoupleIds));
+    const sessions = await db.select().from(testSessions).where(inArray2(testSessions.coupleId, possibleCoupleIds));
     const result = [];
     for (const testId of CATALOG_TEST_IDS) {
       const expectedCount = EXPECTED_QUESTIONS[testId] || 5;
@@ -4962,7 +4969,7 @@ async function getTestsStatusForUser(userLogin, authUserId) {
         const myAnswers = await db.select({ questionId: testAnswers.questionId }).from(testAnswers).where(
           and5(
             eq8(testAnswers.userId, currentUserId),
-            inArray(testAnswers.sessionId, testSessionIds)
+            inArray2(testAnswers.sessionId, testSessionIds)
           )
         );
         const uniqueMyQuestions = new Set(myAnswers.map((a) => a.questionId));
@@ -4971,7 +4978,7 @@ async function getTestsStatusForUser(userLogin, authUserId) {
           const partnerAnswers = await db.select({ questionId: testAnswers.questionId }).from(testAnswers).where(
             and5(
               eq8(testAnswers.userId, partnerUserId),
-              inArray(testAnswers.sessionId, testSessionIds)
+              inArray2(testAnswers.sessionId, testSessionIds)
             )
           );
           const uniquePartnerQuestions = new Set(partnerAnswers.map((a) => a.questionId));
@@ -5027,7 +5034,9 @@ async function getTestsStatusForUser(userLogin, authUserId) {
   });
 }
 async function processTestCompletion(tx, sessionId, userId, coupleId) {
-  const rawUserAnswers = await tx.select().from(testAnswers).where(eq8(testAnswers.sessionId, sessionId));
+  const allSessionsForCouple = await tx.select().from(testSessions).where(eq8(testSessions.coupleId, coupleId));
+  const sessionIds = allSessionsForCouple.map((s) => s.id);
+  const rawUserAnswers = sessionIds.length > 0 ? await tx.select().from(testAnswers).where(inArray2(testAnswers.sessionId, sessionIds)) : [];
   const userAnswers = rawUserAnswers.filter((a) => a.userId === userId);
   const individualVector = calculateIndividualVector(userAnswers);
   await tx.insert(userPsychProfiles).values({

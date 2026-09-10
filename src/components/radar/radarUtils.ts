@@ -1,3 +1,4 @@
+import { SPHERE_TO_TESTS_MAP } from '../../utils/sphereMapping.ts';
 import React from 'react';
 import {
   ShieldCheck,
@@ -24,6 +25,8 @@ export interface MetricDetail {
   gottmanTip: string;
   relatedTestTitle: string;
   relatedTestId: string;
+  isCompletedByMe?: boolean;
+  isCompletedByPartner?: boolean;
 }
 
 export interface VectorScaleInfo {
@@ -105,12 +108,13 @@ export function calculateRadarMetrics({
   const p1 = coupleProfile.partner1;
   const p2 = coupleProfile.partner2;
 
-  const test1 = tests.find((t) => t.id === 'TEST-S1' || t.slug === 'attachment-style');
-  const test2 = tests.find((t) => t.id === 'TEST-S2' || t.slug === 'five-love-languages' || t.slug === 'love-languages');
-  const test3 = tests.find((t) => t.id === 'TEST-S3' || t.slug === 'gottman-four-horsemen');
-  const test4 = tests.find((t) => t.id === 'TEST-C1' || t.slug === 'ideal-day');
-  const test5 = tests.find((t) => t.id === 'TEST-S4' || t.slug === 'sternberg-love-triangle' || t.slug === 'intimacy-passion');
-  const test6 = tests.find((t) => t.id === 'TEST-D1' || t.slug === 'family-scripts');
+  
+  const test1 = tests.find((t) => SPHERE_TO_TESTS_MAP.trust.includes(t.id) || SPHERE_TO_TESTS_MAP.trust.includes(t.slug || ''));
+  const test2 = tests.find((t) => SPHERE_TO_TESTS_MAP.closeness.includes(t.id) || SPHERE_TO_TESTS_MAP.closeness.includes(t.slug || ''));
+  const test3 = tests.find((t) => SPHERE_TO_TESTS_MAP.communication.includes(t.id) || SPHERE_TO_TESTS_MAP.communication.includes(t.slug || ''));
+  const test4 = tests.find((t) => SPHERE_TO_TESTS_MAP.values.includes(t.id) || SPHERE_TO_TESTS_MAP.values.includes(t.slug || ''));
+  const test5 = tests.find((t) => SPHERE_TO_TESTS_MAP.intimacy.includes(t.id) || SPHERE_TO_TESTS_MAP.intimacy.includes(t.slug || ''));
+  const test6 = tests.find((t) => SPHERE_TO_TESTS_MAP.lifestyle.includes(t.id) || SPHERE_TO_TESTS_MAP.lifestyle.includes(t.slug || ''));
 
   const p1Pulses = pulseHistory.filter((p) => p.author === 'partner1');
   const p2Pulses = pulseHistory.filter((p) => p.author === 'partner2');

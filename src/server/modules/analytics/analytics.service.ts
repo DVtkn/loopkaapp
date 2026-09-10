@@ -1,6 +1,6 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import { db, isSqlConfigured } from "../../db/client.ts";
-import { aiInsights, coupleReports, userPsychProfiles, couples, users, testSessions } from "../../db/schema.ts";
+import { aiInsights, coupleReports, userPsychProfiles, couples, users, testSessions, testAnswers } from "../../db/schema.ts";
 import { recordDailyMetrics, getTrends } from "../../analytics.ts";
 import { generateWeeklyInsight } from "../../insights.ts";
 
@@ -93,13 +93,25 @@ export async function getDetailedCoupleAnalytics(
     .where(eq(coupleReports.coupleId, coupleId))
     .limit(1);
 
-  // 3. Fetch completed sessions
-  const sessions = await db
-    .select()
-    .from(testSessions)
-    .where(eq(testSessions.coupleId, coupleId));
 
-  const completedSessions = sessions.filter((s) => s.status === 'completed');
+  // 3. Fetch completed sessions by me
+  let completedTestsCount = 0;
+  if (currentUserIdOrLogin) {
+    const allUsers = await db.select().from(users);
+    const currentUser = allUsers.find((u) => u.id === currentUserIdOrLogin || u.login === currentUserIdOrLogin);
+    
+    if (currentUser) {
+      const userCompletedSessions = await db
+        .select({ testId: testSessions.testId })
+        .from(testSessions)
+        .innerJoin(testAnswers, eq(testAnswers.sessionId, testSessions.id))
+        .where(eq(testAnswers.userId, currentUser.id))
+        .groupBy(testSessions.testId);
+      
+      completedTestsCount = userCompletedSessions.length;
+    }
+  }
+
 
   // 4. Identify partner names
   const allUsers = await db.select().from(users);
@@ -135,7 +147,7 @@ export async function getDetailedCoupleAnalytics(
   if (!isReady || !report) {
     return {
       isCoupleReportReady: false,
-      completedTestsCount: completedSessions.length > 0 ? completedSessions.length : profiles.length > 0 ? 1 : 0,
+      completedTestsCount: completedTestsCount || (profiles.length > 0 ? 1 : 0),
       totalTestsCount: 7,
       waitingFor: partnerProfile ? null : partnerName,
       userProfile: currentUserProfile,
@@ -156,7 +168,7 @@ export async function getDetailedCoupleAnalytics(
 
   return {
     isCoupleReportReady: true,
-    completedTestsCount: completedSessions.length || 7,
+    completedTestsCount: completedTestsCount || 7,
     totalTestsCount: 7,
     waitingFor: null,
     userProfile: currentUserProfile,

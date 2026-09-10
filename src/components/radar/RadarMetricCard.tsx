@@ -78,7 +78,9 @@ export const RadarMetricCard: React.FC<RadarMetricCardProps> = ({
               )}
             </div>
           ) : (
-            <span className="text-[11px] text-[var(--text-3)] font-medium">Не пройден</span>
+            <span className="text-[11px] text-[var(--text-3)] font-medium">
+              {metric.isCompletedByMe && !metric.isCompletedByPartner ? 'Ожидаем партнёра ⏳' : 'Не пройден'}
+            </span>
           )}
           <ChevronDown
             className={`w-4 h-4 text-[var(--text-3)] transition-transform duration-200 ${

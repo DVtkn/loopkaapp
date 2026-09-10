@@ -82,7 +82,77 @@ export async function initDatabase() {
         text text NOT NULL,
         created_at text NOT NULL
       )`,
-      `CREATE INDEX IF NOT EXISTS chat_messages_sender_recipient_idx ON chat_messages(sender_login, recipient_login)`
+      `CREATE INDEX IF NOT EXISTS chat_messages_sender_recipient_idx ON chat_messages(sender_login, recipient_login)`,
+      `CREATE TABLE IF NOT EXISTS test_sessions (
+        id text PRIMARY KEY,
+        test_id text NOT NULL,
+        couple_id text NOT NULL,
+        test_class text NOT NULL DEFAULT 'couple',
+        status text NOT NULL DEFAULT 'in_progress',
+        completed_at timestamp with time zone,
+        created_at timestamp with time zone NOT NULL DEFAULT now()
+      )`,
+      `CREATE INDEX IF NOT EXISTS test_sessions_couple_id_idx ON test_sessions(couple_id)`,
+      `CREATE TABLE IF NOT EXISTS test_answers (
+        id text PRIMARY KEY,
+        session_id text NOT NULL,
+        user_id text NOT NULL,
+        question_id text NOT NULL,
+        scale_id text,
+        selected_value numeric(8, 2) NOT NULL,
+        weight numeric(5, 2) NOT NULL DEFAULT 1.00,
+        reaction_time_ms integer,
+        toggle_count integer NOT NULL DEFAULT 0,
+        target_type varchar(24) NOT NULL DEFAULT 'self',
+        raw_payload jsonb,
+        created_at timestamp with time zone NOT NULL DEFAULT now(),
+        CONSTRAINT uniq_user_session_question UNIQUE (session_id, user_id, question_id)
+      )`,
+      `CREATE INDEX IF NOT EXISTS test_answers_session_idx ON test_answers(session_id)`,
+      `CREATE INDEX IF NOT EXISTS test_answers_user_idx ON test_answers(user_id)`,
+      `ALTER TABLE test_answers ADD COLUMN IF NOT EXISTS reaction_time_ms integer`,
+      `ALTER TABLE test_answers ADD COLUMN IF NOT EXISTS toggle_count integer NOT NULL DEFAULT 0`,
+      `ALTER TABLE test_answers ADD COLUMN IF NOT EXISTS target_type varchar(24) NOT NULL DEFAULT 'self'`,
+      `ALTER TABLE test_answers ADD COLUMN IF NOT EXISTS raw_payload jsonb`,
+      `CREATE TABLE IF NOT EXISTS user_psych_profiles (
+        user_id text PRIMARY KEY,
+        couple_id text NOT NULL,
+        session_id text NOT NULL,
+        e_safety numeric(5, 2) NOT NULL,
+        a_autonomy numeric(5, 2) NOT NULL,
+        c_closeness numeric(5, 2) NOT NULL,
+        r_repair numeric(5, 2) NOT NULL,
+        v_future numeric(5, 2) NOT NULL,
+        consistency_score numeric(5, 2),
+        raw_responses jsonb,
+        updated_at timestamp with time zone NOT NULL DEFAULT now()
+      )`,
+      `ALTER TABLE user_psych_profiles ADD COLUMN IF NOT EXISTS consistency_score numeric(5, 2)`,
+      `CREATE TABLE IF NOT EXISTS couple_reports (
+        id text PRIMARY KEY,
+        session_id text NOT NULL,
+        couple_id text NOT NULL UNIQUE,
+        radar_trust numeric(5, 2) NOT NULL,
+        radar_closeness numeric(5, 2) NOT NULL,
+        radar_communication numeric(5, 2) NOT NULL,
+        radar_intimacy numeric(5, 2) NOT NULL,
+        radar_values numeric(5, 2) NOT NULL,
+        archetype_title text NOT NULL,
+        archetype_description text NOT NULL,
+        lead_spheres jsonb NOT NULL,
+        blind_spots jsonb,
+        calculated_at timestamp with time zone NOT NULL DEFAULT now()
+      )`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS radar_trust numeric(5, 2)`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS radar_closeness numeric(5, 2)`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS radar_communication numeric(5, 2)`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS radar_intimacy numeric(5, 2)`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS radar_values numeric(5, 2)`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS archetype_title text`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS archetype_description text`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS lead_spheres jsonb`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS blind_spots jsonb`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS calculated_at timestamp with time zone DEFAULT now()`
     ];
     for (const stmt of statements) {
       try {

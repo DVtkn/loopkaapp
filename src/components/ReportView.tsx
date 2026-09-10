@@ -143,7 +143,7 @@ export const ReportView: React.FC<{
               <h3 className="text-base font-bold text-[var(--text)]">
                 {analysis.archetypeTitle || 'Гармоничный союз'}
               </h3>
-              <p className="text-xs text-[var(--text-2)] line-clamp-1">
+              <p className="text-xs text-[var(--text-2)] line-clamp-2 mt-0.5">
                 {analysis.summary || 'Высокая степень доверия и бережный эмоциональный контакт.'}
               </p>
             </div>

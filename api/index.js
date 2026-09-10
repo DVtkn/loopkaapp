@@ -34,9 +34,10 @@ __export(schema_exports, {
   testAnswers: () => testAnswers,
   testSessions: () => testSessions,
   timeCapsules: () => timeCapsules,
+  userPsychProfiles: () => userPsychProfiles,
   users: () => users
 });
-import { pgTable, text, timestamp, boolean, jsonb, integer, real, unique, index, customType, foreignKey } from "drizzle-orm/pg-core";
+import { numeric, pgTable, text, timestamp, boolean, jsonb, integer, real, unique, index, customType, foreignKey } from "drizzle-orm/pg-core";
 var bytea = customType({
   dataType() {
     return "bytea";
@@ -119,7 +120,9 @@ var testAnswers = pgTable("test_answers", {
   sessionId: text("session_id").references(() => testSessions.id, { onDelete: "cascade" }).notNull(),
   userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
   questionId: text("question_id").notNull(),
-  selectedValue: integer("selected_value").notNull(),
+  scaleId: text("scale_id"),
+  selectedValue: numeric("selected_value", { precision: 8, scale: 2 }).notNull(),
+  weight: numeric("weight", { precision: 5, scale: 2 }).default("1.00").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 }, (t) => ({
   uniqUserQuestion: unique("uniq_user_session_question").on(t.sessionId, t.userId, t.questionId),
@@ -128,15 +131,18 @@ var testAnswers = pgTable("test_answers", {
 }));
 var coupleReports = pgTable("couple_reports", {
   id: text("id").primaryKey(),
-  coupleId: text("couple_id").notNull(),
-  compatibilityScore: integer("compatibility_score").notNull(),
+  sessionId: text("session_id").notNull(),
+  coupleId: text("couple_id").notNull().unique(),
+  radarTrust: numeric("radar_trust", { precision: 5, scale: 2 }).notNull(),
+  radarCloseness: numeric("radar_closeness", { precision: 5, scale: 2 }).notNull(),
+  radarCommunication: numeric("radar_communication", { precision: 5, scale: 2 }).notNull(),
+  radarIntimacy: numeric("radar_intimacy", { precision: 5, scale: 2 }).notNull(),
+  radarValues: numeric("radar_values", { precision: 5, scale: 2 }).notNull(),
   archetypeTitle: text("archetype_title").notNull(),
-  summary: text("summary").notNull(),
-  reportPayload: jsonb("report_payload").notNull(),
-  generatedAt: timestamp("generated_at", { withTimezone: true }).notNull().defaultNow()
-}, (t) => ({
-  coupleIdIdx: index("couple_reports_couple_id_idx").on(t.coupleId)
-}));
+  archetypeDescription: text("archetype_description").notNull(),
+  leadSpheres: jsonb("lead_spheres").notNull(),
+  calculatedAt: timestamp("calculated_at", { withTimezone: true }).defaultNow().notNull()
+});
 var chatMessages = pgTable("chat_messages", {
   id: text("id").primaryKey(),
   coupleId: text("couple_id").notNull(),
@@ -251,6 +257,18 @@ var coupleEvents = pgTable("couple_events", {
   coupleTargetIdx: index("couple_events_target_idx").on(t.targetLogin, t.createdAt),
   coupleIdIdx: index("couple_events_couple_idx").on(t.coupleId, t.createdAt)
 }));
+var userPsychProfiles = pgTable("user_psych_profiles", {
+  userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).primaryKey(),
+  coupleId: text("couple_id").notNull(),
+  sessionId: text("session_id").notNull(),
+  eSafety: numeric("e_safety", { precision: 5, scale: 2 }).notNull(),
+  aAutonomy: numeric("a_autonomy", { precision: 5, scale: 2 }).notNull(),
+  cCloseness: numeric("c_closeness", { precision: 5, scale: 2 }).notNull(),
+  rRepair: numeric("r_repair", { precision: 5, scale: 2 }).notNull(),
+  vFuture: numeric("v_future", { precision: 5, scale: 2 }).notNull(),
+  rawResponses: jsonb("raw_responses"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+});
 
 // src/server/logger.ts
 import winston from "winston";
@@ -4310,6 +4328,129 @@ import { z as z6 } from "zod";
 // src/server/modules/tests/tests.service.ts
 import crypto8 from "crypto";
 import { eq as eq8, sql as sql3 } from "drizzle-orm";
+
+// src/server/modules/tests/psychometrics.calc.ts
+function calculateIndividualVector(userAnswers) {
+  let eSafety = 50, aAutonomy = 50, cCloseness = 50, rRepair = 50, vFuture = 50;
+  for (const ans of userAnswers) {
+    const val = Number(ans.selectedValue) || 0;
+    const w = Number(ans.weight) || 1;
+    if (ans.questionId.startsWith("q-s1")) eSafety += val * w * 2;
+    else if (ans.questionId.startsWith("q-s2")) cCloseness += val * w * 2;
+    else if (ans.questionId.startsWith("q-s3")) rRepair += val * w * 2;
+    else if (ans.questionId.startsWith("q-c1")) vFuture += val * w * 2;
+    else if (ans.questionId.startsWith("q-s4")) aAutonomy += val * w * 2;
+  }
+  return {
+    eSafety: Math.min(100, Math.max(0, eSafety)),
+    aAutonomy: Math.min(100, Math.max(0, aAutonomy)),
+    cCloseness: Math.min(100, Math.max(0, cCloseness)),
+    rRepair: Math.min(100, Math.max(0, rRepair)),
+    vFuture: Math.min(100, Math.max(0, vFuture))
+  };
+}
+
+// src/server/modules/tests/report.matrix.ts
+function calculateCoupleRadarMatrix(individualVector, partnerVector) {
+  const trust = 50 + (individualVector.eSafety + partnerVector.eSafety) / 4;
+  const closeness = 50 + (individualVector.cCloseness + partnerVector.cCloseness) / 4;
+  const communication = 50 + (individualVector.rRepair + partnerVector.rRepair) / 4;
+  const intimacy = 50 + (individualVector.aAutonomy + partnerVector.aAutonomy) / 4;
+  const deltaValues = Math.abs(individualVector.vFuture - partnerVector.vFuture);
+  const values = 100 - (deltaValues * 0.6 + Math.pow(deltaValues, 2) * 0.4 / 100);
+  return {
+    radar: {
+      trust: Math.min(100, Math.max(0, trust)),
+      closeness: Math.min(100, Math.max(0, closeness)),
+      communication: Math.min(100, Math.max(0, communication)),
+      intimacy: Math.min(100, Math.max(0, intimacy)),
+      values: Math.min(100, Math.max(0, values))
+    },
+    archetype: {
+      title: "\xAB\u041D\u0430\u0434\u0451\u0436\u043D\u0430\u044F \u0433\u0430\u0432\u0430\u043D\u044C & \u0412\u0434\u043E\u0445\u043D\u043E\u0432\u043B\u044F\u044E\u0449\u0438\u0439 \u0432\u0435\u0442\u0435\u0440\xBB",
+      description: "\u0412\u0430\u0448 \u0441\u043E\u044E\u0437 \u0441\u0431\u0430\u043B\u0430\u043D\u0441\u0438\u0440\u043E\u0432\u0430\u043D, \u0432\u044B \u0434\u043E\u043F\u043E\u043B\u043D\u044F\u0435\u0442\u0435 \u0434\u0440\u0443\u0433 \u0434\u0440\u0443\u0433\u0430.",
+      leadSpheres: ["trust", "values"]
+    }
+  };
+}
+
+// src/server/modules/tests/tests.service.ts
+async function processTestCompletion(tx, sessionId, userId, coupleId) {
+  const rawUserAnswers = await tx.select().from(testAnswers).where(eq8(testAnswers.sessionId, sessionId));
+  const userAnswers = rawUserAnswers.filter((a) => a.userId === userId);
+  const individualVector = calculateIndividualVector(userAnswers);
+  await tx.insert(userPsychProfiles).values({
+    userId,
+    coupleId,
+    sessionId,
+    eSafety: individualVector.eSafety.toFixed(2),
+    aAutonomy: individualVector.aAutonomy.toFixed(2),
+    cCloseness: individualVector.cCloseness.toFixed(2),
+    rRepair: individualVector.rRepair.toFixed(2),
+    vFuture: individualVector.vFuture.toFixed(2),
+    updatedAt: /* @__PURE__ */ new Date()
+  }).onConflictDoUpdate({
+    target: userPsychProfiles.userId,
+    set: {
+      eSafety: individualVector.eSafety.toFixed(2),
+      aAutonomy: individualVector.aAutonomy.toFixed(2),
+      cCloseness: individualVector.cCloseness.toFixed(2),
+      rRepair: individualVector.rRepair.toFixed(2),
+      vFuture: individualVector.vFuture.toFixed(2),
+      updatedAt: /* @__PURE__ */ new Date()
+    }
+  });
+  const [couple] = await tx.select().from(couples).where(eq8(couples.id, coupleId));
+  if (!couple) return { state: "WAITING_FOR_PARTNER" };
+  const partnerId = couple.user1Id === userId ? couple.user2Id : couple.user1Id;
+  const [partnerProfile] = await tx.select().from(userPsychProfiles).where(eq8(userPsychProfiles.userId, partnerId));
+  if (!partnerProfile) {
+    return {
+      state: "WAITING_FOR_PARTNER",
+      personalVector: individualVector
+    };
+  }
+  const partnerVector = {
+    eSafety: Number(partnerProfile.eSafety),
+    aAutonomy: Number(partnerProfile.aAutonomy),
+    cCloseness: Number(partnerProfile.cCloseness),
+    rRepair: Number(partnerProfile.rRepair),
+    vFuture: Number(partnerProfile.vFuture)
+  };
+  const radarReport = calculateCoupleRadarMatrix(individualVector, partnerVector);
+  await tx.insert(coupleReports).values({
+    id: crypto8.randomUUID(),
+    sessionId,
+    coupleId,
+    radarTrust: radarReport.radar.trust.toFixed(2),
+    radarCloseness: radarReport.radar.closeness.toFixed(2),
+    radarCommunication: radarReport.radar.communication.toFixed(2),
+    radarIntimacy: radarReport.radar.intimacy.toFixed(2),
+    radarValues: radarReport.radar.values.toFixed(2),
+    archetypeTitle: radarReport.archetype.title,
+    archetypeDescription: radarReport.archetype.description,
+    leadSpheres: radarReport.archetype.leadSpheres,
+    calculatedAt: /* @__PURE__ */ new Date()
+  }).onConflictDoUpdate({
+    target: coupleReports.coupleId,
+    set: {
+      radarTrust: radarReport.radar.trust.toFixed(2),
+      radarCloseness: radarReport.radar.closeness.toFixed(2),
+      radarCommunication: radarReport.radar.communication.toFixed(2),
+      radarIntimacy: radarReport.radar.intimacy.toFixed(2),
+      radarValues: radarReport.radar.values.toFixed(2),
+      archetypeTitle: radarReport.archetype.title,
+      archetypeDescription: radarReport.archetype.description,
+      leadSpheres: radarReport.archetype.leadSpheres,
+      calculatedAt: /* @__PURE__ */ new Date()
+    }
+  });
+  return {
+    state: "COUPLE_HARMONY_READY",
+    personalVector: individualVector,
+    coupleReport: radarReport
+  };
+}
 async function submitTestAnswer(params) {
   const {
     testId,
@@ -4358,21 +4499,29 @@ async function submitTestAnswer(params) {
           sessionId: session.id,
           userId,
           questionId,
-          selectedValue
+          selectedValue: selectedValue.toString(),
+          weight: "1.00"
         }).onConflictDoUpdate({
           target: [testAnswers.sessionId, testAnswers.userId, testAnswers.questionId],
-          set: { selectedValue }
+          set: { selectedValue: selectedValue.toString() }
         });
         const participantsProgress = await tx.select({
           userId: testAnswers.userId,
           count: sql3`count(*)`
         }).from(testAnswers).where(eq8(testAnswers.sessionId, session.id)).groupBy(testAnswers.userId);
+        const myProgress = participantsProgress.find((p) => p.userId === userId);
+        const myCount = myProgress ? Number(myProgress.count) : 0;
+        let harmonyState = null;
+        if (myCount >= expectedQuestionsCount) {
+          harmonyState = await processTestCompletion(tx, session.id, userId, coupleId);
+        }
         const bothPartnersCompleted = participantsProgress.length === 2 && participantsProgress.every((p) => Number(p.count) >= expectedQuestionsCount);
         if (!bothPartnersCompleted) {
           return {
             status: "waiting_for_partner",
             sessionId: session.id,
-            completedCount: participantsProgress.length
+            completedCount: participantsProgress.length,
+            harmonyState
           };
         }
         await tx.update(testSessions).set({ status: "completed", completedAt: /* @__PURE__ */ new Date() }).where(eq8(testSessions.id, session.id));
@@ -4396,12 +4545,13 @@ async function submitTestAnswer(params) {
           status: "completed",
           allFinished: true,
           sessionId: session.id,
-          xpAwarded: 150
+          xpAwarded: 150,
+          harmonyState
         };
       });
     } catch (txErr) {
       if (isProd8) throw txErr;
-      logger.warn("Transaction failed in dev mode, returning fallback", { coupleId }, txErr);
+      logger.warn("Transaction failed in dev mode", { coupleId }, txErr);
       return { status: "waiting_for_partner", allFinished: false };
     }
   }

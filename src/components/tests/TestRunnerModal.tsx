@@ -1,14 +1,22 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Lock, Check, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Lock, Check, ArrowLeft, ArrowRight, ShieldCheck, HeartHandshake } from 'lucide-react';
 import { TestCategory, Question } from '../../types.ts';
 import { getTestMeta } from './testMeta.ts';
+import { TradeOffQuestion } from './TradeOffQuestion.tsx';
+
+interface AnswerMetadata {
+  reactionTimeMs?: number;
+  toggleCount?: number;
+  targetType?: string;
+  rawPayload?: any;
+}
 
 interface TestRunnerModalProps {
   activeTest: TestCategory | null;
   currentQuestionIndex: number;
   userAnswers: Record<string, any>;
-  onSelectOption: (questionId: string, value: any) => void;
+  onSelectOption: (questionId: string, value: any, metadata?: AnswerMetadata) => void;
   onNextQuestion: () => void;
   onPrevQuestion: () => void;
   onClose: () => void;
@@ -28,6 +36,57 @@ export const TestRunnerModal: React.FC<TestRunnerModalProps> = ({
   const q: Question = activeTest.questions[currentQuestionIndex];
   const selectedVal = userAnswers[q?.id];
   const meta = getTestMeta(activeTest);
+
+  // Latency & toggle telemetry tracking
+  const questionStartTimeRef = useRef<number>(Date.now());
+  const toggleCountRef = useRef<number>(0);
+
+  useEffect(() => {
+    questionStartTimeRef.current = Date.now();
+    toggleCountRef.current = 0;
+  }, [currentQuestionIndex, q?.id]);
+
+  const handleChoice = (val: any, rawPayload?: any) => {
+    const elapsed = Date.now() - questionStartTimeRef.current;
+    toggleCountRef.current += 1;
+
+    onSelectOption(q.id, val, {
+      reactionTimeMs: elapsed,
+      toggleCount: toggleCountRef.current,
+      targetType: 'self',
+      rawPayload,
+    });
+  };
+
+  const handleTradeOffChange = (allocations: Record<string, number>) => {
+    const elapsed = Date.now() - questionStartTimeRef.current;
+    toggleCountRef.current += 1;
+
+    const totalUsed = Object.values(allocations).reduce((sum, v) => sum + v, 0);
+    const maxPts = q.tradeOffMaxPoints || 10;
+    const isValid = totalUsed === maxPts;
+
+    onSelectOption(q.id, isValid ? 1 : 0, {
+      reactionTimeMs: elapsed,
+      toggleCount: toggleCountRef.current,
+      targetType: 'self',
+      rawPayload: allocations,
+    });
+  };
+
+  // Check if current question is answerable / answered
+  let isAnswered = false;
+  if (q.type === 'trade_off') {
+    const raw = (userAnswers as any)[`__meta_${q.id}`]?.rawPayload || selectedVal;
+    if (typeof raw === 'object' && raw !== null) {
+      const sum = Object.values(raw).reduce((acc: number, v: any) => acc + (Number(v) || 0), 0);
+      isAnswered = sum === (q.tradeOffMaxPoints || 10);
+    } else {
+      isAnswered = selectedVal === 1;
+    }
+  } else {
+    isAnswered = selectedVal !== undefined && selectedVal !== null && selectedVal !== '';
+  }
 
   return (
     <AnimatePresence>
@@ -63,6 +122,21 @@ export const TestRunnerModal: React.FC<TestRunnerModalProps> = ({
           <div className="p-6 sm:p-7 overflow-y-auto space-y-6 flex-1">
             {q && (
               <div className="space-y-5">
+                {/* Methodological badge */}
+                {q.type === 'ipsative' && (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-semibold border border-indigo-500/20">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>Вынужденный выбор: оба варианта ценны</span>
+                  </div>
+                )}
+
+                {q.type === 'forced_vulnerability' && (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 text-xs font-semibold border border-rose-500/20">
+                    <HeartHandshake className="w-3.5 h-3.5" />
+                    <span>Эмоциональная честность</span>
+                  </div>
+                )}
+
                 <h2 className="text-base sm:text-lg font-bold text-[var(--text)] leading-relaxed">
                   {q.text}
                 </h2>
@@ -74,6 +148,20 @@ export const TestRunnerModal: React.FC<TestRunnerModalProps> = ({
                   </div>
                 )}
 
+                {/* Trade-off Matrix Question Type */}
+                {q.type === 'trade_off' && q.tradeOffItems && (
+                  <TradeOffQuestion
+                    items={q.tradeOffItems}
+                    maxPoints={q.tradeOffMaxPoints || 10}
+                    allocations={
+                      typeof selectedVal === 'object' && selectedVal !== null
+                        ? selectedVal
+                        : (userAnswers as any)[`__meta_${q.id}`]?.rawPayload || {}
+                    }
+                    onChange={handleTradeOffChange}
+                  />
+                )}
+
                 {/* Scale Question Type */}
                 {q.type === 'scale' && (
                   <div className="space-y-2">
@@ -83,7 +171,7 @@ export const TestRunnerModal: React.FC<TestRunnerModalProps> = ({
                         <button
                           key={opt.label}
                           type="button"
-                          onClick={() => onSelectOption(q.id, opt.value)}
+                          onClick={() => handleChoice(opt.value)}
                           className={`w-full p-3.5 sm:p-4 rounded-2xl border text-left text-xs sm:text-sm transition-all flex items-center justify-between cursor-pointer ${
                             isSelected
                               ? 'border-[var(--accent)] bg-[var(--surface-blush)] font-bold text-[var(--text)] shadow-2xs'
@@ -106,8 +194,8 @@ export const TestRunnerModal: React.FC<TestRunnerModalProps> = ({
                   </div>
                 )}
 
-                {/* Single Choice Question Type */}
-                {q.type === 'single' && (
+                {/* Single / Ipsative / Forced Vulnerability Question Types */}
+                {(q.type === 'single' || q.type === 'ipsative' || q.type === 'forced_vulnerability') && (
                   <div className="space-y-2.5">
                     {q.options.map((opt) => {
                       const isSelected = selectedVal === opt.value;
@@ -115,7 +203,7 @@ export const TestRunnerModal: React.FC<TestRunnerModalProps> = ({
                         <button
                           key={opt.label}
                           type="button"
-                          onClick={() => onSelectOption(q.id, opt.value)}
+                          onClick={() => handleChoice(opt.value)}
                           className={`w-full p-3.5 sm:p-4 rounded-2xl border text-left text-xs sm:text-sm transition-all flex items-start gap-3 cursor-pointer ${
                             isSelected
                               ? 'border-[var(--accent)] bg-[var(--surface-blush)] font-bold text-[var(--text)] shadow-2xs'
@@ -162,7 +250,7 @@ export const TestRunnerModal: React.FC<TestRunnerModalProps> = ({
               <button
                 type="button"
                 onClick={onNextQuestion}
-                disabled={!userAnswers[activeTest.questions[currentQuestionIndex]?.id]}
+                disabled={!isAnswered}
                 className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 disabled:cursor-not-allowed shadow-2xs flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
               >
                 <span>

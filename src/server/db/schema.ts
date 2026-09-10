@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, jsonb, integer, real, unique, index, customType, foreignKey } from 'drizzle-orm/pg-core';
+import { numeric, pgTable, text, timestamp, boolean, jsonb, integer, real, unique, index, customType, foreignKey, varchar } from 'drizzle-orm/pg-core';
 
 export const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType() {
@@ -82,7 +82,13 @@ export const testAnswers = pgTable('test_answers', {
   sessionId: text('session_id').references(() => testSessions.id, { onDelete: 'cascade' }).notNull(),
   userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
   questionId: text('question_id').notNull(),
-  selectedValue: integer('selected_value').notNull(),
+  scaleId: text('scale_id'),
+  selectedValue: numeric('selected_value', { precision: 8, scale: 2 }).notNull(),
+  weight: numeric('weight', { precision: 5, scale: 2 }).default('1.00').notNull(),
+  reactionTimeMs: integer('reaction_time_ms'),
+  toggleCount: integer('toggle_count').default(0).notNull(),
+  targetType: varchar('target_type', { length: 24 }).default('self').notNull(), // 'self' | 'partner_observation'
+  rawPayload: jsonb('raw_payload'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
   uniqUserQuestion: unique('uniq_user_session_question').on(t.sessionId, t.userId, t.questionId),
@@ -92,15 +98,19 @@ export const testAnswers = pgTable('test_answers', {
 
 export const coupleReports = pgTable('couple_reports', {
   id: text('id').primaryKey(),
-  coupleId: text('couple_id').notNull(),
-  compatibilityScore: integer('compatibility_score').notNull(),
+  sessionId: text('session_id').notNull(),
+  coupleId: text('couple_id').notNull().unique(),
+  radarTrust: numeric('radar_trust', { precision: 5, scale: 2 }).notNull(),
+  radarCloseness: numeric('radar_closeness', { precision: 5, scale: 2 }).notNull(),
+  radarCommunication: numeric('radar_communication', { precision: 5, scale: 2 }).notNull(),
+  radarIntimacy: numeric('radar_intimacy', { precision: 5, scale: 2 }).notNull(),
+  radarValues: numeric('radar_values', { precision: 5, scale: 2 }).notNull(),
   archetypeTitle: text('archetype_title').notNull(),
-  summary: text('summary').notNull(),
-  reportPayload: jsonb('report_payload').notNull(),
-  generatedAt: timestamp('generated_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => ({
-  coupleIdIdx: index('couple_reports_couple_id_idx').on(t.coupleId),
-}));
+  archetypeDescription: text('archetype_description').notNull(),
+  leadSpheres: jsonb('lead_spheres').notNull(),
+  blindSpots: jsonb('blind_spots'),
+  calculatedAt: timestamp('calculated_at', { withTimezone: true }).defaultNow().notNull()
+});
 
 export const chatMessages = pgTable('chat_messages', {
   id: text('id').primaryKey(),
@@ -220,3 +230,17 @@ export const coupleEvents = pgTable('couple_events', {
 }));
 
 
+
+export const userPsychProfiles = pgTable('user_psych_profiles', {
+  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }).primaryKey(),
+  coupleId: text('couple_id').notNull(),
+  sessionId: text('session_id').notNull(),
+  eSafety: numeric('e_safety', { precision: 5, scale: 2 }).notNull(),
+  aAutonomy: numeric('a_autonomy', { precision: 5, scale: 2 }).notNull(),
+  cCloseness: numeric('c_closeness', { precision: 5, scale: 2 }).notNull(),
+  rRepair: numeric('r_repair', { precision: 5, scale: 2 }).notNull(),
+  vFuture: numeric('v_future', { precision: 5, scale: 2 }).notNull(),
+  consistencyScore: numeric('consistency_score', { precision: 5, scale: 2 }),
+  rawResponses: jsonb('raw_responses'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
+});

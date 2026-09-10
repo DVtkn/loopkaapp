@@ -38,6 +38,7 @@ export const TestsView: React.FC<{ initialMode?: 'catalog' | 'report' }> = ({
   const [activeTest, setActiveTest] = useState<TestCategory | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
   const [userAnswers, setUserAnswers] = useState<Record<string, any>>({});
+  const [answerMetrics, setAnswerMetrics] = useState<Record<string, any>>({});
   const [testJustFinished, setTestJustFinished] = useState<TestCategory | null>(null);
 
   const filteredTests = useMemo(() => {
@@ -59,15 +60,22 @@ export const TestsView: React.FC<{ initialMode?: 'catalog' | 'report' }> = ({
     setActiveTest(test);
     setCurrentQuestionIndex(0);
     setUserAnswers({});
+    setAnswerMetrics({});
     setTestJustFinished(null);
   };
 
-  const handleSelectOption = (questionId: string, value: any) => {
+  const handleSelectOption = (questionId: string, value: any, metadata?: any) => {
     triggerHaptic('light');
     setUserAnswers((prev) => ({
       ...prev,
       [questionId]: value,
     }));
+    if (metadata) {
+      setAnswerMetrics((prev) => ({
+        ...prev,
+        [questionId]: metadata,
+      }));
+    }
   };
 
   const handleNextQuestion = () => {
@@ -77,7 +85,7 @@ export const TestsView: React.FC<{ initialMode?: 'catalog' | 'report' }> = ({
       setCurrentQuestionIndex((prev) => prev + 1);
     } else {
       triggerHaptic('success');
-      submitTestAnswers(activeTest.id, userAnswers);
+      submitTestAnswers(activeTest.id, userAnswers, answerMetrics);
       setTestJustFinished(activeTest);
       setActiveTest(null);
       triggerConfetti();

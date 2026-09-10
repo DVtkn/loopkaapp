@@ -13,8 +13,12 @@ const submitAnswerSchema = z.object({
   testId: z.string().min(1),
   coupleId: z.string().min(1),
   questionId: z.string().min(1),
-  selectedValue: z.number(),
+  selectedValue: z.union([z.number(), z.string()]).optional().default(0),
   expectedQuestionsCount: z.number().optional(),
+  reactionTimeMs: z.number().nullable().optional(),
+  toggleCount: z.number().optional(),
+  targetType: z.string().optional(),
+  rawPayload: z.any().optional(),
 });
 
 testsRouter.post(
@@ -37,6 +41,10 @@ testsRouter.post(
         questionId: req.body.questionId,
         selectedValue: req.body.selectedValue,
         expectedQuestionsCount: req.body.expectedQuestionsCount,
+        reactionTimeMs: req.body.reactionTimeMs,
+        toggleCount: req.body.toggleCount,
+        targetType: req.body.targetType,
+        rawPayload: req.body.rawPayload,
       });
 
       return res.status(200).json({

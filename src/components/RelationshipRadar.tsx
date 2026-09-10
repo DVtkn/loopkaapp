@@ -36,10 +36,10 @@ export const RelationshipRadar: React.FC<RelationshipRadarProps> = ({
   const p1 = coupleProfile.partner1;
   const p2 = coupleProfile.partner2;
   const p1Label = p1.name || 'Партнёр 1';
-  const p2Label = p2.name || 'Партнёр 2';
+const p2Label = p2.name || 'Партнёр 2';
 
   const metricsData = useMemo(() => {
-    return calculateRadarMetrics({
+    const data = calculateRadarMetrics({
       coupleProfile,
       pulseHistory,
       tests,
@@ -50,6 +50,17 @@ export const RelationshipRadar: React.FC<RelationshipRadarProps> = ({
       loveTaps,
       dailyQuiz,
     });
+    
+    const partner1Completed = tests.filter(t => t.partner1Done).length;
+    const partner2Completed = tests.filter(t => t.partner2Done).length;
+    
+    console.log('[Analytics State]:', { 
+      partner1Completed, 
+      partner2Completed, 
+      rawScores: data 
+    });
+    
+    return data;
   }, [coupleProfile, pulseHistory, tests, challenges, smallCravings, moodHistory, dateInvites, loveTaps, dailyQuiz]);
 
   const hasAnyData = useMemo(() => {
@@ -127,6 +138,8 @@ export const RelationshipRadar: React.FC<RelationshipRadarProps> = ({
             setViewMode={setViewMode}
             p1Label={p1Label}
             p2Label={p2Label}
+            p1HasData={metricsData.some((m) => m.p1Score > 0)}
+            p2HasData={metricsData.some((m) => m.p2Score > 0)}
           />
         )}
       </div>

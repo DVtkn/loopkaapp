@@ -5,6 +5,8 @@ import {
   getTrends,
   fetchAiInsights,
   generateWeeklyInsight,
+  getCoupleReport,
+  getUserPsychProfiles,
 } from "./analytics.service.ts";
 import { logger } from "../../shared/utils/logger.ts";
 
@@ -41,5 +43,28 @@ analyticsRouter.post("/insights/generate", requireAuth, requirePairOwnership, as
   } catch (err) {
     logger.error("Ошибка генерации недельного инсайта", err);
     return res.status(500).json({ error: "Ошибка генерации инсайта" });
+  }
+});
+
+analyticsRouter.get("/couple-report/:coupleId", requireAuth, requirePairOwnership, async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const { coupleId } = req.params;
+    const report = await getCoupleReport(coupleId);
+    const profiles = await getUserPsychProfiles(coupleId);
+    return res.json({ report, profiles });
+  } catch (err) {
+    logger.error("Ошибка получения couple-report", err);
+    return res.status(500).json({ error: "Не удалось получить отчет пары" });
+  }
+});
+
+analyticsRouter.get("/psych-profiles/:coupleId", requireAuth, requirePairOwnership, async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const { coupleId } = req.params;
+    const profiles = await getUserPsychProfiles(coupleId);
+    return res.json({ profiles });
+  } catch (err) {
+    logger.error("Ошибка получения psych-profiles", err);
+    return res.status(500).json({ error: "Не удалось получить профили" });
   }
 });

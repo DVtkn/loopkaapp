@@ -151,7 +151,11 @@ export interface CoupleContextType {
   challenges: Challenge[];
   toggleChallenge: (id: string) => void;
   tests: TestCategory[];
-  submitTestAnswers: (testId: string, answers: Record<string, any>) => void;
+  submitTestAnswers: (
+    testId: string,
+    answers: Record<string, any>,
+    metrics?: Record<string, { reactionTimeMs?: number; toggleCount?: number; targetType?: string; rawPayload?: any }>
+  ) => void;
   resetTests: () => void;
   smallCravings: SmallCraving[];
   addCraving: (title: string, category: SmallCraving['category']) => void;
@@ -1142,7 +1146,11 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   );
 
   const submitTestAnswers = useCallback(
-    (testId: string, answers: Record<string, any>) => {
+    (
+      testId: string,
+      answers: Record<string, any>,
+      metrics?: Record<string, { reactionTimeMs?: number; toggleCount?: number; targetType?: string; rawPayload?: any }>
+    ) => {
       let testTitle = 'Тест совместимости';
       setTests((prev) =>
         prev.map((t) => {
@@ -1161,6 +1169,36 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           };
         })
       );
+
+      // Async sync to server API
+      if (currentUser?.login) {
+        const cleanMyLogin = currentUser.login.toLowerCase().replace(/^@/, '');
+        const partnerLogin = currentUser.partnerLogin;
+        const cleanPartnerLogin = partnerLogin ? partnerLogin.toLowerCase().replace(/^@/, '') : '';
+        const targetCoupleId = cleanPartnerLogin
+          ? [cleanMyLogin, cleanPartnerLogin].sort().join('_')
+          : cleanMyLogin;
+
+        const totalQCount = Object.keys(answers).length;
+        Object.entries(answers).forEach(([qId, val]) => {
+          const meta = metrics?.[qId] || {};
+          apiFetch('/api/tests/submit-answer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              testId,
+              coupleId: targetCoupleId,
+              questionId: qId,
+              selectedValue: typeof val === 'number' ? val : (meta.rawPayload ? 1 : 0),
+              expectedQuestionsCount: totalQCount,
+              reactionTimeMs: meta.reactionTimeMs ?? null,
+              toggleCount: meta.toggleCount ?? 0,
+              targetType: meta.targetType ?? 'self',
+              rawPayload: meta.rawPayload ?? (typeof val === 'object' ? val : null),
+            }),
+          }).catch(() => {});
+        });
+      }
 
       addCoupleXP(100, `Пройден тест «${testTitle}»`, 'test');
 
@@ -1188,7 +1226,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       triggerConfetti();
     },
-    [currentPartnerId, addCoupleXP, triggerConfetti]
+    [currentPartnerId, currentUser, addCoupleXP, triggerConfetti]
   );
 
   const resetTests = useCallback(() => {

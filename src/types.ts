@@ -56,12 +56,21 @@ export interface Challenge {
   rewardPoints: number;
 }
 
-export type QuestionType = 'single' | 'scale' | 'dilemma';
+export type QuestionType = 'single' | 'scale' | 'dilemma' | 'ipsative' | 'forced_vulnerability' | 'trade_off';
+
+export interface TradeOffItem {
+  id: string;
+  label: string;
+  description?: string;
+  scaleId?: string;
+}
 
 export interface QuestionOption {
   label: string;
   value: string | number;
   categoryScores?: Record<string, number>;
+  scaleId?: string;
+  weight?: number;
 }
 
 export interface Question {
@@ -69,8 +78,38 @@ export interface Question {
   text: string;
   type: QuestionType;
   options: QuestionOption[];
+  tradeOffItems?: TradeOffItem[];
+  tradeOffMaxPoints?: number;
+  totalPoints?: number;
+  scaleId?: string;
+  targetType?: 'self' | 'partner_observation';
   isPrivate?: boolean;
   tip?: string;
+}
+
+export interface PsychProfileVector {
+  eSafety: number;
+  aAutonomy: number;
+  cCloseness: number;
+  rRepair: number;
+  vFuture: number;
+  consistencyScore?: number;
+}
+
+export interface CoupleReportData {
+  id?: string;
+  sessionId?: string;
+  coupleId?: string;
+  radarTrust: number;
+  radarCloseness: number;
+  radarCommunication: number;
+  radarIntimacy: number;
+  radarValues: number;
+  archetypeTitle: string;
+  archetypeDescription: string;
+  leadSpheres: string[];
+  blindSpots?: Record<string, any> | null;
+  calculatedAt?: string;
 }
 
 export interface TestCategory {

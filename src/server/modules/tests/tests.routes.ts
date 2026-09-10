@@ -84,8 +84,6 @@ testsRouter.post(
   }
 );
 
-import { saveTestDraft, getTestDraft } from "./tests.service.ts";
-
 const saveDraftSchema = z.object({
   testId: z.string().min(1),
   currentQuestionIndex: z.number().int().min(0),
@@ -94,10 +92,10 @@ const saveDraftSchema = z.object({
 
 testsRouter.post("/draft", requireAuth, validateBody(saveDraftSchema), async (req: AuthenticatedRequest, res, next) => {
   try {
-    const userId = req.user?.id;
-    if (!userId) return res.status(401).json({ error: "Необходима авторизация" });
+    const userLogin = req.user?.login;
+    if (!userLogin) return res.status(401).json({ error: "Необходима авторизация" });
     
-    await saveTestDraft(userId, req.body.testId, req.body.currentQuestionIndex, req.body.answers);
+    await saveTestDraft(userLogin, req.body.testId, req.body.currentQuestionIndex, req.body.answers);
     return res.status(200).json({ success: true });
   } catch (err) {
     logger.error("Ошибка сохранения черновика", err);
@@ -107,10 +105,10 @@ testsRouter.post("/draft", requireAuth, validateBody(saveDraftSchema), async (re
 
 testsRouter.get("/draft/:testId", requireAuth, async (req: AuthenticatedRequest, res, next) => {
   try {
-    const userId = req.user?.id;
-    if (!userId) return res.status(401).json({ error: "Необходима авторизация" });
+    const userLogin = req.user?.login;
+    if (!userLogin) return res.status(401).json({ error: "Необходима авторизация" });
     
-    const draft = await getTestDraft(userId, req.params.testId);
+    const draft = await getTestDraft(userLogin, req.params.testId);
     return res.status(200).json({ success: true, draft });
   } catch (err) {
     logger.error("Ошибка получения черновика", err);
@@ -120,10 +118,10 @@ testsRouter.get("/draft/:testId", requireAuth, async (req: AuthenticatedRequest,
 
 testsRouter.delete("/draft/:testId", requireAuth, async (req: AuthenticatedRequest, res, next) => {
   try {
-    const userId = req.user?.id;
-    if (!userId) return res.status(401).json({ error: "Необходима авторизация" });
+    const userLogin = req.user?.login;
+    if (!userLogin) return res.status(401).json({ error: "Необходима авторизация" });
     
-    await clearTestDraft(userId, req.params.testId);
+    await clearTestDraft(userLogin, req.params.testId);
     return res.status(200).json({ success: true });
   } catch (err) {
     logger.error("Ошибка удаления черновика", err);

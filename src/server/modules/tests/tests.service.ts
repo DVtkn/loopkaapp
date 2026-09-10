@@ -8,8 +8,17 @@ import { getCoupleData, saveCoupleData } from "../../services/storageService.ts"
 import { calculateIndividualVector } from './psychometrics.calc.ts';
 import { calculateCoupleMatrix } from './couple-matrix.calc.ts';
 
-export async function saveTestDraft(userId: string, testId: string, currentQuestionIndex: number, answers: any) {
-  if (!isSqlConfigured) return;
+async function resolveDbUserId(userIdentifier: string): Promise<string | null> {
+  if (!isSqlConfigured() || !db) return null;
+  const clean = userIdentifier.toLowerCase().trim().replace(/^@/, '');
+  const [u] = await db.select().from(users).where(or(eq(users.id, userIdentifier), eq(users.login, clean))).limit(1);
+  return u ? u.id : null;
+}
+
+export async function saveTestDraft(userIdentifier: string, testId: string, currentQuestionIndex: number, answers: any) {
+  if (!isSqlConfigured() || !db) return;
+  const userId = await resolveDbUserId(userIdentifier);
+  if (!userId) return;
   await db.insert(testDrafts).values({
     userId,
     testId,
@@ -22,16 +31,20 @@ export async function saveTestDraft(userId: string, testId: string, currentQuest
   });
 }
 
-export async function getTestDraft(userId: string, testId: string) {
-  if (!isSqlConfigured) return null;
+export async function getTestDraft(userIdentifier: string, testId: string) {
+  if (!isSqlConfigured() || !db) return null;
+  const userId = await resolveDbUserId(userIdentifier);
+  if (!userId) return null;
   const drafts = await db.select().from(testDrafts).where(
     and(eq(testDrafts.userId, userId), eq(testDrafts.testId, testId))
   ).limit(1);
   return drafts[0] || null;
 }
 
-export async function clearTestDraft(userId: string, testId: string) {
-  if (!isSqlConfigured) return;
+export async function clearTestDraft(userIdentifier: string, testId: string) {
+  if (!isSqlConfigured() || !db) return;
+  const userId = await resolveDbUserId(userIdentifier);
+  if (!userId) return;
   await db.delete(testDrafts).where(
     and(eq(testDrafts.userId, userId), eq(testDrafts.testId, testId))
   );

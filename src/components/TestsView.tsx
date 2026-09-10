@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { ChevronRight, Activity } from 'lucide-react';
 import { useCouple } from '../context/CoupleContext.tsx';
+import { apiFetch } from '../utils/api.ts';
 import { TestCategory } from '../types.ts';
 import { PageLayout } from './ui/PageLayout.tsx';
 import { ReportView } from './ReportView.tsx';

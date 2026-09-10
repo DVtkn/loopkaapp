@@ -65,6 +65,15 @@ export const TEST_META_MAP: Record<string, TestEditorialMeta> = {
     discoveryText: 'Узнайте, как детский опыт формирует ваши взгляды на роли, традиции и правила в союзе.',
     estimatedMinutes: 8,
   },
+  'TEST-D2': {
+    emotionalTitle: 'Как вы находите согласие в спорах?',
+    categoryLabel: 'Общение',
+    categoryKey: 'communication',
+    categoryIcon: '✧',
+    tagline: 'Стратегии в конфликте · Модель Томаса-Килманна',
+    discoveryText: 'Узнайте свои привычные стратегии в моменты разногласий и как экологично приходить к согласию.',
+    estimatedMinutes: 6,
+  },
 };
 
 export const CATEGORIES = [

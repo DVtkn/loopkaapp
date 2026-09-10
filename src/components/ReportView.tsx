@@ -227,8 +227,8 @@ export const ReportView: React.FC<{
 
   return (
     <PageLayout
-      title="Карта совместимости"
-      subtitle="Глубокое понимание гармонии вашей пары"
+      title="Аналитика союза"
+      subtitle="Карта гармонии и профиль пары"
       onBack={() => setActiveTab('us')}
     >
       {content}

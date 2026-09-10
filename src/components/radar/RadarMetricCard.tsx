@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronRight, Info, CheckCircle2 } from 'lucide-react';
+import { ChevronRight, Info, CheckCircle2, ChevronDown, HelpCircle } from 'lucide-react';
 import { MetricDetail } from './radarUtils.ts';
 import { triggerHaptic } from '../../utils/haptics.ts';
 
@@ -18,11 +18,29 @@ export const RadarMetricCard: React.FC<RadarMetricCardProps> = ({
 }) => {
   const Icon = metric.icon;
 
-  const getStatusText = (score: number) => {
-    if (score >= 75) return "Высокая синхронность: общие ориентиры и схожие реакции";
-    if (score >= 50) return "Зона роста: есть различия во взглядах, которые обогащают пару при открытом диалоге";
-    return "Точка внимания: разные ожидания, требующие бережного обсуждения";
+  const getStatusBadge = (score: number) => {
+    if (score >= 75) {
+      return {
+        label: 'Высокая синхронность',
+        className: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+        detail: 'Общие ориентиры и схожие реакции, создающие ощущение надёжного взаимопонимания.',
+      };
+    }
+    if (score >= 50) {
+      return {
+        label: 'Взаимодополняемость / Зона роста',
+        className: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/20',
+        detail: 'Различия в реакциях и потребностях, которые обогащают пару при осознанном диалоге.',
+      };
+    }
+    return {
+      label: 'Точка внимания',
+      className: 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/20',
+      detail: 'Разные ожидания и паттерны, требующие бережного проговаривания без критики.',
+    };
   };
+
+  const status = metric.avgScore > 0 ? getStatusBadge(metric.avgScore) : null;
 
   return (
     <div
@@ -49,12 +67,24 @@ export const RadarMetricCard: React.FC<RadarMetricCardProps> = ({
             <span className="text-[11px] text-[var(--text-3)]">{metric.relatedTestTitle}</span>
           </div>
         </div>
-        <div className="text-right">
+        <div className="flex items-center gap-2 text-right">
           {metric.avgScore > 0 ? (
-            <span className="text-xs font-bold text-[var(--accent)]">{metric.avgScore}%</span>
+            <div className="flex flex-col items-end">
+              <span className="text-xs font-bold text-[var(--accent)]">{metric.avgScore}%</span>
+              {status && (
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border mt-0.5 ${status.className}`}>
+                  {status.label}
+                </span>
+              )}
+            </div>
           ) : (
             <span className="text-[11px] text-[var(--text-3)] font-medium">Не пройден</span>
           )}
+          <ChevronDown
+            className={`w-4 h-4 text-[var(--text-3)] transition-transform duration-200 ${
+              isSelected ? 'rotate-180 text-[var(--accent)]' : ''
+            }`}
+          />
         </div>
       </div>
 
@@ -67,9 +97,10 @@ export const RadarMetricCard: React.FC<RadarMetricCardProps> = ({
               style={{ width: `${metric.avgScore}%` }}
             />
           </div>
-          <p className="text-[10px] text-[var(--text-3)] font-medium">
-            <span className="font-bold text-[var(--text-2)]">{metric.avgScore}%</span> — Уровень синхронизации взглядов
-          </p>
+          <div className="flex items-center justify-between text-[10px] text-[var(--text-3)] font-medium">
+            <span>Индекс синхронизации взглядов</span>
+            <span className="font-bold text-[var(--text-2)]">{metric.avgScore}%</span>
+          </div>
         </div>
       )}
 
@@ -78,14 +109,14 @@ export const RadarMetricCard: React.FC<RadarMetricCardProps> = ({
       {/* Inline Accordion Details */}
       {isSelected && (
         <div className="pt-3 border-t border-[var(--divider)] space-y-2.5 animate-fadeIn">
-          {metric.avgScore > 0 && (
-            <div className="p-3 rounded-xl bg-indigo-50/50 dark:bg-indigo-900/20 border border-indigo-100/50 dark:border-indigo-500/20 space-y-1 text-xs">
-              <div className="font-bold text-indigo-600 flex items-center gap-1.5">
-                <Info className="w-3.5 h-3.5" />
-                <span>Оценка синхронизации</span>
+          {metric.avgScore > 0 && status && (
+            <div className="p-3 rounded-xl bg-[var(--surface-2)] border border-[var(--divider)] space-y-1 text-xs">
+              <div className="font-bold text-[var(--text)] flex items-center gap-1.5">
+                <HelpCircle className="w-3.5 h-3.5 text-[var(--accent)]" />
+                <span>Что это значит</span>
               </div>
               <p className="text-[var(--text-2)] leading-relaxed text-[11px]">
-                {getStatusText(metric.avgScore)}
+                {status.detail}
               </p>
             </div>
           )}

@@ -226,7 +226,7 @@ export const UsView: React.FC = () => {
                     }}
                     className="text-xs font-semibold text-[var(--text-2)] hover:text-[var(--text)] px-3 py-2 rounded-xl hover:bg-[var(--surface-2)] transition-colors cursor-pointer"
                   >
-                    Радар и отчёт →
+                    Аналитика союза →
                   </button>
                   <button
                     type="button"

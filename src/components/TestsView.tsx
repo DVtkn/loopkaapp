@@ -144,11 +144,11 @@ export const TestsView: React.FC<{ initialMode?: 'catalog' | 'report' }> = ({
 
   return (
     <PageLayout
-      title={subMode === 'report' ? 'Аналитика отношений' : 'Исследования пары'}
+      title={subMode === 'report' ? 'Аналитика союза' : 'Исследования пары'}
       subtitle={
         subMode === 'report'
-          ? 'Карта гармонии и психологический профиль союза'
-          : 'Тесты и радар гармонии союза'
+          ? 'Карта гармонии и профиль пары'
+          : 'Психологические опросники и карта союза'
       }
       onBack={
         subMode === 'report'
@@ -182,11 +182,11 @@ export const TestsView: React.FC<{ initialMode?: 'catalog' | 'report' }> = ({
                 </div>
                 <div>
                   <div className="text-sm font-bold text-[var(--text)] group-hover:text-[var(--accent)] transition-colors">
-                    Радар гармонии пары: {analysis.hasData && analysis.compatibilityScore > 0 ? `${analysis.compatibilityScore}%` : 'Калибровка'}
+                    Аналитика союза: {analysis.hasData && analysis.compatibilityScore > 0 ? `${analysis.compatibilityScore}%` : 'Калибровка'}
                   </div>
                   <div className="text-xs text-[var(--text-2)] mt-0.5">
                     {analysis.hasData && analysis.compatibilityScore > 0
-                      ? 'Анализ 5 сфер, суперсилы и разбор союза'
+                      ? 'Карта 5 сфер, суперсилы и разбор союза'
                       : 'Пройдите опросники, чтобы открыть аналитику'}
                   </div>
                 </div>
@@ -245,12 +245,12 @@ export const TestsView: React.FC<{ initialMode?: 'catalog' | 'report' }> = ({
                   <div className="w-14 h-14 rounded-full bg-[var(--accent)]/10 text-[var(--accent)] flex items-center justify-center mb-1 shadow-sm">
                     <span className="text-2xl">🎉</span>
                   </div>
-                  <h3 className="text-[var(--text)] font-extrabold text-xl tracking-tight">Все исследования пройдены!</h3>
+                  <h3 className="text-[var(--text)] font-extrabold text-xl tracking-tight">Все исследования пройдены 🎉</h3>
                   <p className="text-[var(--text-2)] text-sm max-w-sm mx-auto leading-relaxed">
-                    Вы завершили все доступные тесты. Посмотрите обновлённую аналитику союза и ваши суперсилы.
+                    Вы завершили все доступные опросники. Посмотрите обновлённую аналитику союза и ваши точки синергии.
                   </p>
                   <div className="mt-3 inline-flex items-center gap-1.5 text-[var(--surface)] font-bold text-sm bg-[var(--accent)] px-5 py-2.5 rounded-2xl hover:bg-[var(--accent-2)] transition-colors shadow-md">
-                    Перейти к аналитике <ChevronRight className="w-4 h-4" />
+                    Перейти к аналитике союза <ChevronRight className="w-4 h-4" />
                   </div>
                 </div>
               )
@@ -267,7 +267,7 @@ export const TestsView: React.FC<{ initialMode?: 'catalog' | 'report' }> = ({
                   onClick={() => setActiveTab('report')}
                   className="text-xs font-semibold text-[var(--accent)] hover:underline flex items-center gap-1 cursor-pointer"
                 >
-                  <span>Карта совместимости</span>
+                  <span>Аналитика союза</span>
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>

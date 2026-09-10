@@ -15,7 +15,6 @@ import {
   saveChatMessage,
   getAIMessages,
   callGroqChat,
-  generateSmartPsychologistReply,
   saveAIMessageToDb,
 } from "./chat.service.ts";
 import { sendSSEEventToUser } from "../../shared/utils/sse.ts";
@@ -225,25 +224,18 @@ aiRouter.post("/chat", aiLimiter, requireAuth, validateBody(aiChatMessageSchema)
     const groqReply = await callGroqChat(groqMessages);
     if (groqReply) {
       await saveAIMessageToDb(callerLogin, lastUserText, groqReply);
-      return res.json({ reply: groqReply, mode: "groq" });
+      return res.json({ reply: groqReply, mode: "openrouter" });
     }
 
-    const smartReply = generateSmartPsychologistReply(lastUserText, partnerName, partner2Name);
-    await saveAIMessageToDb(callerLogin, lastUserText, smartReply);
-    return res.json({
-      reply: smartReply,
-      mode: "smart_psychologist_engine",
+    return res.status(503).json({
+      error: "ИИ временно недоступен. Попробуйте позже.",
+      mode: "error",
     });
   } catch (err: unknown) {
     logger.error("Ошибка в AI чате Совы", err);
-    const partnerName = req.body?.currentPartner?.name || "Партнёр";
-    const partner2Name = req.body?.coupleContext?.user2?.name || "партнёр";
-    const lastUserText = req.body?.messages?.slice(-1)?.[0]?.content || "";
-    const fallback = generateSmartPsychologistReply(lastUserText, partnerName, partner2Name);
-    await saveAIMessageToDb(req.user?.login, lastUserText, fallback);
-    return res.json({
-      reply: fallback,
-      mode: "safety_fallback",
+    return res.status(503).json({
+      error: "ИИ временно недоступен. Попробуйте позже.",
+      mode: "error",
     });
   }
 });

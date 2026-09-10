@@ -415,13 +415,15 @@ function loadConfig() {
       jwtSecret = "loop_secret_fallback_12345";
     }
   }
-  if (!process.env.GROQ_API_KEY) {
-    logger.warn("GROQ_API_KEY is not configured in .env. AI will fallback to smart rule engine.");
+  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+  if (!OPENROUTER_API_KEY) {
+    logger.warn("OPENROUTER_API_KEY is not configured in .env. AI psychologist (Sova) will return 503.");
   }
   return {
     port,
     nodeEnv,
     jwtSecret,
+    openrouterApiKey: OPENROUTER_API_KEY,
     groqApiKey: process.env.GROQ_API_KEY,
     geminiApiKey: process.env.GEMINI_API_KEY,
     allowedOrigins: parseAllowedOrigins()
@@ -846,117 +848,46 @@ async function saveCoupleData(key, data) {
 }
 
 // src/server/aiService.ts
-import { GoogleGenAI } from "@google/genai";
 import crypto from "crypto";
-var GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
-var GROQ_API_KEY = process.env.GROQ_API_KEY;
-var GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-var GROQ_MODELS = [
-  "llama-3.3-70b-versatile",
-  "llama-3.1-8b-instant",
-  "mixtral-8x7b-32768"
-];
-async function callGeminiFallback(messages) {
-  if (!GEMINI_API_KEY) {
+var OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
+var MODEL_NAME = "thinkingmachines/inkling-small:free";
+async function callGroqChat(messages) {
+  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+  if (!OPENROUTER_API_KEY) {
+    logger.warn("OPENROUTER_API_KEY \u043D\u0435 \u0437\u0430\u0434\u0430\u043D \u0432 \u043E\u043A\u0440\u0443\u0436\u0435\u043D\u0438\u0438 (.env)");
     return null;
   }
   try {
-    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-    const formattedPrompt = messages.map((m) => `${m.role === "user" ? "\u041F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044C" : m.role === "assistant" ? "\u0421\u043E\u0432\u0430" : "\u0418\u043D\u0441\u0442\u0440\u0443\u043A\u0446\u0438\u044F"}: ${m.content}`).join("\n\n");
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: formattedPrompt
+    const response = await fetch(OPENROUTER_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        "HTTP-Referer": "https://loopkaapp.vercel.app",
+        "X-Title": "Loop Couples App"
+      },
+      body: JSON.stringify({
+        messages,
+        model: MODEL_NAME,
+        temperature: 0.5,
+        max_tokens: 650,
+        stream: false
+      })
     });
-    if (response.text) {
-      logger.info("\u041E\u0442\u0432\u0435\u0442 \u0443\u0441\u043F\u0435\u0448\u043D\u043E \u043F\u043E\u043B\u0443\u0447\u0435\u043D \u0447\u0435\u0440\u0435\u0437 \u0440\u0435\u0437\u0435\u0440\u0432\u043D\u044B\u0439 Gemini API");
-      return response.text;
-    }
-  } catch (err) {
-    logger.warn("\u0420\u0435\u0437\u0435\u0440\u0432\u043D\u044B\u0439 Gemini API \u0432\u0435\u0440\u043D\u0443\u043B \u043E\u0448\u0438\u0431\u043A\u0443:", void 0, err);
-  }
-  return null;
-}
-async function callGroqChat(messages) {
-  if (GROQ_API_KEY) {
-    for (const model of GROQ_MODELS) {
-      try {
-        const response = await fetch(GROQ_ENDPOINT, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${GROQ_API_KEY}`
-          },
-          body: JSON.stringify({
-            messages,
-            model,
-            temperature: 0.5,
-            max_tokens: 650,
-            stream: false
-          })
-        });
-        if (response.ok) {
-          const data = await response.json();
-          const content = data.choices?.[0]?.message?.content;
-          if (content) {
-            logger.info(`\u041E\u0442\u0432\u0435\u0442 Groq \u0443\u0441\u043F\u0435\u0448\u043D\u043E \u043F\u043E\u043B\u0443\u0447\u0435\u043D (\u043C\u043E\u0434\u0435\u043B\u044C: ${model})`);
-            return content;
-          }
-        }
-        const errText = await response.text();
-        logger.warn(`Groq ${model} \u0441\u0442\u0430\u0442\u0443\u0441 ${response.status}: ${errText.slice(0, 200)}`);
-      } catch (err) {
-        logger.error(`\u0421\u0435\u0442\u0435\u0432\u0430\u044F \u043E\u0448\u0438\u0431\u043A\u0430 \u043F\u0440\u0438 \u0437\u0430\u043F\u0440\u043E\u0441\u0435 \u043A Groq (${model})`, err);
+    if (response.ok) {
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content;
+      if (content) {
+        logger.info(`\u041E\u0442\u0432\u0435\u0442 OpenRouter \u0443\u0441\u043F\u0435\u0448\u043D\u043E \u043F\u043E\u043B\u0443\u0447\u0435\u043D (\u043C\u043E\u0434\u0435\u043B\u044C: ${MODEL_NAME})`);
+        return content;
       }
     }
-  } else {
-    logger.warn("GROQ_API_KEY \u043D\u0435 \u0437\u0430\u0434\u0430\u043D \u0432 \u043E\u043A\u0440\u0443\u0436\u0435\u043D\u0438\u0438 (.env), \u043F\u0440\u043E\u0431\u0443\u0435\u043C \u0440\u0435\u0437\u0435\u0440\u0432\u043D\u044B\u0439 Gemini API");
-  }
-  const geminiReply = await callGeminiFallback(messages);
-  if (geminiReply) {
-    return geminiReply;
+    const errText = await response.text();
+    logger.warn(`OpenRouter ${MODEL_NAME} \u0441\u0442\u0430\u0442\u0443\u0441 ${response.status}: ${errText.slice(0, 200)}`);
+  } catch (err) {
+    logger.error(`\u0421\u0435\u0442\u0435\u0432\u0430\u044F \u043E\u0448\u0438\u0431\u043A\u0430 \u043F\u0440\u0438 \u0437\u0430\u043F\u0440\u043E\u0441\u0435 \u043A OpenRouter (${MODEL_NAME})`, err);
   }
   return null;
-}
-function generateSmartPsychologistReply(userMessage, partnerName, partner2Name) {
-  const text2 = (userMessage || "").toLowerCase();
-  if (text2.includes("\u0441\u0441\u043E\u0440\u0430") || text2.includes("\u0440\u0443\u0433\u0430\u0435\u043C") || text2.includes("\u043E\u0431\u0438\u0434") || text2.includes("\u043A\u043E\u043D\u0444\u043B\u0438\u043A\u0442") || text2.includes("\u0441\u043F\u043E\u0440")) {
-    return `**\u0412\u0437\u0433\u043B\u044F\u0434 \u043F\u0441\u0438\u0445\u043E\u043B\u043E\u0433\u0430**: \u0417\u0430 \u043A\u0430\u0436\u0434\u044B\u043C \u043E\u0441\u0442\u0440\u044B\u043C \u043A\u043E\u043D\u0444\u043B\u0438\u043A\u0442\u043E\u043C \u0438 \u043E\u0431\u0438\u0434\u043E\u0439 \u0432\u0441\u0435\u0433\u0434\u0430 \u0441\u0442\u043E\u0438\u0442 \u0443\u044F\u0437\u0432\u0438\u043C\u043E\u0435 \u0447\u0443\u0432\u0441\u0442\u0432\u043E \u2014 \u0441\u0442\u0440\u0430\u0445 \u0431\u044B\u0442\u044C \u043D\u0435\u0443\u0441\u043B\u044B\u0448\u0430\u043D\u043D\u044B\u043C \u0438\u043B\u0438 \u043E\u0442\u0432\u0435\u0440\u0433\u043D\u0443\u0442\u044B\u043C. \u0417\u0430\u0449\u0438\u0442\u043D\u0430\u044F \u0440\u0435\u0430\u043A\u0446\u0438\u044F \u0447\u0430\u0441\u0442\u043E \u0432\u044B\u0433\u043B\u044F\u0434\u0438\u0442 \u043A\u0430\u043A \u0437\u043B\u043E\u0441\u0442\u044C, \u043D\u043E \u043A\u043E\u0440\u0435\u043D\u044C \u0437\u0430\u0440\u044B\u0442 \u0433\u043B\u0443\u0431\u0436\u0435.
-
-**\u041F\u0440\u0430\u043A\u0442\u0438\u043A\u0430 / \u0413\u043E\u0442\u043E\u0432\u0430\u044F \u0444\u0440\u0430\u0437\u0430**: \u041F\u043E\u043F\u0440\u043E\u0431\u0443\u0439\u0442\u0435 \u0432\u0437\u044F\u0442\u044C \u043F\u0430\u0443\u0437\u0443 \u043D\u0430 15 \u043C\u0438\u043D\u0443\u0442 \u0438 \u0441\u043A\u0430\u0437\u0430\u0442\u044C ${partner2Name}:
-\xAB\u041C\u043D\u0435 \u043E\u0447\u0435\u043D\u044C \u0436\u0430\u043B\u044C, \u0447\u0442\u043E \u043D\u0430\u0448 \u0440\u0430\u0437\u0433\u043E\u0432\u043E\u0440 \u0437\u0430\u0448\u0451\u043B \u0432 \u0442\u0443\u043F\u0438\u043A. \u042F \u043E\u0447\u0435\u043D\u044C \u0446\u0435\u043D\u044E \u043D\u0430\u0441 \u0438 \u0445\u043E\u0447\u0443 \u0432\u0441\u0451 \u043E\u0431\u0441\u0443\u0434\u0438\u0442\u044C \u0441\u043F\u043E\u043A\u043E\u0439\u043D\u043E, \u043A\u043E\u0433\u0434\u0430 \u044D\u043C\u043E\u0446\u0438\u0438 \u043D\u0435\u043C\u043D\u043E\u0433\u043E \u0443\u0442\u0438\u0445\u043D\u0443\u0442\xBB.
-
-**\u0412\u043E\u043F\u0440\u043E\u0441 \u0434\u043B\u044F \u0432\u0430\u0441**: \u041A\u0430\u043A\u0430\u044F \u0438\u043C\u0435\u043D\u043D\u043E \u0432\u0430\u0448\u0430 \u043D\u0435\u0443\u0434\u043E\u0432\u043B\u0435\u0442\u0432\u043E\u0440\u0451\u043D\u043D\u0430\u044F \u043F\u043E\u0442\u0440\u0435\u0431\u043D\u043E\u0441\u0442\u044C \u0441\u0442\u043E\u0438\u0442 \u0437\u0430 \u044D\u0442\u043E\u0439 \u0441\u0438\u0442\u0443\u0430\u0446\u0438\u0435\u0439?`;
-  }
-  if (text2.includes("\u0440\u0435\u0432\u043D") || text2.includes("\u0438\u0437\u043C\u0435\u043D") || text2.includes("\u043D\u0435 \u0434\u043E\u0432\u0435\u0440")) {
-    return `**\u0412\u0437\u0433\u043B\u044F\u0434 \u043F\u0441\u0438\u0445\u043E\u043B\u043E\u0433\u0430**: \u0420\u0435\u0432\u043D\u043E\u0441\u0442\u044C \u2014 \u044D\u0442\u043E \u043D\u0435 \u043F\u0440\u0438\u0437\u043D\u0430\u043A \u043D\u0435\u043B\u044E\u0431\u0432\u0438, \u0430 \u043F\u043E\u0434\u0441\u0432\u0435\u0447\u0435\u043D\u043D\u044B\u0439 \u0441\u0442\u0440\u0430\u0445 \u0443\u0442\u0440\u0430\u0442\u044B \u0431\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u043E\u0441\u0442\u0438 \u0438 \u0446\u0435\u043D\u043D\u043E\u0441\u0442\u0438 \u0432 \u0433\u043B\u0430\u0437\u0430\u0445 \u043F\u0430\u0440\u0442\u043D\u0451\u0440\u0430.
-
-**\u041F\u0440\u0430\u043A\u0442\u0438\u043A\u0430 / \u0413\u043E\u0442\u043E\u0432\u0430\u044F \u0444\u0440\u0430\u0437\u0430**: \u041F\u043E\u0434\u0435\u043B\u0438\u0442\u0435\u0441\u044C \u0447\u0443\u0432\u0441\u0442\u0432\u043E\u043C \u0447\u0435\u0440\u0435\u0437 \u0443\u044F\u0437\u0432\u0438\u043C\u043E\u0441\u0442\u044C \u0441 ${partner2Name}:
-\xAB\u0417\u043D\u0430\u0435\u0448\u044C, \u0438\u043D\u043E\u0433\u0434\u0430 \u0432\u043E \u043C\u043D\u0435 \u043F\u0440\u043E\u0441\u044B\u043F\u0430\u0435\u0442\u0441\u044F \u0442\u0440\u0435\u0432\u043E\u0433\u0430. \u041C\u043D\u0435 \u043E\u0447\u0435\u043D\u044C \u0432\u0430\u0436\u043D\u043E \u0441\u043B\u044B\u0448\u0430\u0442\u044C, \u0447\u0442\u043E \u044F \u0434\u043B\u044F \u0442\u0435\u0431\u044F \u0446\u0435\u043D\u0435\u043D \u0438 \u0432\u0430\u0436\u0435\u043D\xBB.
-
-**\u0412\u043E\u043F\u0440\u043E\u0441 \u0434\u043B\u044F \u0432\u0430\u0441**: \u0427\u0442\u043E \u043F\u0430\u0440\u0442\u043D\u0451\u0440 \u043C\u043E\u0436\u0435\u0442 \u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0441\u0435\u0433\u043E\u0434\u043D\u044F, \u0447\u0442\u043E\u0431\u044B \u0432\u044B \u043F\u043E\u0447\u0443\u0432\u0441\u0442\u0432\u043E\u0432\u0430\u043B\u0438 \u0431\u043E\u043B\u044C\u0448\u0443\u044E \u043D\u0430\u0434\u0451\u0436\u043D\u043E\u0441\u0442\u044C?`;
-  }
-  if (text2.includes("\u0443\u0441\u0442\u0430\u043B") || text2.includes("\u0431\u044B\u0442") || text2.includes("\u0440\u0443\u0442\u0438\u043D") || text2.includes("\u043D\u0435\u0442 \u0432\u0440\u0435\u043C\u0435\u043D\u0438")) {
-    return `**\u0412\u0437\u0433\u043B\u044F\u0434 \u043F\u0441\u0438\u0445\u043E\u043B\u043E\u0433\u0430**: \u041D\u0430\u043A\u043E\u043F\u043B\u0435\u043D\u043D\u0430\u044F \u0431\u044B\u0442\u043E\u0432\u0430\u044F \u0443\u0441\u0442\u0430\u043B\u043E\u0441\u0442\u044C \u043D\u0435\u0437\u0430\u043C\u0435\u0442\u043D\u043E \u0438\u0441\u0442\u043E\u0449\u0430\u0435\u0442 \u044D\u043C\u043E\u0446\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u044B\u0439 \u0431\u0430\u043B\u0430\u043D\u0441 \u043F\u0430\u0440\u044B. \u0415\u0441\u043B\u0438 \u043D\u0435 \u043F\u043E\u043F\u043E\u043B\u043D\u044F\u0442\u044C \xAB\u0431\u0430\u043D\u043A \u0442\u0435\u043F\u043B\u044B\u0445 \u0432\u043F\u0435\u0447\u0430\u0442\u043B\u0435\u043D\u0438\u0439\xBB, \u043E\u0431\u044B\u0447\u043D\u044B\u0435 \u043C\u0435\u043B\u043E\u0447\u0438 \u043D\u0430\u0447\u0438\u043D\u0430\u044E\u0442 \u0440\u0430\u0437\u0434\u0440\u0430\u0436\u0430\u0442\u044C.
-
-**\u041F\u0440\u0430\u043A\u0442\u0438\u043A\u0430 / \u0413\u043E\u0442\u043E\u0432\u0430\u044F \u0444\u0440\u0430\u0437\u0430**: \u0414\u043E\u0433\u043E\u0432\u043E\u0440\u0438\u0442\u0435\u0441\u044C \u043E 10-\u043C\u0438\u043D\u0443\u0442\u043D\u043E\u043C \u0440\u0438\u0442\u0443\u0430\u043B\u0435 \u0441 ${partner2Name}:
-\xAB\u0414\u0430\u0432\u0430\u0439 \u0441\u0435\u0439\u0447\u0430\u0441 \u043D\u0430 10 \u043C\u0438\u043D\u0443\u0442 \u043E\u0442\u043B\u043E\u0436\u0438\u043C \u0432\u0441\u0435 \u0442\u0435\u043B\u0435\u0444\u043E\u043D\u044B \u0438 \u0434\u0435\u043B\u0430, \u043F\u0440\u043E\u0441\u0442\u043E \u0432\u044B\u043F\u044C\u0435\u043C \u0447\u0430\u044E \u0438 \u043E\u0431\u043D\u0438\u043C\u0435\u043C\u0441\u044F\xBB.
-
-**\u0412\u043E\u043F\u0440\u043E\u0441 \u0434\u043B\u044F \u0432\u0430\u0441**: \u041A\u0430\u043A\u0443\u044E \u043E\u0434\u043D\u0443 \u0431\u044B\u0442\u043E\u0432\u0443\u044E \u043E\u0431\u044F\u0437\u0430\u043D\u043D\u043E\u0441\u0442\u044C \u0432\u044B \u043C\u043E\u0436\u0435\u0442\u0435 \u043E\u0431\u043B\u0435\u0433\u0447\u0438\u0442\u044C \u0438\u043B\u0438 \u043F\u0435\u0440\u0435\u0440\u0430\u0441\u043F\u0440\u0435\u0434\u0435\u043B\u0438\u0442\u044C \u043D\u0430 \u044D\u0442\u043E\u0439 \u043D\u0435\u0434\u0435\u043B\u0435?`;
-  }
-  if (text2.includes("\u0432\u043D\u0438\u043C\u0430\u043D\u0438") || text2.includes("\u043E\u0434\u0438\u043D\u043E\u0447\u0435\u0441\u0442") || text2.includes("\u0445\u043E\u043B\u043E\u0434") || text2.includes("\u043E\u0442\u0434\u0430\u043B\u044F")) {
-    return `**\u0412\u0437\u0433\u043B\u044F\u0434 \u043F\u0441\u0438\u0445\u043E\u043B\u043E\u0433\u0430**: \u0427\u0443\u0432\u0441\u0442\u0432\u043E \u0434\u0438\u0441\u0442\u0430\u043D\u0446\u0438\u0438 \u0432 \u043E\u0442\u043D\u043E\u0448\u0435\u043D\u0438\u044F\u0445 \u2014 \u044D\u0442\u043E \u0435\u0441\u0442\u0435\u0441\u0442\u0432\u0435\u043D\u043D\u044B\u0439 \u0441\u0438\u0433\u043D\u0430\u043B \u043E \u0442\u043E\u043C, \u0447\u0442\u043E \u0432\u0430\u0448 \u044D\u043C\u043E\u0446\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0430\u043A\u0442 \u0442\u0440\u0435\u0431\u0443\u0435\u0442 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F.
-
-**\u041F\u0440\u0430\u043A\u0442\u0438\u043A\u0430 / \u0413\u043E\u0442\u043E\u0432\u0430\u044F \u0444\u0440\u0430\u0437\u0430**: \u0417\u0430\u0434\u0430\u0439\u0442\u0435 ${partner2Name} \u0442\u0451\u043F\u043B\u044B\u0439 \u043E\u0442\u043A\u0440\u044B\u0442\u044B\u0439 \u0432\u043E\u043F\u0440\u043E\u0441:
-\xAB\u042F \u0441\u043E\u0441\u043A\u0443\u0447\u0438\u043B\u0441\u044F \u043F\u043E \u043D\u0430\u0448\u0438\u043C \u0433\u043B\u0443\u0431\u043E\u043A\u0438\u043C \u0440\u0430\u0437\u0433\u043E\u0432\u043E\u0440\u0430\u043C. \u041A\u0430\u043A \u0442\u044B \u0441\u0435\u0431\u044F \u0447\u0443\u0432\u0441\u0442\u0432\u0443\u0435\u0448\u044C \u0432 \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u0435\u0435 \u0432\u0440\u0435\u043C\u044F \u0438 \u043E \u0447\u0451\u043C \u0447\u0430\u0449\u0435 \u0432\u0441\u0435\u0433\u043E \u0434\u0443\u043C\u0430\u0435\u0448\u044C?\xBB
-
-**\u0412\u043E\u043F\u0440\u043E\u0441 \u0434\u043B\u044F \u0432\u0430\u0441**: \u041A\u0430\u043A\u043E\u0435 \u0441\u043E\u0432\u043C\u0435\u0441\u0442\u043D\u043E\u0435 \u0437\u0430\u043D\u044F\u0442\u0438\u0435 \u0440\u0430\u043D\u044C\u0448\u0435 \u043F\u0440\u0438\u043D\u043E\u0441\u0438\u043B\u043E \u0432\u0430\u043C \u0431\u043E\u043B\u044C\u0448\u0435 \u0432\u0441\u0435\u0433\u043E \u0440\u0430\u0434\u043E\u0441\u0442\u0438 \u0438 \u043B\u0451\u0433\u043A\u043E\u0441\u0442\u0438?`;
-  }
-  return `**\u0412\u0437\u0433\u043B\u044F\u0434 \u043F\u0441\u0438\u0445\u043E\u043B\u043E\u0433\u0430**: \u041B\u044E\u0431\u044B\u0435 \u043F\u0435\u0440\u0435\u0436\u0438\u0432\u0430\u043D\u0438\u044F \u0432 \u043F\u0430\u0440\u0435 \u2014 \u044D\u0442\u043E \u0442\u043E\u0447\u043A\u0430 \u0440\u043E\u0441\u0442\u0430 \u0434\u043B\u044F \u0432\u0430\u0448\u0435\u0433\u043E \u044D\u043C\u043E\u0446\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u043E\u0433\u043E \u043A\u043E\u043D\u0442\u0430\u043A\u0442\u0430. \u0413\u043B\u0430\u0432\u043D\u043E\u0435 \u2014 \u043F\u043E\u0434\u0445\u043E\u0434\u0438\u0442\u044C \u043A \u0434\u0438\u0430\u043B\u043E\u0433\u0443 \u043D\u0435 \u0438\u0437 \u043F\u043E\u0437\u0438\u0446\u0438\u0438 \u043F\u0440\u0435\u0442\u0435\u043D\u0437\u0438\u0439, \u0430 \u0438\u0437 \u0436\u0435\u043B\u0430\u043D\u0438\u044F \u043F\u043E\u043D\u044F\u0442\u044C \u0434\u0440\u0443\u0433 \u0434\u0440\u0443\u0433\u0430.
-
-**\u041F\u0440\u0430\u043A\u0442\u0438\u043A\u0430 / \u0413\u043E\u0442\u043E\u0432\u0430\u044F \u0444\u0440\u0430\u0437\u0430**: \u041F\u043E\u043F\u0440\u043E\u0431\u0443\u0439\u0442\u0435 \u0441\u0444\u043E\u0440\u043C\u0443\u043B\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u043C\u044B\u0441\u043B\u044C \u0447\u0435\u0440\u0435\u0437 \u042F-\u0432\u044B\u0441\u043A\u0430\u0437\u044B\u0432\u0430\u043D\u0438\u0435:
-\xAB\u042F \u0447\u0443\u0432\u0441\u0442\u0432\u0443\u044E \u0442\u0440\u0435\u0432\u043E\u0433\u0443, \u043A\u043E\u0433\u0434\u0430 \u043F\u0440\u043E\u0438\u0441\u0445\u043E\u0434\u044F\u0442 \u043F\u043E\u0434\u043E\u0431\u043D\u044B\u0435 \u0441\u0438\u0442\u0443\u0430\u0446\u0438\u0438, \u043F\u043E\u0442\u043E\u043C\u0443 \u0447\u0442\u043E \u0434\u043B\u044F \u043C\u0435\u043D\u044F \u043E\u0447\u0435\u043D\u044C \u0432\u0430\u0436\u043D\u0430 \u043D\u0430\u0448\u0430 \u0431\u043B\u0438\u0437\u043E\u0441\u0442\u044C \u0441 ${partner2Name}\xBB.
-
-**\u0412\u043E\u043F\u0440\u043E\u0441 \u0434\u043B\u044F \u0432\u0430\u0441**: \u0427\u0442\u043E \u043F\u0440\u044F\u043C\u043E \u0441\u0435\u0439\u0447\u0430\u0441 \u043F\u043E\u043C\u043E\u0436\u0435\u0442 \u0432\u0430\u043C \u043F\u043E\u0447\u0443\u0432\u0441\u0442\u0432\u043E\u0432\u0430\u0442\u044C \u0441\u0435\u0431\u044F \u043E\u0434\u043D\u043E\u0439 \u0443\u0432\u0435\u0440\u0435\u043D\u043D\u043E\u0439 \u043A\u043E\u043C\u0430\u043D\u0434\u043E\u0439?`;
 }
 async function saveAIMessageToDb(userLogin, prompt, reply) {
   if (!userLogin) return;
@@ -1216,6 +1147,280 @@ function validateBody(schema) {
 
 // src/server/shared/middleware/auth.middleware.ts
 import jwt from "jsonwebtoken";
+
+// src/server/shared/utils/sse.ts
+var recentTouches = [];
+var sseClients = /* @__PURE__ */ new Map();
+function registerSSEClient(login, res) {
+  const cleanLogin = login.toLowerCase().replace(/^@/, "");
+  if (!sseClients.has(cleanLogin)) {
+    sseClients.set(cleanLogin, []);
+  }
+  sseClients.get(cleanLogin).push(res);
+}
+function removeSSEClient(login, res) {
+  const cleanLogin = login.toLowerCase().replace(/^@/, "");
+  const clients = sseClients.get(cleanLogin);
+  if (clients) {
+    const idx = clients.indexOf(res);
+    if (idx !== -1) clients.splice(idx, 1);
+    if (clients.length === 0) sseClients.delete(cleanLogin);
+  }
+}
+function sendSSEEventToUser(login, eventType, payload) {
+  const cleanLogin = login.toLowerCase().replace(/^@/, "");
+  const clients = sseClients.get(cleanLogin);
+  if (clients && clients.length > 0) {
+    const data = `event: ${eventType}
+data: ${JSON.stringify(payload)}
+
+`;
+    clients.forEach((res) => {
+      try {
+        res.write(data);
+      } catch (err) {
+      }
+    });
+  }
+}
+
+// src/server/modules/realtime/realtime.service.ts
+import { eq as eq3, and, gt, desc } from "drizzle-orm";
+var pushSubscriptions2 = [];
+var lastActiveCache = /* @__PURE__ */ new Map();
+async function touchUserLastActive(login) {
+  const cleanLogin = String(login || "").toLowerCase().replace(/^@/, "").trim();
+  if (!cleanLogin) return;
+  const now = Date.now();
+  const lastTime = lastActiveCache.get(cleanLogin) || 0;
+  if (now - lastTime < 25e3) {
+    return;
+  }
+  lastActiveCache.set(cleanLogin, now);
+  const nowIso = new Date(now).toISOString();
+  if (isSqlConfigured() && db) {
+    try {
+      await db.update(users).set({ lastActiveAt: nowIso }).where(eq3(users.login, cleanLogin));
+    } catch (err) {
+      logger.warn("\u041E\u0448\u0438\u0431\u043A\u0430 \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F lastActiveAt \u0432 SQL", { login: cleanLogin }, err);
+    }
+  }
+  try {
+    const store = readEmergencyFile();
+    if (store.users && store.users[cleanLogin]) {
+      store.users[cleanLogin].lastActiveAt = nowIso;
+      writeEmergencyFile(store);
+    }
+  } catch {
+  }
+}
+async function recordCoupleEvent(params) {
+  const eventId = params.id || `evt-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+  if (isSqlConfigured() && db) {
+    try {
+      await db.insert(coupleEvents).values({
+        id: eventId,
+        coupleId: params.coupleId,
+        targetLogin: params.targetLogin,
+        senderLogin: params.senderLogin,
+        eventType: params.eventType,
+        payload: params.payload,
+        createdAt: nowIso
+      });
+    } catch (err) {
+      logger.warn("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0441\u043E\u0431\u044B\u0442\u0438\u0435 \u0432 \u0442\u0430\u0431\u043B\u0438\u0446\u0443 couple_events", void 0, err);
+    }
+  }
+  sendSSEEventToUser(params.targetLogin, params.eventType, params.payload);
+  return { id: eventId, createdAt: nowIso };
+}
+async function sendQuickTouch(params) {
+  const sLogin = String(params.senderLogin).toLowerCase().replace(/^@/, "");
+  const tLogin = String(params.targetLogin).toLowerCase().replace(/^@/, "");
+  const now = Date.now();
+  const tenSecondsAgo = now - 1e4;
+  const existingRecent = recentTouches.find(
+    (t) => t.senderLogin === sLogin && t.targetLogin === tLogin && t.actionType === params.actionType && new Date(t.createdAt).getTime() > tenSecondsAgo
+  );
+  if (existingRecent) {
+    return {
+      status: "throttled",
+      throttled: true,
+      message: "\u0414\u0435\u0439\u0441\u0442\u0432\u0438\u0435 \u0443\u0436\u0435 \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E \u043D\u0435\u0434\u0430\u0432\u043D\u043E",
+      touch: existingRecent
+    };
+  }
+  const newTouch = {
+    id: `touch-${now}-${Math.random().toString(36).slice(2, 7)}`,
+    senderLogin: sLogin,
+    senderName: params.senderName || sLogin,
+    targetLogin: tLogin,
+    actionType: params.actionType,
+    title: params.title || `${params.senderName || sLogin} \u043E\u0431\u0440\u0430\u0442\u0438\u043B(\u0430) \u043D\u0430 \u0432\u0430\u0441 \u0432\u043D\u0438\u043C\u0430\u043D\u0438\u0435`,
+    subtitle: params.subtitle || "\u0422\u043E\u043B\u044C\u043A\u043E \u0447\u0442\u043E",
+    icon: params.icon || "heart",
+    iconBg: params.iconBg || "bg-rose-500/10",
+    iconColor: params.iconColor || "text-rose-500",
+    customNote: params.customNote,
+    createdAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  recentTouches.unshift(newTouch);
+  if (recentTouches.length > 200) recentTouches.pop();
+  const coupleKey = [sLogin, tLogin].sort().join("_");
+  if (isSqlConfigured() && db) {
+    try {
+      await db.insert(coupleEvents).values({
+        id: newTouch.id,
+        coupleId: coupleKey,
+        targetLogin: tLogin,
+        senderLogin: sLogin,
+        eventType: "touch",
+        payload: newTouch,
+        createdAt: newTouch.createdAt
+      });
+    } catch (err) {
+      logger.warn("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u043F\u0438\u0441\u0430\u0442\u044C \u043A\u0430\u0441\u0430\u043D\u0438\u0435 \u0432 couple_events (PostgreSQL)", void 0, err);
+    }
+  }
+  sendSSEEventToUser(tLogin, "touch", newTouch);
+  logger.info("\u0411\u044B\u0441\u0442\u0440\u043E\u0435 \u043A\u0430\u0441\u0430\u043D\u0438\u0435 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u043E \u0432 \u0411\u0414 \u0438 \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E", {
+    from: sLogin,
+    to: tLogin,
+    action: params.actionType
+  });
+  return {
+    status: "dispatched",
+    throttled: false,
+    touch: newTouch
+  };
+}
+function getUserTouches(login) {
+  const cleanLogin = String(login || "").toLowerCase().replace(/^@/, "");
+  return recentTouches.filter(
+    (t) => t.targetLogin === cleanLogin || t.senderLogin === cleanLogin
+  );
+}
+async function handleHeartbeat(login) {
+  const cleanLogin = String(login || "").toLowerCase().replace(/^@/, "").trim();
+  const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+  let partnerLastActiveAt = null;
+  let partnerLogin = null;
+  if (cleanLogin) {
+    await touchUserLastActive(cleanLogin);
+    if (isSqlConfigured() && db) {
+      try {
+        const [currentUserRecord] = await db.select().from(users).where(eq3(users.login, cleanLogin)).limit(1);
+        if (currentUserRecord?.partnerLogin) {
+          partnerLogin = currentUserRecord.partnerLogin;
+          const [partnerRecord] = await db.select().from(users).where(eq3(users.login, partnerLogin)).limit(1);
+          if (partnerRecord?.lastActiveAt) {
+            partnerLastActiveAt = partnerRecord.lastActiveAt;
+          }
+        }
+      } catch (err) {
+        logger.warn("Heartbeat error in Neon DB", void 0, err);
+      }
+    }
+    if (!partnerLastActiveAt) {
+      try {
+        const store = readEmergencyFile();
+        const userObj = store.users?.[cleanLogin];
+        if (userObj?.partnerLogin) {
+          partnerLogin = partnerLogin || userObj.partnerLogin;
+          const partnerObj = store.users?.[userObj.partnerLogin.toLowerCase()];
+          if (partnerObj?.lastActiveAt) {
+            partnerLastActiveAt = partnerObj.lastActiveAt;
+          }
+        }
+      } catch {
+      }
+    }
+  }
+  const isPartnerOnline = partnerLastActiveAt ? Date.now() - new Date(partnerLastActiveAt).getTime() < 18e4 : false;
+  return {
+    ok: true,
+    timestamp: nowIso,
+    login: cleanLogin,
+    partnerLogin,
+    partnerLastActiveAt,
+    isPartnerOnline
+  };
+}
+async function getEventsPoll(params) {
+  const cleanLogin = String(params.login || "").toLowerCase().replace(/^@/, "").trim();
+  const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+  const events = [];
+  let partnerLastActiveAt = null;
+  if (cleanLogin) {
+    await touchUserLastActive(cleanLogin);
+  }
+  if (isSqlConfigured() && db && cleanLogin) {
+    try {
+      const [currentUserRecord] = await db.select().from(users).where(eq3(users.login, cleanLogin)).limit(1);
+      if (currentUserRecord?.partnerLogin) {
+        const [partnerRecord] = await db.select().from(users).where(eq3(users.login, currentUserRecord.partnerLogin)).limit(1);
+        if (partnerRecord?.lastActiveAt) {
+          partnerLastActiveAt = partnerRecord.lastActiveAt;
+        }
+      }
+      const cutoffTime = params.since || new Date(Date.now() - 45e3).toISOString();
+      const dbEvents = await db.select().from(coupleEvents).where(
+        and(
+          eq3(coupleEvents.targetLogin, cleanLogin),
+          gt(coupleEvents.createdAt, cutoffTime)
+        )
+      ).orderBy(desc(coupleEvents.createdAt)).limit(30);
+      for (const ev of dbEvents) {
+        if (params.lastEventId && ev.id === params.lastEventId) continue;
+        events.push({
+          id: ev.id,
+          type: ev.eventType,
+          data: ev.payload,
+          createdAt: ev.createdAt
+        });
+      }
+    } catch (err) {
+      logger.warn("Events poll error in Neon DB", void 0, err);
+    }
+  }
+  if (!partnerLastActiveAt && cleanLogin) {
+    try {
+      const store = readEmergencyFile();
+      const u = store.users?.[cleanLogin];
+      if (u?.partnerLogin) {
+        const p = store.users?.[u.partnerLogin.toLowerCase()];
+        if (p?.lastActiveAt) {
+          partnerLastActiveAt = p.lastActiveAt;
+        }
+      }
+    } catch {
+    }
+  }
+  if (events.length === 0) {
+    const memoryTouches = recentTouches.filter(
+      (t) => t.targetLogin === cleanLogin && (!params.lastEventId || t.id !== params.lastEventId)
+    );
+    for (const t of memoryTouches.slice(0, 10)) {
+      events.push({
+        id: t.id,
+        type: "touch",
+        data: t,
+        createdAt: t.createdAt
+      });
+    }
+  }
+  const isPartnerOnline = partnerLastActiveAt ? Date.now() - new Date(partnerLastActiveAt).getTime() < 18e4 : false;
+  return {
+    events,
+    touches: getUserTouches(cleanLogin),
+    partnerLastActiveAt,
+    isPartnerOnline,
+    serverTime: nowIso
+  };
+}
+
+// src/server/shared/middleware/auth.middleware.ts
 function generateToken(login) {
   return jwt.sign({ login: login.toLowerCase() }, config.jwtSecret, { expiresIn: "30d" });
 }
@@ -1233,6 +1438,8 @@ function requireAuth(req, res, next) {
     }
     req.userLogin = userLogin;
     req.user = { login: userLogin };
+    touchUserLastActive(userLogin).catch(() => {
+    });
     next();
   } catch (err) {
     logger.warn("\u041E\u0448\u0438\u0431\u043A\u0430 \u0432\u0430\u043B\u0438\u0434\u0430\u0446\u0438\u0438 JWT \u0442\u043E\u043A\u0435\u043D\u0430", { ip: req.ip }, err);
@@ -1645,10 +1852,10 @@ var pairDisconnectSchema = z2.object({
 });
 
 // src/server/modules/pairing/pairing.service.ts
-import { eq as eq4, and as and2 } from "drizzle-orm";
+import { eq as eq5, and as and3 } from "drizzle-orm";
 
 // src/server/services/pairService.ts
-import { eq as eq3, or as or2, and } from "drizzle-orm";
+import { eq as eq4, or as or3, and as and2 } from "drizzle-orm";
 import crypto4 from "crypto";
 var isProd5 = () => process.env.NODE_ENV === "production";
 async function acceptPair(cleanMe, cleanPartner) {
@@ -1659,12 +1866,12 @@ async function acceptPair(cleanMe, cleanPartner) {
     }
     try {
       await db.transaction(async (tx) => {
-        await tx.update(users).set({ partnerLogin: cleanPartner, pairedAt: now }).where(eq3(users.login, cleanMe));
-        await tx.update(users).set({ partnerLogin: cleanMe, pairedAt: now }).where(eq3(users.login, cleanPartner));
+        await tx.update(users).set({ partnerLogin: cleanPartner, pairedAt: now }).where(eq4(users.login, cleanMe));
+        await tx.update(users).set({ partnerLogin: cleanMe, pairedAt: now }).where(eq4(users.login, cleanPartner));
         await tx.delete(pairRequests).where(
-          or2(
-            and(eq3(pairRequests.fromLogin, cleanPartner), eq3(pairRequests.toLogin, cleanMe)),
-            and(eq3(pairRequests.fromLogin, cleanMe), eq3(pairRequests.toLogin, cleanPartner))
+          or3(
+            and2(eq4(pairRequests.fromLogin, cleanPartner), eq4(pairRequests.toLogin, cleanMe)),
+            and2(eq4(pairRequests.fromLogin, cleanMe), eq4(pairRequests.toLogin, cleanPartner))
           )
         );
       });
@@ -1729,12 +1936,12 @@ async function acceptPair(cleanMe, cleanPartner) {
   if (isSqlConfigured() && db) {
     try {
       await db.transaction(async (tx) => {
-        await tx.update(users).set({ partnerLogin: cleanPartner, pairedAt: now }).where(eq3(users.login, cleanMe));
-        await tx.update(users).set({ partnerLogin: cleanMe, pairedAt: now }).where(eq3(users.login, cleanPartner));
+        await tx.update(users).set({ partnerLogin: cleanPartner, pairedAt: now }).where(eq4(users.login, cleanMe));
+        await tx.update(users).set({ partnerLogin: cleanMe, pairedAt: now }).where(eq4(users.login, cleanPartner));
         await tx.delete(pairRequests).where(
-          or2(
-            and(eq3(pairRequests.fromLogin, cleanPartner), eq3(pairRequests.toLogin, cleanMe)),
-            and(eq3(pairRequests.fromLogin, cleanMe), eq3(pairRequests.toLogin, cleanPartner))
+          or3(
+            and2(eq4(pairRequests.fromLogin, cleanPartner), eq4(pairRequests.toLogin, cleanMe)),
+            and2(eq4(pairRequests.fromLogin, cleanMe), eq4(pairRequests.toLogin, cleanPartner))
           )
         );
       });
@@ -1831,13 +2038,13 @@ async function disconnectPair(cleanLogin) {
     }
     try {
       await db.transaction(async (tx) => {
-        await tx.update(users).set({ partnerLogin: null, pairedAt: null }).where(eq3(users.login, cleanLogin));
+        await tx.update(users).set({ partnerLogin: null, pairedAt: null }).where(eq4(users.login, cleanLogin));
         if (partnerLogin) {
-          await tx.update(users).set({ partnerLogin: null, pairedAt: null }).where(eq3(users.login, partnerLogin));
+          await tx.update(users).set({ partnerLogin: null, pairedAt: null }).where(eq4(users.login, partnerLogin));
           await tx.delete(pairRequests).where(
-            or2(
-              and(eq3(pairRequests.fromLogin, cleanLogin), eq3(pairRequests.toLogin, partnerLogin)),
-              and(eq3(pairRequests.fromLogin, partnerLogin), eq3(pairRequests.toLogin, cleanLogin))
+            or3(
+              and2(eq4(pairRequests.fromLogin, cleanLogin), eq4(pairRequests.toLogin, partnerLogin)),
+              and2(eq4(pairRequests.fromLogin, partnerLogin), eq4(pairRequests.toLogin, cleanLogin))
             )
           );
         }
@@ -1859,13 +2066,13 @@ async function disconnectPair(cleanLogin) {
   if (isSqlConfigured() && db) {
     try {
       await db.transaction(async (tx) => {
-        await tx.update(users).set({ partnerLogin: null, pairedAt: null }).where(eq3(users.login, cleanLogin));
+        await tx.update(users).set({ partnerLogin: null, pairedAt: null }).where(eq4(users.login, cleanLogin));
         if (partnerLogin) {
-          await tx.update(users).set({ partnerLogin: null, pairedAt: null }).where(eq3(users.login, partnerLogin));
+          await tx.update(users).set({ partnerLogin: null, pairedAt: null }).where(eq4(users.login, partnerLogin));
           await tx.delete(pairRequests).where(
-            or2(
-              and(eq3(pairRequests.fromLogin, cleanLogin), eq3(pairRequests.toLogin, partnerLogin)),
-              and(eq3(pairRequests.fromLogin, partnerLogin), eq3(pairRequests.toLogin, cleanLogin))
+            or3(
+              and2(eq4(pairRequests.fromLogin, cleanLogin), eq4(pairRequests.toLogin, partnerLogin)),
+              and2(eq4(pairRequests.fromLogin, partnerLogin), eq4(pairRequests.toLogin, cleanLogin))
             )
           );
         }
@@ -1922,9 +2129,9 @@ async function createPairRequest(fromUser, toUser) {
     try {
       await db.transaction(async (tx) => {
         await tx.delete(pairRequests).where(
-          or2(
-            and(eq3(pairRequests.fromLogin, cleanFrom), eq3(pairRequests.toLogin, cleanTo)),
-            and(eq3(pairRequests.fromLogin, cleanTo), eq3(pairRequests.toLogin, cleanFrom))
+          or3(
+            and2(eq4(pairRequests.fromLogin, cleanFrom), eq4(pairRequests.toLogin, cleanTo)),
+            and2(eq4(pairRequests.fromLogin, cleanTo), eq4(pairRequests.toLogin, cleanFrom))
           )
         );
         await tx.insert(pairRequests).values(reqObj);
@@ -1940,9 +2147,9 @@ async function createPairRequest(fromUser, toUser) {
     try {
       await db.transaction(async (tx) => {
         await tx.delete(pairRequests).where(
-          or2(
-            and(eq3(pairRequests.fromLogin, cleanFrom), eq3(pairRequests.toLogin, cleanTo)),
-            and(eq3(pairRequests.fromLogin, cleanTo), eq3(pairRequests.toLogin, cleanFrom))
+          or3(
+            and2(eq4(pairRequests.fromLogin, cleanFrom), eq4(pairRequests.toLogin, cleanTo)),
+            and2(eq4(pairRequests.fromLogin, cleanTo), eq4(pairRequests.toLogin, cleanFrom))
           )
         );
         await tx.insert(pairRequests).values(reqObj);
@@ -1988,7 +2195,7 @@ async function rejectPairRequest(fromLogin, toLogin) {
     }
     try {
       await db.delete(pairRequests).where(
-        and2(eq4(pairRequests.fromLogin, fromLogin), eq4(pairRequests.toLogin, toLogin))
+        and3(eq5(pairRequests.fromLogin, fromLogin), eq5(pairRequests.toLogin, toLogin))
       );
       return;
     } catch (err) {
@@ -1999,7 +2206,7 @@ async function rejectPairRequest(fromLogin, toLogin) {
   if (isSqlConfigured() && db) {
     try {
       await db.delete(pairRequests).where(
-        and2(eq4(pairRequests.fromLogin, fromLogin), eq4(pairRequests.toLogin, toLogin))
+        and3(eq5(pairRequests.fromLogin, fromLogin), eq5(pairRequests.toLogin, toLogin))
       );
     } catch (err) {
       logger.warn("\u0421\u0431\u043E\u0439 \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u044F \u0437\u0430\u043F\u0440\u043E\u0441\u0430 \u043F\u0430\u0440\u044B \u0438\u0437 SQL", void 0, err);
@@ -2027,8 +2234,8 @@ async function getPairStatus(login) {
       throw new DatabaseUnavailableError();
     }
     try {
-      incoming = await db.select().from(pairRequests).where(and2(eq4(pairRequests.toLogin, login), eq4(pairRequests.status, "PENDING")));
-      outgoing = await db.select().from(pairRequests).where(and2(eq4(pairRequests.fromLogin, login), eq4(pairRequests.status, "PENDING")));
+      incoming = await db.select().from(pairRequests).where(and3(eq5(pairRequests.toLogin, login), eq5(pairRequests.status, "PENDING")));
+      outgoing = await db.select().from(pairRequests).where(and3(eq5(pairRequests.fromLogin, login), eq5(pairRequests.status, "PENDING")));
       return {
         paired: !!user.partnerLogin,
         user: toSafeUser(user),
@@ -2043,8 +2250,8 @@ async function getPairStatus(login) {
   }
   if (isSqlConfigured() && db) {
     try {
-      incoming = await db.select().from(pairRequests).where(and2(eq4(pairRequests.toLogin, login), eq4(pairRequests.status, "PENDING")));
-      outgoing = await db.select().from(pairRequests).where(and2(eq4(pairRequests.fromLogin, login), eq4(pairRequests.status, "PENDING")));
+      incoming = await db.select().from(pairRequests).where(and3(eq5(pairRequests.toLogin, login), eq5(pairRequests.status, "PENDING")));
+      outgoing = await db.select().from(pairRequests).where(and3(eq5(pairRequests.fromLogin, login), eq5(pairRequests.status, "PENDING")));
     } catch (err) {
       logger.warn("\u0421\u0431\u043E\u0439 \u0432\u044B\u0431\u043E\u0440\u043A\u0438 pair_requests \u0438\u0437 SQL, \u0447\u0442\u0435\u043D\u0438\u0435 \u0438\u0437 \u0444\u0430\u0439\u043B\u0430", void 0, err);
     }
@@ -2151,7 +2358,7 @@ var coupleSyncSchema = z3.object({
 });
 
 // src/server/analytics.ts
-import { eq as eq5, and as and3, gte } from "drizzle-orm";
+import { eq as eq6, and as and4, gte } from "drizzle-orm";
 import crypto5 from "crypto";
 async function recordDailyMetrics(coupleId, metricDate, data) {
   try {
@@ -2231,8 +2438,8 @@ async function getTrends(coupleId, periodDays) {
   pastDate.setDate(pastDate.getDate() - periodDays);
   const dateString = pastDate.toISOString().split("T")[0];
   try {
-    const records = await db.select().from(relationshipMetrics).where(and3(
-      eq5(relationshipMetrics.coupleId, coupleId),
+    const records = await db.select().from(relationshipMetrics).where(and4(
+      eq6(relationshipMetrics.coupleId, coupleId),
       gte(relationshipMetrics.metricDate, dateString)
     )).orderBy(relationshipMetrics.metricDate);
     return records;
@@ -2505,42 +2712,6 @@ function computeCoupleRatingAnalytics(params) {
   };
 }
 
-// src/server/shared/utils/sse.ts
-var recentTouches = [];
-var sseClients = /* @__PURE__ */ new Map();
-function registerSSEClient(login, res) {
-  const cleanLogin = login.toLowerCase().replace(/^@/, "");
-  if (!sseClients.has(cleanLogin)) {
-    sseClients.set(cleanLogin, []);
-  }
-  sseClients.get(cleanLogin).push(res);
-}
-function removeSSEClient(login, res) {
-  const cleanLogin = login.toLowerCase().replace(/^@/, "");
-  const clients = sseClients.get(cleanLogin);
-  if (clients) {
-    const idx = clients.indexOf(res);
-    if (idx !== -1) clients.splice(idx, 1);
-    if (clients.length === 0) sseClients.delete(cleanLogin);
-  }
-}
-function sendSSEEventToUser(login, eventType, payload) {
-  const cleanLogin = login.toLowerCase().replace(/^@/, "");
-  const clients = sseClients.get(cleanLogin);
-  if (clients && clients.length > 0) {
-    const data = `event: ${eventType}
-data: ${JSON.stringify(payload)}
-
-`;
-    clients.forEach((res) => {
-      try {
-        res.write(data);
-      } catch (err) {
-      }
-    });
-  }
-}
-
 // src/server/modules/couple-data/couple.service.ts
 async function syncCouplePayload(params, senderUserLogin) {
   const { login1, login2, coupleId, payload } = params;
@@ -2675,183 +2846,6 @@ var aiDateIdeaSchema = z4.object({
   vibe: z4.string().max(50).optional(),
   location: z4.string().max(100).optional()
 });
-
-// src/server/modules/realtime/realtime.service.ts
-import { eq as eq6, and as and4, gt, desc } from "drizzle-orm";
-var pushSubscriptions2 = [];
-async function recordCoupleEvent(params) {
-  const eventId = params.id || `evt-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-  if (isSqlConfigured() && db) {
-    try {
-      await db.insert(coupleEvents).values({
-        id: eventId,
-        coupleId: params.coupleId,
-        targetLogin: params.targetLogin,
-        senderLogin: params.senderLogin,
-        eventType: params.eventType,
-        payload: params.payload,
-        createdAt: nowIso
-      });
-    } catch (err) {
-      logger.warn("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0441\u043E\u0431\u044B\u0442\u0438\u0435 \u0432 \u0442\u0430\u0431\u043B\u0438\u0446\u0443 couple_events", void 0, err);
-    }
-  }
-  sendSSEEventToUser(params.targetLogin, params.eventType, params.payload);
-  return { id: eventId, createdAt: nowIso };
-}
-async function sendQuickTouch(params) {
-  const sLogin = String(params.senderLogin).toLowerCase().replace(/^@/, "");
-  const tLogin = String(params.targetLogin).toLowerCase().replace(/^@/, "");
-  const now = Date.now();
-  const tenSecondsAgo = now - 1e4;
-  const existingRecent = recentTouches.find(
-    (t) => t.senderLogin === sLogin && t.targetLogin === tLogin && t.actionType === params.actionType && new Date(t.createdAt).getTime() > tenSecondsAgo
-  );
-  if (existingRecent) {
-    return {
-      status: "throttled",
-      throttled: true,
-      message: "\u0414\u0435\u0439\u0441\u0442\u0432\u0438\u0435 \u0443\u0436\u0435 \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E \u043D\u0435\u0434\u0430\u0432\u043D\u043E",
-      touch: existingRecent
-    };
-  }
-  const newTouch = {
-    id: `touch-${now}-${Math.random().toString(36).slice(2, 7)}`,
-    senderLogin: sLogin,
-    senderName: params.senderName || sLogin,
-    targetLogin: tLogin,
-    actionType: params.actionType,
-    title: params.title || `${params.senderName || sLogin} \u043E\u0431\u0440\u0430\u0442\u0438\u043B(\u0430) \u043D\u0430 \u0432\u0430\u0441 \u0432\u043D\u0438\u043C\u0430\u043D\u0438\u0435`,
-    subtitle: params.subtitle || "\u0422\u043E\u043B\u044C\u043A\u043E \u0447\u0442\u043E",
-    icon: params.icon || "heart",
-    iconBg: params.iconBg || "bg-rose-500/10",
-    iconColor: params.iconColor || "text-rose-500",
-    customNote: params.customNote,
-    createdAt: (/* @__PURE__ */ new Date()).toISOString()
-  };
-  recentTouches.unshift(newTouch);
-  if (recentTouches.length > 200) recentTouches.pop();
-  const coupleKey = [sLogin, tLogin].sort().join("_");
-  if (isSqlConfigured() && db) {
-    try {
-      await db.insert(coupleEvents).values({
-        id: newTouch.id,
-        coupleId: coupleKey,
-        targetLogin: tLogin,
-        senderLogin: sLogin,
-        eventType: "touch",
-        payload: newTouch,
-        createdAt: newTouch.createdAt
-      });
-    } catch (err) {
-      logger.warn("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u043F\u0438\u0441\u0430\u0442\u044C \u043A\u0430\u0441\u0430\u043D\u0438\u0435 \u0432 couple_events (PostgreSQL)", void 0, err);
-    }
-  }
-  sendSSEEventToUser(tLogin, "touch", newTouch);
-  logger.info("\u0411\u044B\u0441\u0442\u0440\u043E\u0435 \u043A\u0430\u0441\u0430\u043D\u0438\u0435 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u043E \u0432 \u0411\u0414 \u0438 \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E", {
-    from: sLogin,
-    to: tLogin,
-    action: params.actionType
-  });
-  return {
-    status: "dispatched",
-    throttled: false,
-    touch: newTouch
-  };
-}
-function getUserTouches(login) {
-  const cleanLogin = String(login || "").toLowerCase().replace(/^@/, "");
-  return recentTouches.filter(
-    (t) => t.targetLogin === cleanLogin || t.senderLogin === cleanLogin
-  );
-}
-async function handleHeartbeat(login) {
-  const cleanLogin = String(login || "").toLowerCase().replace(/^@/, "");
-  const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-  let partnerLastActiveAt = null;
-  let partnerLogin = null;
-  if (isSqlConfigured() && db && cleanLogin) {
-    try {
-      await db.update(users).set({ lastActiveAt: nowIso }).where(eq6(users.login, cleanLogin));
-      const [currentUserRecord] = await db.select().from(users).where(eq6(users.login, cleanLogin)).limit(1);
-      if (currentUserRecord?.partnerLogin) {
-        partnerLogin = currentUserRecord.partnerLogin;
-        const [partnerRecord] = await db.select().from(users).where(eq6(users.login, partnerLogin)).limit(1);
-        if (partnerRecord?.lastActiveAt) {
-          partnerLastActiveAt = partnerRecord.lastActiveAt;
-        }
-      }
-    } catch (err) {
-      logger.warn("Heartbeat error in Neon DB", void 0, err);
-    }
-  }
-  const isPartnerOnline = partnerLastActiveAt ? Date.now() - new Date(partnerLastActiveAt).getTime() < 6e4 : false;
-  return {
-    ok: true,
-    timestamp: nowIso,
-    login: cleanLogin,
-    partnerLogin,
-    partnerLastActiveAt,
-    isPartnerOnline
-  };
-}
-async function getEventsPoll(params) {
-  const cleanLogin = String(params.login || "").toLowerCase().replace(/^@/, "");
-  const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-  const events = [];
-  let partnerLastActiveAt = null;
-  if (isSqlConfigured() && db && cleanLogin) {
-    try {
-      const [currentUserRecord] = await db.select().from(users).where(eq6(users.login, cleanLogin)).limit(1);
-      if (currentUserRecord?.partnerLogin) {
-        const [partnerRecord] = await db.select().from(users).where(eq6(users.login, currentUserRecord.partnerLogin)).limit(1);
-        if (partnerRecord?.lastActiveAt) {
-          partnerLastActiveAt = partnerRecord.lastActiveAt;
-        }
-      }
-      const cutoffTime = params.since || new Date(Date.now() - 45e3).toISOString();
-      const dbEvents = await db.select().from(coupleEvents).where(
-        and4(
-          eq6(coupleEvents.targetLogin, cleanLogin),
-          gt(coupleEvents.createdAt, cutoffTime)
-        )
-      ).orderBy(desc(coupleEvents.createdAt)).limit(30);
-      for (const ev of dbEvents) {
-        if (params.lastEventId && ev.id === params.lastEventId) continue;
-        events.push({
-          id: ev.id,
-          type: ev.eventType,
-          data: ev.payload,
-          createdAt: ev.createdAt
-        });
-      }
-    } catch (err) {
-      logger.warn("Events poll error in Neon DB", void 0, err);
-    }
-  }
-  if (events.length === 0) {
-    const memoryTouches = recentTouches.filter(
-      (t) => t.targetLogin === cleanLogin && (!params.lastEventId || t.id !== params.lastEventId)
-    );
-    for (const t of memoryTouches.slice(0, 10)) {
-      events.push({
-        id: t.id,
-        type: "touch",
-        data: t,
-        createdAt: t.createdAt
-      });
-    }
-  }
-  const isPartnerOnline = partnerLastActiveAt ? Date.now() - new Date(partnerLastActiveAt).getTime() < 6e4 : false;
-  return {
-    events,
-    touches: getUserTouches(cleanLogin),
-    partnerLastActiveAt,
-    isPartnerOnline,
-    serverTime: nowIso
-  };
-}
 
 // src/server/modules/chat/safety.filter.ts
 var EMERGENCY_PATTERNS = [
@@ -3322,24 +3316,17 @@ aiRouter.post("/chat", aiLimiter, requireAuth, validateBody(aiChatMessageSchema)
     const groqReply = await callGroqChat(groqMessages);
     if (groqReply) {
       await saveAIMessageToDb(callerLogin, lastUserText, groqReply);
-      return res.json({ reply: groqReply, mode: "groq" });
+      return res.json({ reply: groqReply, mode: "openrouter" });
     }
-    const smartReply = generateSmartPsychologistReply(lastUserText, partnerName, partner2Name);
-    await saveAIMessageToDb(callerLogin, lastUserText, smartReply);
-    return res.json({
-      reply: smartReply,
-      mode: "smart_psychologist_engine"
+    return res.status(503).json({
+      error: "\u0418\u0418 \u0432\u0440\u0435\u043C\u0435\u043D\u043D\u043E \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D. \u041F\u043E\u043F\u0440\u043E\u0431\u0443\u0439\u0442\u0435 \u043F\u043E\u0437\u0436\u0435.",
+      mode: "error"
     });
   } catch (err) {
     logger.error("\u041E\u0448\u0438\u0431\u043A\u0430 \u0432 AI \u0447\u0430\u0442\u0435 \u0421\u043E\u0432\u044B", err);
-    const partnerName = req.body?.currentPartner?.name || "\u041F\u0430\u0440\u0442\u043D\u0451\u0440";
-    const partner2Name = req.body?.coupleContext?.user2?.name || "\u043F\u0430\u0440\u0442\u043D\u0451\u0440";
-    const lastUserText = req.body?.messages?.slice(-1)?.[0]?.content || "";
-    const fallback = generateSmartPsychologistReply(lastUserText, partnerName, partner2Name);
-    await saveAIMessageToDb(req.user?.login, lastUserText, fallback);
-    return res.json({
-      reply: fallback,
-      mode: "safety_fallback"
+    return res.status(503).json({
+      error: "\u0418\u0418 \u0432\u0440\u0435\u043C\u0435\u043D\u043D\u043E \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D. \u041F\u043E\u043F\u0440\u043E\u0431\u0443\u0439\u0442\u0435 \u043F\u043E\u0437\u0436\u0435.",
+      mode: "error"
     });
   }
 });

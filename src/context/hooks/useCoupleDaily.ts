@@ -46,19 +46,7 @@ export function useCoupleDaily({
   triggerConfetti,
 }: UseCoupleDailyProps): UseCoupleDailyReturn {
   const [timeCapsules, setTimeCapsules] = useState<TimeCapsule[]>(() => {
-    return safeGetStorage('together_time_capsules', [
-      {
-        id: 'tc-initial-1',
-        title: 'Наше секретное обещание на годовщину',
-        content: 'Никогда не ложиться спать обиженными и каждый месяц устраивать хотя бы одно свидание-сюрприз!',
-        authorLogin: 'dmitry',
-        authorName: 'Дмитрий',
-        unlockDate: '2026-12-31',
-        isOpened: false,
-        category: 'promise',
-        createdAt: new Date().toISOString(),
-      },
-    ]);
+    return safeGetStorage('together_time_capsules', []);
   });
 
   const [dailyQuiz, setDailyQuiz] = useState<DailyCoupleQuiz>(() => {

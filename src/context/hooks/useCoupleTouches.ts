@@ -109,13 +109,13 @@ export function useCoupleTouches({
     const senderName =
       currentUser?.name || (currentPartnerId === 'partner1' ? coupleProfile.partner1.name : coupleProfile.partner2.name);
     const senderLogin = (
-      currentUser?.login || (currentPartnerId === 'partner1' ? 'alex' : 'masha')
+      currentUser?.login || (currentPartnerId === 'partner1' ? coupleProfile.partner1.login : coupleProfile.partner2.login) || ''
     )
       .toLowerCase()
       .replace(/^@/, '');
 
     const targetLogin = (
-      currentUser?.partnerLogin || (senderLogin === 'alex' ? 'masha' : senderLogin === 'masha' ? 'alex' : '')
+      currentUser?.partnerLogin || (currentPartnerId === 'partner1' ? coupleProfile.partner2.login : coupleProfile.partner1.login) || ''
     )
       .toLowerCase()
       .replace(/^@/, '');
@@ -230,7 +230,7 @@ export function useCoupleTouches({
     const config = tapConfig[tapType] || tapConfig.thinking;
     const senderName =
       currentUser?.name || (currentPartnerId === 'partner1' ? coupleProfile.partner1.name : coupleProfile.partner2.name);
-    const senderLogin = currentUser?.login || (currentPartnerId === 'partner1' ? 'alex' : 'masha');
+    const senderLogin = currentUser?.login || (currentPartnerId === 'partner1' ? coupleProfile.partner1.login : coupleProfile.partner2.login) || '';
 
     const newTap: LoveTap = {
       id: `tap-${Date.now()}`,

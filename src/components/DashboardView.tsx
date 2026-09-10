@@ -49,11 +49,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
   // Safe fallback to guarantee partner status always renders
   const safeOtherPartner = otherPartner || {
     id: currentPartnerId === 'partner1' ? 'partner2' : 'partner1',
-    name: 'Анна',
+    name: isPaired ? (currentUser?.partnerLogin || 'Партнёр') : 'Партнёр не подключён',
     avatar: 'heart',
-    login: 'anna',
-    loveLanguage: 'Слова поощрения',
-    attachmentStyle: 'Надёжный',
+    login: currentUser?.partnerLogin || '',
+    loveLanguage: 'Не указан',
+    attachmentStyle: 'Не указан',
     currentMood: {
       emoji: 'calm',
       label: 'Спокойствие',
@@ -63,9 +63,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
   };
 
   const partnerName =
-    safeOtherPartner.name && safeOtherPartner.name !== 'Партнёр не подключён'
+    safeOtherPartner.name && safeOtherPartner.name !== 'Партнёр не подключён' && safeOtherPartner.name !== 'Партнёр 1' && safeOtherPartner.name !== 'Партнёр 2'
       ? safeOtherPartner.name
-      : currentUser?.partnerLogin || safeOtherPartner.login || 'Анна';
+      : currentUser?.partnerLogin || safeOtherPartner.login || (isPaired ? 'Партнёр' : 'Партнёр не подключён');
 
   const partnerStatusInfo = getPartnerStatusDetails({
     name: partnerName,

@@ -399,7 +399,10 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           'Партнёр не подключён',
           new Date().toISOString().split('T')[0],
           'Москва',
-          safeUser.gender
+          safeUser.gender,
+          undefined,
+          safeUser.login,
+          safeUser.partnerLogin || undefined
         )
       );
     }
@@ -441,18 +444,19 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [currentPartnerId, coupleProfile]);
 
   const partnerStatusDetails = useMemo(() => {
+    const isPaired = !!currentUser?.partnerLogin;
     const safeOther = otherPartner || {
       id: currentPartnerId === 'partner1' ? 'partner2' : 'partner1',
-      name: 'Анна',
+      name: isPaired ? (currentUser?.partnerLogin || 'Партнёр') : 'Партнёр не подключён',
       avatar: 'heart',
-      login: currentUser?.partnerLogin || 'anna',
-      gender: 'female',
+      login: currentUser?.partnerLogin || '',
+      gender: 'unknown' as any,
       lastActiveAt: new Date().toISOString(),
     };
     const partnerName =
-      safeOther.name && safeOther.name !== 'Партнёр не подключён'
+      safeOther.name && safeOther.name !== 'Партнёр не подключён' && safeOther.name !== 'Партнёр 1' && safeOther.name !== 'Партнёр 2'
         ? safeOther.name
-        : currentUser?.partnerLogin || safeOther.login || 'Анна';
+        : currentUser?.partnerLogin || safeOther.login || (isPaired ? 'Партнёр' : 'Партнёр не подключён');
 
     return getPartnerStatusDetails({
       name: partnerName,

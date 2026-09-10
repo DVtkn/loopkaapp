@@ -44,20 +44,22 @@ export const ChatView: React.FC = () => {
   const currentPartner = currentPartnerId === 'partner1' ? coupleProfile.partner1 : coupleProfile.partner2;
   const otherPartner = currentPartnerId === 'partner1' ? coupleProfile.partner2 : coupleProfile.partner1;
 
+  const isPaired = !!currentUser?.partnerLogin;
+
   // Safe partner fallback aligned with Dashboard
   const safeOtherPartner = otherPartner || {
     id: currentPartnerId === 'partner1' ? 'partner2' : 'partner1',
-    name: 'Анна',
+    name: isPaired ? (currentUser?.partnerLogin || 'Партнёр') : 'Партнёр не подключён',
     avatar: 'heart',
-    login: currentUser?.partnerLogin || 'anna',
+    login: currentUser?.partnerLogin || '',
     gender: 'female',
     lastActiveAt: new Date().toISOString(),
   };
 
   const partnerDisplayName =
-    safeOtherPartner.name && safeOtherPartner.name !== 'Партнёр не подключён'
+    safeOtherPartner.name && safeOtherPartner.name !== 'Партнёр не подключён' && safeOtherPartner.name !== 'Партнёр 1' && safeOtherPartner.name !== 'Партнёр 2'
       ? safeOtherPartner.name
-      : currentUser?.partnerLogin || safeOtherPartner.login || 'Анна';
+      : currentUser?.partnerLogin || safeOtherPartner.login || (isPaired ? 'Партнёр' : 'Партнёр не подключён');
 
   const [inputMessage, setInputMessage] = useState<string>('');
   const [isRecording, setIsRecording] = useState<boolean>(false);

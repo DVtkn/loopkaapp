@@ -75,7 +75,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAchievements, onOpenSettin
                   {currentUser.name ? currentUser.name[0].toUpperCase() : currentUser.login[0].toUpperCase()}
                 </div>
                 <span className="text-xs font-semibold text-[var(--text-2)] hover:text-[var(--text)] hidden sm:inline">
-                  @{currentUser.login}
+                  {currentUser.name || `@${currentUser.login}`}
                 </span>
                 {isPaired && <Heart className="w-3 h-3 text-[var(--accent)] fill-[var(--accent)] shrink-0" />}
               </button>

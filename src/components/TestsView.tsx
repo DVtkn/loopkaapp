@@ -120,9 +120,10 @@ export const TestsView: React.FC<{ initialMode?: 'catalog' | 'report' }> = ({
       };
     }
     if (!myDone && partnerDone) {
+      const passedVerb = otherPartner.gender === 'male' ? 'уже прошёл' : otherPartner.gender === 'female' ? 'уже прошла' : 'уже прошёл(ла)';
       return {
         state: 'PARTNER_READY',
-        label: isPaired ? `${otherPartner.name} уже прошла` : 'Партнёр прошёл',
+        label: isPaired ? `${otherPartner.name} ${passedVerb}` : 'Партнёр прошёл',
         sublabel: 'Пройдите для сравнения',
         isComplete: false,
         actionText: 'Пройти →',

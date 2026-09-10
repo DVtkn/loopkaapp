@@ -42,11 +42,13 @@ export const PhotoArchive: React.FC = () => {
   const partnerLogin = (currentUser?.partnerLogin || '').toLowerCase().trim().replace(/^@/, '');
   const coupleId = partnerLogin ? [myLogin, partnerLogin].sort().join('_') : myLogin;
 
+  const otherPartnerName = coupleProfile.partner1.login.toLowerCase() === myLogin
+    ? coupleProfile.partner2.name
+    : coupleProfile.partner1.name;
+
   const partnerNameMap: Record<string, string> = {
     [myLogin]: currentUser?.name || myLogin,
-    [partnerLogin]: coupleProfile.partner2.name || partnerLogin,
-    alex: 'Алексей',
-    masha: 'Мария',
+    ...(partnerLogin ? { [partnerLogin]: otherPartnerName || partnerLogin } : {}),
   };
 
   const loadPhotos = useCallback(async () => {

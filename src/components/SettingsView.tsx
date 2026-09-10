@@ -146,7 +146,7 @@ export const SettingsView: React.FC = () => {
           {isPaired ? (
             <ActionRow 
               icon={<Heart className="w-4 h-4" />}
-              title={otherPartner?.name || 'Партнёр'}
+              title={(otherPartner?.name && otherPartner.name !== 'Партнёр не подключён' && otherPartner.name !== 'Партнёр 1' && otherPartner.name !== 'Партнёр 2') ? otherPartner.name : `@${currentUser?.partnerLogin}`}
               value="В союзе"
               onClick={() => setShowDisconnectModal(true)}
               color="warmth"

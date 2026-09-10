@@ -6433,6 +6433,125 @@
       "currentMood": null,
       "lastActiveAt": "2026-09-10T02:47:04.653Z",
       "createdAt": "2026-09-10T02:47:04.653Z"
+    },
+    "alex_audit": {
+      "id": "66e57d5e-4054-4cae-b472-8f223cebd6f5",
+      "login": "alex_audit",
+      "passwordHash": "$2b$10$Gr2JK3tTVgKcrkEb.hHFmu.APwYfj5WnWU./V/F5XdGUlrdsSM63q",
+      "name": "Алексей",
+      "gender": "male",
+      "avatarEmoji": "sparkles",
+      "partnerLogin": null,
+      "pairedAt": null,
+      "startDate": null,
+      "city": null,
+      "loveLanguage": null,
+      "attachmentStyle": null,
+      "currentMood": null,
+      "lastActiveAt": "2026-09-10T04:50:55.187Z",
+      "createdAt": "2026-09-10T04:50:55.187Z"
+    },
+    "maria_audit": {
+      "id": "591a0dc2-276c-4066-be1f-6bb0cb04e2b0",
+      "login": "maria_audit",
+      "passwordHash": "$2b$10$31HyQ0RDNEJ9renq2/xHy.So6Za.041j9QtMJxrv9Rex4m58pF6kO",
+      "name": "Мария",
+      "gender": "female",
+      "avatarEmoji": "sparkles",
+      "partnerLogin": null,
+      "pairedAt": null,
+      "startDate": null,
+      "city": null,
+      "loveLanguage": null,
+      "attachmentStyle": null,
+      "currentMood": null,
+      "lastActiveAt": "2026-09-10T04:50:55.553Z",
+      "createdAt": "2026-09-10T04:50:55.553Z"
+    },
+    "alex_test": {
+      "id": "fa294657-17a3-46fd-87ad-02072d902d27",
+      "login": "alex_test",
+      "passwordHash": "$2b$10$oVK/Kwd/J.2X9ZoX3kHgX.w0x0hRS1PZiTiBE1PYlwmdUD34tBfw.",
+      "name": "Алексей",
+      "gender": "male",
+      "avatarEmoji": "sparkles",
+      "partnerLogin": "maria_test",
+      "pairedAt": "2026-09-10T04:51:26.292Z",
+      "startDate": null,
+      "city": null,
+      "loveLanguage": null,
+      "attachmentStyle": null,
+      "currentMood": null,
+      "lastActiveAt": "2026-09-10T04:51:24.875Z",
+      "createdAt": "2026-09-10T04:51:24.875Z"
+    },
+    "maria_test": {
+      "id": "e61ecfd2-46b2-4ec7-b7e4-6fd90399c557",
+      "login": "maria_test",
+      "passwordHash": "$2b$10$GpAeCRt5BHlfGQnkue6h2O351hNY1peX1olz8Vh9/KlspjiqNU7y.",
+      "name": "Мария",
+      "gender": "female",
+      "avatarEmoji": "sparkles",
+      "partnerLogin": "alex_test",
+      "pairedAt": "2026-09-10T04:51:26.292Z",
+      "startDate": null,
+      "city": null,
+      "loveLanguage": null,
+      "attachmentStyle": null,
+      "currentMood": null,
+      "lastActiveAt": "2026-09-10T04:51:25.207Z",
+      "createdAt": "2026-09-10T04:51:25.207Z"
+    },
+    "alex_1789016043123": {
+      "id": "dd78318a-8f89-455f-bfc5-09f55167b216",
+      "login": "alex_1789016043123",
+      "passwordHash": "$2b$10$XhXsC4SuCbub5vyZ1ng2A.byO/EK6OjQEPSoJfbtAjfir2.MoSgNK",
+      "name": "Алексей",
+      "gender": "male",
+      "avatarEmoji": "sparkles",
+      "partnerLogin": null,
+      "pairedAt": null,
+      "startDate": null,
+      "city": null,
+      "loveLanguage": null,
+      "attachmentStyle": null,
+      "currentMood": null,
+      "lastActiveAt": "2026-09-10T04:54:03.702Z",
+      "createdAt": "2026-09-10T04:54:03.702Z"
+    },
+    "alex_1789016053557": {
+      "id": "9be0241a-b410-4cc8-bd00-8edf65e9a5e5",
+      "login": "alex_1789016053557",
+      "passwordHash": "$2b$10$nLklhB3hPalRcIUuDWT15uFUOqd3lYKHFjZ5G6WtSuQoE04u9jw9O",
+      "name": "Алексей",
+      "gender": "male",
+      "avatarEmoji": "sparkles",
+      "partnerLogin": "maria_1789016053557",
+      "pairedAt": "2026-09-10T04:54:15.222Z",
+      "startDate": null,
+      "city": null,
+      "loveLanguage": null,
+      "attachmentStyle": null,
+      "currentMood": null,
+      "lastActiveAt": "2026-09-10T04:54:13.829Z",
+      "createdAt": "2026-09-10T04:54:13.829Z"
+    },
+    "maria_1789016053557": {
+      "id": "d1113165-31fe-40b0-b2a6-5ab47f9e7192",
+      "login": "maria_1789016053557",
+      "passwordHash": "$2b$10$fMuj/9HDRNSU6WDZpFk3lO40UKZHTvE8R6x0wpldpYWtXsjduqfda",
+      "name": "Мария",
+      "gender": "female",
+      "avatarEmoji": "sparkles",
+      "partnerLogin": "alex_1789016053557",
+      "pairedAt": "2026-09-10T04:54:15.222Z",
+      "startDate": null,
+      "city": null,
+      "loveLanguage": null,
+      "attachmentStyle": null,
+      "currentMood": null,
+      "lastActiveAt": "2026-09-10T04:54:14.155Z",
+      "createdAt": "2026-09-10T04:54:14.155Z"
     }
   },
   "pairRequests": [
@@ -6462,6 +6581,15 @@
       "toLogin": "anna_mtuahswe",
       "status": "PENDING",
       "createdAt": "2026-09-09T16:05:11.139Z"
+    },
+    {
+      "id": "cb94c8d4-20e5-4cef-9d64-5ca66c2e06fd",
+      "fromLogin": "alex_audit",
+      "fromName": "Алексей",
+      "fromAvatar": "sparkles",
+      "toLogin": "maria_audit",
+      "status": "PENDING",
+      "createdAt": "2026-09-10T04:50:55.909Z"
     }
   ],
   "coupleData": {
@@ -29760,6 +29888,81 @@
         }
       },
       "testsCompletedCount": 0
+    },
+    "alex_test_maria_test": {
+      "coupleProfile": {
+        "id": "c-1789015887128",
+        "city": "Москва",
+        "level": 1,
+        "status": "ACTIVE",
+        "linkCode": "LOOP-7908",
+        "partner1": {
+          "name": "Алексей",
+          "login": "alex_test",
+          "gender": "male"
+        },
+        "partner2": {
+          "name": "Мария",
+          "login": "maria_test",
+          "gender": "female"
+        },
+        "levelName": "Первая искра",
+        "startDate": "2026-09-10",
+        "testsCompletedCount": 1
+      },
+      "tests": [
+        {
+          "id": "love-languages",
+          "title": "5 языков любви",
+          "partner1Done": true,
+          "partner2Done": false,
+          "partner1Answers": {
+            "q1": 3,
+            "q2": 4
+          },
+          "completedAt": "2026-09-10T04:51:27.679Z"
+        }
+      ],
+      "level": 1,
+      "levelName": "Первая искра",
+      "testsCompletedCount": 1
+    },
+    "alex_1789016053557_maria_1789016053557": {
+      "coupleProfile": {
+        "id": "c-1789016056058",
+        "city": "Москва",
+        "level": 1,
+        "status": "ACTIVE",
+        "linkCode": "LOOP-6942",
+        "partner1": {
+          "name": "Алексей",
+          "login": "alex_1789016053557",
+          "gender": "male"
+        },
+        "partner2": {
+          "name": "Мария",
+          "login": "maria_1789016053557",
+          "gender": "female"
+        },
+        "levelName": "Первая искра",
+        "startDate": "2026-09-10",
+        "testsCompletedCount": 1
+      },
+      "tests": [
+        {
+          "id": "love-languages",
+          "title": "5 языков любви",
+          "partner1Done": true,
+          "partner2Done": false,
+          "partner1Answers": {
+            "q1": 4,
+            "q2": 5
+          }
+        }
+      ],
+      "level": 1,
+      "levelName": "Первая искра",
+      "testsCompletedCount": 1
     }
   },
   "chatMessages": [

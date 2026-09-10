@@ -19,9 +19,14 @@ export function createFreshCoupleProfile(
   startDate: string = new Date().toISOString().split('T')[0],
   city: string = 'Москва',
   gender1?: Gender,
-  gender2?: Gender
+  gender2?: Gender,
+  partner1Login?: string,
+  partner2Login?: string
 ): CoupleProfile {
   const randomCode = Math.floor(1000 + Math.random() * 9000);
+  const cleanLogin1 = partner1Login ? partner1Login.toLowerCase().replace(/^@/, '').trim() : '';
+  const cleanLogin2 = partner2Login ? partner2Login.toLowerCase().replace(/^@/, '').trim() : '';
+
   return {
     id: 'c-' + Date.now(),
     status: 'ACTIVE',
@@ -36,7 +41,7 @@ export function createFreshCoupleProfile(
       name: partner1Name.trim() || 'Партнёр 1',
       avatar: gender1 === 'male' ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80' : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
       email: '',
-      login: 'p1_' + Math.random().toString(36).substring(7),
+      login: cleanLogin1 || ('p1_' + Math.random().toString(36).substring(7)),
       gender: gender1,
       birthDate: '',
       loveLanguage: 'Пройдите тест',
@@ -53,7 +58,7 @@ export function createFreshCoupleProfile(
       name: partner2Name.trim() || 'Партнёр 2',
       avatar: gender2 === 'male' ? 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80' : 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
       email: '',
-      login: 'p2_' + Math.random().toString(36).substring(7),
+      login: cleanLogin2 || ('p2_' + Math.random().toString(36).substring(7)),
       gender: gender2,
       birthDate: '',
       loveLanguage: 'Пройдите тест',

@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <script>
+      window.addEventListener('error', function(e) {
+        fetch('/api/log-error', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: e.message, filename: e.filename, lineno: e.lineno, colno: e.colno, error: e.error ? e.error.stack : null })
+        }).catch(function(){});
+      });
+      window.addEventListener('unhandledrejection', function(e) {
+        fetch('/api/log-error', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: e.reason ? e.reason.toString() : 'Promise Rejection', stack: e.reason && e.reason.stack })
+        }).catch(function(){});
+      });
+    </script>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <!-- Prevent Caching (Обход кеша на мобильных) -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>Loop • Психология отношений и гармония пары</title>
+    <meta name="description" content="Loop — умное приложение для двоих: глубокие тесты совместимости Готтмана и ЭФТ, детальная аналитика отношений, планирование свиданий и ИИ-психолог Сова." />
+    
+    <!-- Google Fonts: Inter (Instagram default), Golos Text, Manrope with full Cyrillic support -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Golos+Text:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+    <!-- iOS Web App Meta Tags (Add to Home Screen & Push Notification Support) -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Loop" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#FF3B30" />
+    <meta name="msapplication-navbutton-color" content="#FF3B30" />
+    <meta name="apple-touch-fullscreen" content="yes" />
+
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" href="/icon-180.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="167x167" href="/apple-touch-icon.png" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+
+    <!-- Web App Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Loop • Психология отношений и гармония пары" />
+    <meta property="og:description" content="Научные тесты Готтмана и ЭФТ, детальная аналитика точек роста, свидания и ИИ-психолог Сова." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/icon.svg" />
+  </head>
+  <body class="overflow-x-hidden select-none overscroll-none antialiased font-sans">
+    <div id="root">
+      <div style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#FAF9F6;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#1C1A1B;z-index:9999;">
+        <div style="width:56px;height:56px;border-radius:18px;background:linear-gradient(135deg, #FF3B4E, #FF5A6E);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(255,59,78,0.25);animation:pulse 1.8s ease-in-out infinite;">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="white" stroke="none"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        </div>
+        <div style="margin-top:16px;font-size:17px;font-weight:700;letter-spacing:-0.02em;">Loop</div>
+        <div style="margin-top:4px;font-size:12px;color:#6E686A;">Гармония и близость пары</div>
+      </div>
+      <style>
+        @keyframes pulse {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.08); opacity: 0.88; }
+        }
+      </style>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

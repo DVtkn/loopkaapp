@@ -1,0 +1,41 @@
+{
+  "collections": [
+    {
+      "name": "users",
+      "fields": {
+        "id": "string",
+        "login": "string",
+        "passwordHash": "string",
+        "name": "string",
+        "avatarEmoji": "string",
+        "partnerLogin": "string | null",
+        "pairedAt": "string",
+        "startDate": "string",
+        "city": "string",
+        "loveLanguage": "string",
+        "attachmentStyle": "string",
+        "currentMood": "map",
+        "createdAt": "string"
+      }
+    },
+    {
+      "name": "pairRequests",
+      "fields": {
+        "id": "string",
+        "fromLogin": "string",
+        "fromName": "string",
+        "fromAvatar": "string",
+        "toLogin": "string",
+        "status": "string",
+        "createdAt": "string"
+      }
+    },
+    {
+      "name": "couples",
+      "fields": {
+        "id": "string",
+        "data": "map"
+      }
+    }
+  ]
+}

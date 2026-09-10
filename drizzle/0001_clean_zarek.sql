@@ -1,0 +1,4 @@
+ALTER TABLE "pair_requests" ADD CONSTRAINT "pair_requests_from_login_users_login_fk" FOREIGN KEY ("from_login") REFERENCES "public"."users"("login") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "pair_requests" ADD CONSTRAINT "pair_requests_to_login_users_login_fk" FOREIGN KEY ("to_login") REFERENCES "public"."users"("login") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "photos" ADD CONSTRAINT "photos_uploader_login_users_login_fk" FOREIGN KEY ("uploader_login") REFERENCES "public"."users"("login") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "users" ADD CONSTRAINT "users_partner_login_fk" FOREIGN KEY ("partner_login") REFERENCES "public"."users"("login") ON DELETE set null ON UPDATE no action;

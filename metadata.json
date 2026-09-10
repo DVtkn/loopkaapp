@@ -1,0 +1,7 @@
+{
+  "name": "Loop — Психологическое приложение для пар",
+  "description": "Публичный релиз Loop: глубокие научные тесты совместимости (Готтман, ЭФТ, Чепмен, Боулби), радар отношений, детальная аналитика точек роста и сильных сторон, книга партнёра, свидания, PWA Web Push для iOS/Android и ИИ-психолог Сова.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

@@ -73,6 +73,7 @@ export const PSYCH_24_SCALES_CONFIG: VectorScaleInfo[] = [
 ];
 
 export function getStatusLabel(score: number): string {
+  if (score <= 0) return 'Калибровка';
   if (score >= 75) return 'Синхронный резонанс';
   if (score >= 50) return 'Зона синергии';
   return 'Точка рассинхрона';
@@ -275,8 +276,6 @@ export function calculateRadarMetrics({
 
   const calcAvg = (score1: number, score2: number): number => {
     if (score1 > 0 && score2 > 0) return Math.round((score1 + score2) / 2);
-    if (score1 > 0) return score1;
-    if (score2 > 0) return score2;
     return 0;
   };
 

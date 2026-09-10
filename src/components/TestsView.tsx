@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { ChevronRight, Activity } from 'lucide-react';
 import { useCouple } from '../context/CoupleContext.tsx';
 import { TestCategory } from '../types.ts';
@@ -24,7 +24,12 @@ export const TestsView: React.FC<{ initialMode?: 'catalog' | 'report' }> = ({
     triggerConfetti,
     setActiveTab,
     currentUser,
+    refreshTestsStatus,
   } = useCouple();
+
+  useEffect(() => {
+    refreshTestsStatus?.();
+  }, [refreshTestsStatus]);
 
   const otherPartner = currentPartnerId === 'partner1' ? coupleProfile.partner2 : coupleProfile.partner1;
   const isPaired = !!currentUser?.partnerLogin;
@@ -41,6 +46,16 @@ export const TestsView: React.FC<{ initialMode?: 'catalog' | 'report' }> = ({
   const [answerMetrics, setAnswerMetrics] = useState<Record<string, any>>({});
   const [testJustFinished, setTestJustFinished] = useState<TestCategory | null>(null);
 
+  const getIsMyDone = useCallback((t: TestCategory) => {
+    if (t.isCompletedByMe !== undefined) return !!t.isCompletedByMe;
+    return currentPartnerId === 'partner1' ? t.partner1Done : t.partner2Done;
+  }, [currentPartnerId]);
+
+  const getIsPartnerDone = useCallback((t: TestCategory) => {
+    if (t.isCompletedByPartner !== undefined) return !!t.isCompletedByPartner;
+    return currentPartnerId === 'partner1' ? t.partner2Done : t.partner1Done;
+  }, [currentPartnerId]);
+
   const filteredTests = useMemo(() => {
     return tests.filter((t) => {
       if (activeCategory === 'all') return true;
@@ -50,10 +65,9 @@ export const TestsView: React.FC<{ initialMode?: 'catalog' | 'report' }> = ({
   }, [tests, activeCategory]);
 
   const featuredTest = useMemo(() => {
-    const myDone = (t: TestCategory) => (currentPartnerId === 'partner1' ? t.partner1Done : t.partner2Done);
-    const firstUncompleted = tests.find((t) => !myDone(t));
+    const firstUncompleted = tests.find((t) => !getIsMyDone(t));
     return firstUncompleted || null;
-  }, [tests, currentPartnerId]);
+  }, [tests, getIsMyDone]);
 
   const handleStartTest = (test: TestCategory) => {
     triggerHaptic('selection');
@@ -100,10 +114,8 @@ export const TestsView: React.FC<{ initialMode?: 'catalog' | 'report' }> = ({
   };
 
   const getTestCompletionStatus = (test: TestCategory) => {
-    const p1Done = test.partner1Done;
-    const p2Done = test.partner2Done;
-    const myDone = currentPartnerId === 'partner1' ? p1Done : p2Done;
-    const partnerDone = currentPartnerId === 'partner1' ? p2Done : p1Done;
+    const myDone = getIsMyDone(test);
+    const partnerDone = getIsPartnerDone(test);
 
     if (myDone && partnerDone) {
       return {

@@ -194,6 +194,10 @@ export interface TestCategory {
   questions: Question[];
   partner1Done: boolean;
   partner2Done: boolean;
+  isCompletedByMe?: boolean;
+  isCompletedByPartner?: boolean;
+  myAnswersCount?: number;
+  partnerAnswersCount?: number;
   partner1Answers?: Record<string, any>;
   partner2Answers?: Record<string, any>;
   completedAt?: string;

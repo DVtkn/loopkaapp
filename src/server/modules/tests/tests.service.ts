@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, and, or, inArray } from "drizzle-orm";
 import { db, isSqlConfigured } from "../../db/client.ts";
 import { testSessions, testAnswers, couples, coupleData, users, userPsychProfiles, coupleReports } from "../../db/schema.ts";
 import { logger } from "../../shared/utils/logger.ts";
@@ -8,11 +8,210 @@ import { getCoupleData, saveCoupleData } from "../../services/storageService.ts"
 import { calculateIndividualVector } from './psychometrics.calc.ts';
 import { calculateCoupleMatrix } from './couple-matrix.calc.ts';
 
+export const CATALOG_TEST_IDS = [
+  'TEST-S1',
+  'TEST-S2',
+  'TEST-S3',
+  'TEST-C1',
+  'TEST-S4',
+  'TEST-D1',
+  'TEST-D2',
+];
+
+export const EXPECTED_QUESTIONS: Record<string, number> = {
+  'TEST-S1': 6,
+  'TEST-S2': 6,
+  'TEST-S3': 5,
+  'TEST-C1': 4,
+  'TEST-S4': 5,
+  'TEST-D1': 5,
+  'TEST-D2': 5,
+};
+
+export interface TestStatusItem {
+  testId: string;
+  isCompletedByMe: boolean;
+  isCompletedByPartner: boolean;
+  myAnswersCount: number;
+  partnerAnswersCount: number;
+  expectedQuestionsCount: number;
+  status: 'not_started' | 'waiting_partner' | 'partner_ready' | 'both_done';
+}
+
+export async function getTestsStatusForUser(userLogin: string, authUserId?: string): Promise<TestStatusItem[]> {
+  const isProd = process.env.NODE_ENV === "production";
+  if (isProd && (!isSqlConfigured() || !db)) {
+    throw new DatabaseUnavailableError();
+  }
+
+  const cleanLogin = userLogin.toLowerCase().trim().replace(/^@/, '');
+
+  if (isSqlConfigured() && db) {
+    // 1. Fetch current user from DB
+    let currentDbUser = null;
+    if (authUserId) {
+      const [u] = await db.select().from(users).where(eq(users.id, authUserId));
+      currentDbUser = u;
+    }
+    if (!currentDbUser && cleanLogin) {
+      const [u] = await db.select().from(users).where(eq(users.login, cleanLogin));
+      currentDbUser = u;
+    }
+
+    if (!currentDbUser) {
+      return CATALOG_TEST_IDS.map((testId) => ({
+        testId,
+        isCompletedByMe: false,
+        isCompletedByPartner: false,
+        myAnswersCount: 0,
+        partnerAnswersCount: 0,
+        expectedQuestionsCount: EXPECTED_QUESTIONS[testId] || 5,
+        status: 'not_started' as const,
+      }));
+    }
+
+    const currentUserId = currentDbUser.id;
+
+    // 2. Fetch partner from DB
+    let partnerDbUser = null;
+    if (currentDbUser.partnerLogin) {
+      const cleanPartner = currentDbUser.partnerLogin.toLowerCase().trim().replace(/^@/, '');
+      const [pu] = await db.select().from(users).where(eq(users.login, cleanPartner));
+      partnerDbUser = pu;
+    }
+
+    const partnerUserId = partnerDbUser ? partnerDbUser.id : null;
+    const cleanPartnerLogin = partnerDbUser ? partnerDbUser.login.toLowerCase().trim().replace(/^@/, '') : null;
+
+    // 3. Find potential coupleIds for test sessions
+    const possibleCoupleIds = [cleanLogin];
+    if (cleanPartnerLogin) {
+      possibleCoupleIds.push(cleanPartnerLogin);
+      possibleCoupleIds.push([cleanLogin, cleanPartnerLogin].sort().join('_'));
+    }
+
+    // Also look up in couples table if exists
+    const [coupleRecord] = await db
+      .select()
+      .from(couples)
+      .where(
+        or(
+          eq(couples.user1Id, currentUserId),
+          eq(couples.user2Id, currentUserId)
+        )
+      );
+    if (coupleRecord && coupleRecord.id) {
+      possibleCoupleIds.push(coupleRecord.id);
+    }
+
+    const sessions = await db
+      .select()
+      .from(testSessions)
+      .where(inArray(testSessions.coupleId, possibleCoupleIds));
+
+    const result: TestStatusItem[] = [];
+
+    for (const testId of CATALOG_TEST_IDS) {
+      const expectedCount = EXPECTED_QUESTIONS[testId] || 5;
+      const testSessionList = sessions.filter((s) => s.testId === testId);
+      const testSessionIds = testSessionList.map((s) => s.id);
+
+      let myAnswersCount = 0;
+      let partnerAnswersCount = 0;
+
+      if (testSessionIds.length > 0) {
+        // Query testAnswers strictly for current user
+        const myAnswers = await db
+          .select({ questionId: testAnswers.questionId })
+          .from(testAnswers)
+          .where(
+            and(
+              eq(testAnswers.userId, currentUserId),
+              inArray(testAnswers.sessionId, testSessionIds)
+            )
+          );
+        const uniqueMyQuestions = new Set(myAnswers.map((a) => a.questionId));
+        myAnswersCount = uniqueMyQuestions.size;
+
+        if (partnerUserId) {
+          const partnerAnswers = await db
+            .select({ questionId: testAnswers.questionId })
+            .from(testAnswers)
+            .where(
+              and(
+                eq(testAnswers.userId, partnerUserId),
+                inArray(testAnswers.sessionId, testSessionIds)
+              )
+            );
+          const uniquePartnerQuestions = new Set(partnerAnswers.map((a) => a.questionId));
+          partnerAnswersCount = uniquePartnerQuestions.size;
+        }
+      }
+
+      const isCompletedByMe = myAnswersCount >= expectedCount;
+      const isCompletedByPartner = partnerUserId ? partnerAnswersCount >= expectedCount : false;
+
+      let status: 'not_started' | 'waiting_partner' | 'partner_ready' | 'both_done' = 'not_started';
+      if (isCompletedByMe && isCompletedByPartner) {
+        status = 'both_done';
+      } else if (isCompletedByMe && !isCompletedByPartner) {
+        status = 'waiting_partner';
+      } else if (!isCompletedByMe && isCompletedByPartner) {
+        status = 'partner_ready';
+      }
+
+      console.log(
+        `[TEST STATUS CHECK] Req User: ${currentDbUser.login} (${currentUserId}) -> testId: ${testId}, count: ${myAnswersCount}/${expectedCount}, Completed: ${isCompletedByMe}`
+      );
+      logger.info(
+        `[TEST STATUS CHECK] Req User: ${currentDbUser.login} (${currentUserId}) -> testId: ${testId}, count: ${myAnswersCount}/${expectedCount}, Completed: ${isCompletedByMe}`
+      );
+
+      result.push({
+        testId,
+        isCompletedByMe,
+        isCompletedByPartner,
+        myAnswersCount,
+        partnerAnswersCount,
+        expectedQuestionsCount: expectedCount,
+        status,
+      });
+    }
+
+    return result;
+  }
+
+  // Fallback (dev mode without SQL)
+  const coupleKey = cleanLogin;
+  const cData = await getCoupleData(coupleKey);
+  const testsList = Array.isArray(cData?.tests) ? cData.tests : [];
+
+  return CATALOG_TEST_IDS.map((testId) => {
+    const expectedCount = EXPECTED_QUESTIONS[testId] || 5;
+    const t = testsList.find((x: any) => x.id === testId);
+    
+    const myAnswers = t?.userAnswers?.[cleanLogin] || t?.userAnswers?.[authUserId || ''] || {};
+    const myCount = Object.keys(myAnswers).length;
+    const isCompletedByMe = myCount >= expectedCount;
+
+    return {
+      testId,
+      isCompletedByMe,
+      isCompletedByPartner: false,
+      myAnswersCount: myCount,
+      partnerAnswersCount: 0,
+      expectedQuestionsCount: expectedCount,
+      status: isCompletedByMe ? ('waiting_partner' as const) : ('not_started' as const),
+    };
+  });
+}
+
 export interface SubmitAnswerParams {
   sessionId?: string;
   testId: string;
   coupleId: string;
   userLogin: string;
+  authUserId?: string;
   questionId: string;
   selectedValue?: string | number;
   expectedQuestionsCount?: number;

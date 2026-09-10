@@ -151,6 +151,7 @@ export interface CoupleContextType {
   challenges: Challenge[];
   toggleChallenge: (id: string) => void;
   tests: TestCategory[];
+  refreshTestsStatus: () => Promise<void>;
   submitTestAnswers: (
     testId: string,
     answers: Record<string, any>,
@@ -219,7 +220,7 @@ export interface CoupleContextType {
   };
 }
 
-const CoupleContext = createContext<CoupleContextType | undefined>(undefined);
+export const CoupleContext = createContext<CoupleContextType | undefined>(undefined);
 
 export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Theme & Navigation UI states
@@ -300,10 +301,19 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return safeGetStorage('together_couple_profile', initialCoupleProfile);
   });
 
+  // Storage key helper for per-user isolation
+  const getUserTestsStorageKey = useCallback((login?: string | null) => {
+    if (!login) return 'together_tests_guest';
+    return `together_tests_${login.toLowerCase().trim().replace(/^@/, '')}`;
+  }, []);
+
   // Tests, Challenges, Pulse, Mood
   const [tests, setTests] = useState<TestCategory[]>(() => {
-    const data = safeGetStorage<TestCategory[]>('together_tests', initialTests);
-    return Array.isArray(data) ? data : initialTests;
+    const savedUser = safeGetStorage<UserAccount | null>('together_current_user', null);
+    const userLogin = savedUser?.login ? savedUser.login.toLowerCase().trim().replace(/^@/, '') : null;
+    const key = userLogin ? `together_tests_${userLogin}` : 'together_tests_guest';
+    const data = safeGetStorage<TestCategory[]>(key, []);
+    return Array.isArray(data) && data.length > 0 ? data : getFreshTests();
   });
 
   const [pulseHistory, setPulseHistory] = useState<PulseEntry[]>(() => {
@@ -409,6 +419,14 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           safeUser.partnerLogin || undefined
         )
       );
+    },
+    () => {
+      // onLogout: Reset all cached session state
+      setTests(getFreshTests());
+      setPulseHistory([]);
+      setChallenges(getFreshChallenges());
+      setPartnerMessages([]);
+      setCoupleProfile(initialCoupleProfile);
     }
   );
 
@@ -967,6 +985,37 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const isInitialRemoteLoadDone = useRef(false);
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  const refreshTestsStatus = useCallback(async () => {
+    if (!currentUser?.login) return;
+    try {
+      const res = await apiFetch('/api/tests/status');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.statuses)) {
+          const statusMap = new Map(data.statuses.map((s: any) => [s.testId, s]));
+          setTests((prev) =>
+            prev.map((t) => {
+              const s: any = statusMap.get(t.id);
+              if (!s) return t;
+              const isP1 = currentPartnerId === 'partner1';
+              return {
+                ...t,
+                isCompletedByMe: s.isCompletedByMe,
+                isCompletedByPartner: s.isCompletedByPartner,
+                myAnswersCount: s.myAnswersCount,
+                partnerAnswersCount: s.partnerAnswersCount,
+                partner1Done: isP1 ? s.isCompletedByMe : s.isCompletedByPartner,
+                partner2Done: isP1 ? s.isCompletedByPartner : s.isCompletedByMe,
+              };
+            })
+          );
+        }
+      }
+    } catch {
+      // offline resilience
+    }
+  }, [currentUser?.login, currentPartnerId]);
+
   const fetchCoupleDataFromRemote = useCallback(async () => {
     if (!currentUser) return;
     const cleanLogin = currentUser.login.toLowerCase().trim().replace(/^@/, '');
@@ -979,7 +1028,6 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         const { data } = await res.json();
         if (data && typeof data === 'object') {
           if (data.coupleProfile) setCoupleProfile((prev) => ({ ...prev, ...data.coupleProfile }));
-          if (Array.isArray(data.tests) && data.tests.length > 0) setTests(data.tests);
           if (Array.isArray(data.pulseHistory)) setPulseHistory(data.pulseHistory);
           if (Array.isArray(data.challenges)) setChallenges(data.challenges);
           if (Array.isArray(data.smallCravings)) setSmallCravings(data.smallCravings);
@@ -994,10 +1042,11 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           if (Array.isArray(data.timeCapsules)) setTimeCapsules(data.timeCapsules);
         }
       }
+      await refreshTestsStatus();
     } catch {
       // offline resilience
     }
-  }, [currentUser, setCoupleXP, setDateInvites, setFlowerPreferences, setScheduleEvents, setSmallCravings, setTimeCapsules, setVenues, setWishlist, setXpHistory]);
+  }, [currentUser, setCoupleXP, setDateInvites, setFlowerPreferences, setScheduleEvents, setSmallCravings, setTimeCapsules, setVenues, setWishlist, setXpHistory, refreshTestsStatus]);
 
   fetchCoupleDataRef.current = fetchCoupleDataFromRemote;
 
@@ -1007,6 +1056,22 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       isInitialRemoteLoadDone.current = true;
     });
   }, [currentUser?.login, currentUser?.partnerLogin, fetchCoupleDataFromRemote]);
+
+  // Load user-isolated tests on user change
+  useEffect(() => {
+    if (currentUser?.login) {
+      const key = getUserTestsStorageKey(currentUser.login);
+      const userTests = safeGetStorage<TestCategory[]>(key, []);
+      if (Array.isArray(userTests) && userTests.length > 0) {
+        setTests(userTests);
+      } else {
+        setTests(getFreshTests());
+      }
+      refreshTestsStatus();
+    } else {
+      setTests(getFreshTests());
+    }
+  }, [currentUser?.login, refreshTestsStatus, getUserTestsStorageKey]);
 
   // Debounced sync to database
   useEffect(() => {
@@ -1090,8 +1155,9 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     safeSetStorage('together_challenges', challenges);
   }, [challenges]);
   useEffect(() => {
-    safeSetStorage('together_tests', tests);
-  }, [tests]);
+    const key = getUserTestsStorageKey(currentUser?.login);
+    safeSetStorage(key, tests);
+  }, [tests, currentUser?.login, getUserTestsStorageKey]);
   useEffect(() => {
     safeSetStorage('together_mood_history', moodHistory);
   }, [moodHistory]);
@@ -1161,6 +1227,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           const p2Done = isP1 ? t.partner2Done : true;
           return {
             ...t,
+            isCompletedByMe: true,
             partner1Done: p1Done,
             partner2Done: p2Done,
             partner1Answers: isP1 ? answers : t.partner1Answers,
@@ -1180,9 +1247,9 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           : cleanMyLogin;
 
         const totalQCount = Object.keys(answers).length;
-        Object.entries(answers).forEach(([qId, val]) => {
+        const promises = Object.entries(answers).map(([qId, val]) => {
           const meta = metrics?.[qId] || {};
-          apiFetch('/api/tests/submit-answer', {
+          return apiFetch('/api/tests/submit-answer', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1197,6 +1264,12 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               rawPayload: meta.rawPayload ?? (typeof val === 'object' ? val : null),
             }),
           }).catch(() => {});
+        });
+
+        Promise.all(promises).then(() => {
+          setTimeout(() => {
+            refreshTestsStatus();
+          }, 300);
         });
       }
 
@@ -1226,13 +1299,14 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       triggerConfetti();
     },
-    [currentPartnerId, currentUser, addCoupleXP, triggerConfetti]
+    [currentPartnerId, currentUser, addCoupleXP, triggerConfetti, refreshTestsStatus]
   );
 
   const resetTests = useCallback(() => {
     const fresh = getFreshTests();
     setTests(fresh);
-    safeSetStorage('together_tests', fresh);
+    const key = getUserTestsStorageKey(currentUser?.login);
+    safeSetStorage(key, fresh);
     setCoupleProfile((prev) => {
       const updated = {
         ...prev,
@@ -1251,7 +1325,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       safeSetStorage('together_couple_profile', updated);
       return updated;
     });
-  }, []);
+  }, [currentUser?.login, getUserTestsStorageKey]);
 
   const addMoodStatus = useCallback(
     (emoji: string, label: string, severity: number, note?: string) => {
@@ -1621,6 +1695,7 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         challenges,
         toggleChallenge,
         tests,
+        refreshTestsStatus,
         submitTestAnswers,
         resetTests,
         smallCravings,

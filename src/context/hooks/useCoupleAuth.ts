@@ -32,7 +32,8 @@ export interface UseCoupleAuthReturn {
 export function useCoupleAuth(
   triggerConfetti: () => void,
   setPairRequests: React.Dispatch<React.SetStateAction<PairRequest[]>>,
-  onRegisterResetState?: (safeUser: UserAccount) => void
+  onRegisterResetState?: (safeUser: UserAccount) => void,
+  onLogoutResetState?: () => void
 ): UseCoupleAuthReturn {
   const [accountsDb, setAccountsDb] = useState<Record<string, UserAccount & { password?: string }>>(() => {
     const saved = safeGetStorage<Record<string, UserAccount & { password?: string }>>(
@@ -262,6 +263,7 @@ export function useCoupleAuth(
     safeSetStorage('together_current_user', null);
     safeSetStorage('loop_auth_token', null);
     setIsOnboarded(false);
+    onLogoutResetState?.();
   };
 
   const switchAccount = (_targetLogin: string) => {

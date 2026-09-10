@@ -68,6 +68,13 @@ export function getFreshTests(): TestCategory[] {
     ...t,
     partner1Done: false,
     partner2Done: false,
+    isCompletedByMe: false,
+    isCompletedByPartner: false,
+    myAnswersCount: 0,
+    partnerAnswersCount: 0,
+    partner1Answers: undefined,
+    partner2Answers: undefined,
+    completedAt: undefined,
   }));
 }
 

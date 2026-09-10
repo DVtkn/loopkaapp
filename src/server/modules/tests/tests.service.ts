@@ -1,12 +1,41 @@
 import crypto from "crypto";
 import { eq, sql, and, or, inArray } from "drizzle-orm";
 import { db, isSqlConfigured } from "../../db/client.ts";
-import { testSessions, testAnswers, couples, coupleData, users, userPsychProfiles, coupleReports } from "../../db/schema.ts";
+import { testSessions, testAnswers, couples, coupleData, users, userPsychProfiles, coupleReports, testDrafts } from "../../db/schema.ts";
 import { logger } from "../../shared/utils/logger.ts";
 import { DatabaseUnavailableError } from "../../shared/errors/index.ts";
 import { getCoupleData, saveCoupleData } from "../../services/storageService.ts";
 import { calculateIndividualVector } from './psychometrics.calc.ts';
 import { calculateCoupleMatrix } from './couple-matrix.calc.ts';
+
+export async function saveTestDraft(userId: string, testId: string, currentQuestionIndex: number, answers: any) {
+  if (!isSqlConfigured) return;
+  await db.insert(testDrafts).values({
+    userId,
+    testId,
+    currentQuestionIndex,
+    answers,
+    updatedAt: new Date()
+  }).onConflictDoUpdate({
+    target: [testDrafts.userId, testDrafts.testId],
+    set: { currentQuestionIndex, answers, updatedAt: new Date() }
+  });
+}
+
+export async function getTestDraft(userId: string, testId: string) {
+  if (!isSqlConfigured) return null;
+  const drafts = await db.select().from(testDrafts).where(
+    and(eq(testDrafts.userId, userId), eq(testDrafts.testId, testId))
+  ).limit(1);
+  return drafts[0] || null;
+}
+
+export async function clearTestDraft(userId: string, testId: string) {
+  if (!isSqlConfigured) return;
+  await db.delete(testDrafts).where(
+    and(eq(testDrafts.userId, userId), eq(testDrafts.testId, testId))
+  );
+}
 
 export const CATALOG_TEST_IDS = [
   'TEST-S1',

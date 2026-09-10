@@ -1,4 +1,4 @@
-import { numeric, pgTable, text, timestamp, boolean, jsonb, integer, real, unique, index, customType, foreignKey, varchar } from 'drizzle-orm/pg-core';
+import { numeric, pgTable, text, timestamp, boolean, jsonb, integer, real, unique, index, customType, foreignKey, varchar, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 export const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType() {
@@ -251,3 +251,14 @@ export const coupleReports = pgTable('couple_reports', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
 });
 
+
+export const testDrafts = pgTable('test_drafts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  testId: varchar('test_id', { length: 64 }).notNull(),
+  currentQuestionIndex: integer('current_question_index').default(0).notNull(),
+  answers: jsonb('answers').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  userTestDraftIdx: uniqueIndex('user_test_draft_idx').on(table.userId, table.testId)
+}));

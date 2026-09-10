@@ -69,13 +69,52 @@ export const TestsView: React.FC<{ initialMode?: 'catalog' | 'report' }> = ({
     return firstUncompleted || null;
   }, [tests, getIsMyDone]);
 
-  const handleStartTest = (test: TestCategory) => {
+  const handleStartTest = async (test: TestCategory) => {
     triggerHaptic('selection');
     setActiveTest(test);
-    setCurrentQuestionIndex(0);
-    setUserAnswers({});
-    setAnswerMetrics({});
     setTestJustFinished(null);
+
+    let startIndex = 0;
+    let initialAnswers = {};
+
+    try {
+      const res = await apiFetch(`/api/tests/draft/${test.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.draft) {
+          initialAnswers = data.draft.answers || {};
+          startIndex = data.draft.currentQuestionIndex || 0;
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load draft:", err);
+    }
+
+    setCurrentQuestionIndex(startIndex);
+    setUserAnswers(initialAnswers);
+    setAnswerMetrics({});
+  };
+
+  const handleDeferTest = async () => {
+    if (!activeTest) {
+      setActiveTest(null);
+      return;
+    }
+    try {
+      await apiFetch('/api/tests/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          testId: activeTest.id,
+          currentQuestionIndex,
+          answers: userAnswers
+        })
+      });
+      alert('Прогресс сохранён. Вы можете продолжить с любого устройства.');
+    } catch (err) {
+      console.error('Failed to save draft:', err);
+    }
+    setActiveTest(null);
   };
 
   const handleSelectOption = (questionId: string, value: any, metadata?: any) => {
@@ -97,6 +136,17 @@ export const TestsView: React.FC<{ initialMode?: 'catalog' | 'report' }> = ({
     if (currentQuestionIndex < activeTest.questions.length - 1) {
       triggerHaptic('selection');
       setCurrentQuestionIndex((prev) => prev + 1);
+      
+      // Auto-save draft in background
+      apiFetch('/api/tests/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          testId: activeTest.id,
+          currentQuestionIndex: currentQuestionIndex + 1,
+          answers: userAnswers
+        })
+      }).catch(() => {});
     } else {
       triggerHaptic('success');
       submitTestAnswers(activeTest.id, userAnswers, answerMetrics);
@@ -309,7 +359,7 @@ export const TestsView: React.FC<{ initialMode?: 'catalog' | 'report' }> = ({
         onSelectOption={handleSelectOption}
         onNextQuestion={handleNextQuestion}
         onPrevQuestion={handlePrevQuestion}
-        onClose={() => setActiveTest(null)}
+        onClose={handleDeferTest}
       />
 
       {/* Test Completed Modal */}

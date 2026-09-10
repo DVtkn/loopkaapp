@@ -32,12 +32,13 @@ __export(schema_exports, {
   pushSubscriptions: () => pushSubscriptions,
   relationshipMetrics: () => relationshipMetrics,
   testAnswers: () => testAnswers,
+  testDrafts: () => testDrafts,
   testSessions: () => testSessions,
   timeCapsules: () => timeCapsules,
   userPsychProfiles: () => userPsychProfiles,
   users: () => users
 });
-import { numeric, pgTable, text, timestamp, boolean, jsonb, integer, real, unique, index, customType, foreignKey, varchar } from "drizzle-orm/pg-core";
+import { numeric, pgTable, text, timestamp, boolean, jsonb, integer, real, unique, index, customType, foreignKey, varchar, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 var bytea = customType({
   dataType() {
     return "bytea";
@@ -284,6 +285,16 @@ var coupleReports = pgTable("couple_reports", {
   calculatedAt: timestamp("calculated_at", { withTimezone: true }).defaultNow().notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
 });
+var testDrafts = pgTable("test_drafts", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  testId: varchar("test_id", { length: 64 }).notNull(),
+  currentQuestionIndex: integer("current_question_index").default(0).notNull(),
+  answers: jsonb("answers").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+}, (table) => ({
+  userTestDraftIdx: uniqueIndex("user_test_draft_idx").on(table.userId, table.testId)
+}));
 
 // src/server/logger.ts
 import winston from "winston";
@@ -4845,6 +4856,32 @@ function calculateCoupleMatrix(p1Scales, p2Scales) {
 }
 
 // src/server/modules/tests/tests.service.ts
+async function saveTestDraft(userId, testId, currentQuestionIndex, answers) {
+  if (!isSqlConfigured) return;
+  await db.insert(testDrafts).values({
+    userId,
+    testId,
+    currentQuestionIndex,
+    answers,
+    updatedAt: /* @__PURE__ */ new Date()
+  }).onConflictDoUpdate({
+    target: [testDrafts.userId, testDrafts.testId],
+    set: { currentQuestionIndex, answers, updatedAt: /* @__PURE__ */ new Date() }
+  });
+}
+async function getTestDraft(userId, testId) {
+  if (!isSqlConfigured) return null;
+  const drafts = await db.select().from(testDrafts).where(
+    and5(eq8(testDrafts.userId, userId), eq8(testDrafts.testId, testId))
+  ).limit(1);
+  return drafts[0] || null;
+}
+async function clearTestDraft(userId, testId) {
+  if (!isSqlConfigured) return;
+  await db.delete(testDrafts).where(
+    and5(eq8(testDrafts.userId, userId), eq8(testDrafts.testId, testId))
+  );
+}
 var CATALOG_TEST_IDS = [
   "TEST-S1",
   "TEST-S2",
@@ -5300,6 +5337,44 @@ testsRouter.post(
     }
   }
 );
+var saveDraftSchema = z6.object({
+  testId: z6.string().min(1),
+  currentQuestionIndex: z6.number().int().min(0),
+  answers: z6.any()
+});
+testsRouter.post("/draft", requireAuth, validateBody(saveDraftSchema), async (req, res, next) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: "\u041D\u0435\u043E\u0431\u0445\u043E\u0434\u0438\u043C\u0430 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u044F" });
+    await saveTestDraft(userId, req.body.testId, req.body.currentQuestionIndex, req.body.answers);
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    logger.error("\u041E\u0448\u0438\u0431\u043A\u0430 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u044F \u0447\u0435\u0440\u043D\u043E\u0432\u0438\u043A\u0430", err);
+    next(err);
+  }
+});
+testsRouter.get("/draft/:testId", requireAuth, async (req, res, next) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: "\u041D\u0435\u043E\u0431\u0445\u043E\u0434\u0438\u043C\u0430 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u044F" });
+    const draft = await getTestDraft(userId, req.params.testId);
+    return res.status(200).json({ success: true, draft });
+  } catch (err) {
+    logger.error("\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u044F \u0447\u0435\u0440\u043D\u043E\u0432\u0438\u043A\u0430", err);
+    next(err);
+  }
+});
+testsRouter.delete("/draft/:testId", requireAuth, async (req, res, next) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: "\u041D\u0435\u043E\u0431\u0445\u043E\u0434\u0438\u043C\u0430 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u044F" });
+    await clearTestDraft(userId, req.params.testId);
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    logger.error("\u041E\u0448\u0438\u0431\u043A\u0430 \u0443\u0434\u0430\u043B\u0435\u043D\u0438\u044F \u0447\u0435\u0440\u043D\u043E\u0432\u0438\u043A\u0430", err);
+    next(err);
+  }
+});
 
 // src/server/app.ts
 var app = express();

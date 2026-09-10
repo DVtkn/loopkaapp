@@ -50,6 +50,8 @@ export function requirePairOwnership(
     return res.status(401).json({ error: "Необходима авторизация" });
   }
 
+  let coupleId: string | null = null;
+
   // 1. Проверка по параметру :coupleId или :key в URL
   if (req.params?.coupleId || req.params?.key) {
     const targetId = req.params.coupleId || req.params.key;
@@ -61,6 +63,7 @@ export function requirePairOwnership(
       });
       return res.status(403).json({ error: "Нет доступа", code: "FORBIDDEN" });
     }
+    coupleId = targetId;
   }
 
   // 2. Проверка по полю coupleId в теле запроса
@@ -73,6 +76,7 @@ export function requirePairOwnership(
       });
       return res.status(403).json({ error: "Нет доступа", code: "FORBIDDEN" });
     }
+    coupleId = req.body.coupleId;
   }
 
   // 3. Проверка пары логинов в параметрах URL: /api/couple/data/:login1/:login2
@@ -87,6 +91,7 @@ export function requirePairOwnership(
       });
       return res.status(403).json({ error: "Нет доступа", code: "FORBIDDEN" });
     }
+    coupleId = getPairKey(l1, l2);
   }
 
   // 4. Проверка логинов в теле запроса: /api/couple/sync
@@ -101,6 +106,7 @@ export function requirePairOwnership(
       });
       return res.status(403).json({ error: "Нет доступа", code: "FORBIDDEN" });
     }
+    coupleId = getPairKey(l1, l2);
   }
 
   // 5. Проверка параметра :login в URL (например /api/ai/messages/:login, /api/pair/status/:login)
@@ -114,6 +120,12 @@ export function requirePairOwnership(
       });
       return res.status(403).json({ error: "Нет доступа", code: "FORBIDDEN" });
     }
+    coupleId = getPairKey(userLogin, paramLogin);
+  }
+
+  // Attach coupleId to request for downstream handlers
+  if (coupleId) {
+    req.couple = { id: coupleId };
   }
 
   next();

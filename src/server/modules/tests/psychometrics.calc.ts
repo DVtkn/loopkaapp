@@ -64,6 +64,8 @@ export interface PsychProfileVectorResult {
   consistencyScore: number;
 }
 
+/** Экспорт для использования в tests.service.ts */
+export { calculateIndividualVector as calculatePsychProfile };
 export function calculateIndividualVector(userAnswers: RawUserAnswer[]): PsychProfileVectorResult {
   // Initialize all 24 scales with neutral baseline (50)
   const scales: PsychProfile24Scales = {

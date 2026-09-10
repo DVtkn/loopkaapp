@@ -35,6 +35,55 @@ export interface CoupleRadarResult {
   };
 }
 
+import { db, isSqlConfigured } from "../../db/client.ts";
+import { userPsychProfiles } from "../../db/schema.ts";
+import { eq } from "drizzle-orm";
+
+export interface CoupleRadarInput {
+  coupleId: string;
+  user1Id: string;
+  user2Id: string;
+}
+
+export async function calculateCoupleRadar(input: CoupleRadarInput): Promise<CoupleRadarResult> {
+  if (!isSqlConfigured() || !db) {
+    throw new Error("Database not configured");
+  }
+  
+  // Fetch psych profiles for both users
+  const [profile1, profile2] = await Promise.all([
+    db.select().from(userPsychProfiles).where(eq(userPsychProfiles.userId, input.user1Id)).limit(1),
+    db.select().from(userPsychProfiles).where(eq(userPsychProfiles.userId, input.user2Id)).limit(1),
+  ]);
+
+  const v1 = profile1[0]?.traitScores as PsychVector | undefined;
+  const v2 = profile2[0]?.traitScores as PsychVector | undefined;
+
+  if (!v1 || !v2) {
+    throw new Error("Psych profiles not found for one or both users");
+  }
+
+  // Ensure all required fields exist with defaults
+  const vec1: PsychVector = {
+    eSafety: v1.eSafety ?? 50,
+    aAutonomy: v1.aAutonomy ?? 50,
+    cCloseness: v1.cCloseness ?? 50,
+    rRepair: v1.rRepair ?? 50,
+    vFuture: v1.vFuture ?? 50,
+    consistencyScore: v1.consistencyScore ?? 95,
+  };
+  const vec2: PsychVector = {
+    eSafety: v2.eSafety ?? 50,
+    aAutonomy: v2.aAutonomy ?? 50,
+    cCloseness: v2.cCloseness ?? 50,
+    rRepair: v2.rRepair ?? 50,
+    vFuture: v2.vFuture ?? 50,
+    consistencyScore: v2.consistencyScore ?? 95,
+  };
+
+  return calculateCoupleRadarMatrix(vec1, vec2);
+}
+
 export function calculateCoupleRadarMatrix(v1: PsychVector, v2: PsychVector): CoupleRadarResult {
   // 1. Calculate the 5 Radar dimensions
   // Trust (Доверие): combines emotional safety and repair capability

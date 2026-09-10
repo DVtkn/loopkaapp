@@ -11,6 +11,7 @@ export interface AuthenticatedUser {
 export interface AuthenticatedRequest extends Request {
   user?: AuthenticatedUser;
   userLogin?: string;
+  couple?: { id: string };
 }
 
 export function generateToken(login: string): string {

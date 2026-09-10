@@ -11,12 +11,12 @@ export interface UserPartner {
   birthDate?: string;
   loveLanguage: string;
   attachmentStyle: string;
-  currentMood: {
+  currentMood?: {
     emoji: string;
     label: string;
     note: string;
     updatedAt: string;
-  };
+  } | null;
   lastActiveAt?: string;
 }
 

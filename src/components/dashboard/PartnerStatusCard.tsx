@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronRight, UserPlus } from 'lucide-react';
+import { ChevronRight, UserPlus, CalendarHeart } from 'lucide-react';
 import { ColoredAvatar } from '../ColoredIcon.tsx';
 
 export function formatRussianPlural(n: number, one: string, two: string, five: string): string {
@@ -10,11 +10,29 @@ export function formatRussianPlural(n: number, one: string, two: string, five: s
   return five;
 }
 
-export function formatDaysTogetherDetailed(startDateStr?: string): string {
+export function isMoodRecent(updatedAt?: string): boolean {
+  if (!updatedAt) return false;
   try {
-    const start = startDateStr ? new Date(startDateStr) : new Date(Date.now() - 482 * 24 * 60 * 60 * 1000);
+    const d = new Date(updatedAt);
+    if (isNaN(d.getTime())) return false;
     const now = new Date();
-    if (isNaN(start.getTime()) || now < start) return '1 день вместе';
+    const isSameDay = d.toDateString() === now.toDateString();
+    const isWithin24Hours = now.getTime() - d.getTime() < 24 * 3600 * 1000;
+    return isSameDay || isWithin24Hours;
+  } catch {
+    return false;
+  }
+}
+
+export function formatDaysTogetherDetailed(startDateStr?: string): string | null {
+  if (!startDateStr || !startDateStr.trim()) {
+    return null;
+  }
+  try {
+    const start = new Date(startDateStr);
+    const now = new Date();
+    if (isNaN(start.getTime())) return null;
+    if (now < start) return '1 день вместе';
 
     let years = now.getFullYear() - start.getFullYear();
     let months = now.getMonth() - start.getMonth();
@@ -43,7 +61,7 @@ export function formatDaysTogetherDetailed(startDateStr?: string): string {
 
     return `${parts.join(' ')} вместе`;
   } catch {
-    return '482 дня вместе';
+    return null;
   }
 }
 
@@ -59,21 +77,29 @@ export function getPartnerStatusDetails(partner: {
 } {
   if (!partner.lastActiveAt) {
     return {
-      isOnline: true,
-      statusText: 'В сети',
-      badgeText: 'В сети',
+      isOnline: false,
+      statusText: 'Не в сети',
+      badgeText: 'Офлайн',
     };
   }
 
   try {
     const last = new Date(partner.lastActiveAt);
     const now = new Date();
+    if (isNaN(last.getTime())) {
+      return {
+        isOnline: false,
+        statusText: 'Не в сети',
+        badgeText: 'Офлайн',
+      };
+    }
     const diffMs = Math.max(0, now.getTime() - last.getTime());
     const diffSecs = Math.floor(diffMs / 1000);
     const diffMins = Math.floor(diffMs / 60000);
     const isFemale = partner.gender === 'female';
 
-    if (diffSecs < 60) {
+    // В сети, если последняя активность была в течение 3 минут (180 секунд)
+    if (diffSecs <= 180) {
       return {
         isOnline: true,
         statusText: 'В сети',
@@ -85,7 +111,7 @@ export function getPartnerStatusDetails(partner: {
       const displayMins = Math.max(1, diffMins);
       return {
         isOnline: false,
-        statusText: `${isFemale ? 'Была' : 'Был'} ${displayMins} мин назад`,
+        statusText: `${isFemale ? 'Была' : 'Был'} ${displayMins} ${formatRussianPlural(displayMins, 'минуту', 'минуты', 'минут')} назад`,
         badgeText: `${displayMins}м назад`,
       };
     }
@@ -112,14 +138,14 @@ export function getPartnerStatusDetails(partner: {
 
     return {
       isOnline: false,
-      statusText: 'Был(а) недавно',
-      badgeText: 'На связи',
+      statusText: `${isFemale ? 'Была' : 'Был'} ${last.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}`,
+      badgeText: 'Офлайн',
     };
   } catch {
     return {
-      isOnline: true,
-      statusText: 'На связи в Loop',
-      badgeText: 'В сети',
+      isOnline: false,
+      statusText: 'Не в сети',
+      badgeText: 'Офлайн',
     };
   }
 }
@@ -136,6 +162,7 @@ interface PartnerStatusCardProps {
   coupleStartDate?: string;
   onOpenDetails: () => void;
   onGoToProfile: () => void;
+  onSetStartDate?: () => void;
 }
 
 export const PartnerStatusCard: React.FC<PartnerStatusCardProps> = ({
@@ -146,6 +173,7 @@ export const PartnerStatusCard: React.FC<PartnerStatusCardProps> = ({
   coupleStartDate,
   onOpenDetails,
   onGoToProfile,
+  onSetStartDate,
 }) => {
   if (!isPaired) {
     return (
@@ -169,6 +197,9 @@ export const PartnerStatusCard: React.FC<PartnerStatusCardProps> = ({
       </section>
     );
   }
+
+  const formattedDays = formatDaysTogetherDetailed(coupleStartDate);
+  const isPartnerMoodSet = !!(safeOtherPartner?.currentMood?.label && isMoodRecent(safeOtherPartner.currentMood.updatedAt));
 
   return (
     <section
@@ -205,15 +236,37 @@ export const PartnerStatusCard: React.FC<PartnerStatusCardProps> = ({
 
           {/* Line 2: Mood */}
           <div className="text-xs text-[var(--text-2)] flex items-center gap-1.5 flex-wrap">
-            <span className="text-[11px] text-[var(--accent)] font-semibold">Настроение:</span>
-            <span className="text-[var(--text)] font-medium">
-              {safeOtherPartner.currentMood?.label || 'Спокойствие'}
-            </span>
+            {isPartnerMoodSet ? (
+              <>
+                <span className="text-[11px] text-[var(--accent)] font-semibold">Настроение:</span>
+                <span className="text-[var(--text)] font-medium">
+                  {safeOtherPartner.currentMood.label}
+                </span>
+              </>
+            ) : (
+              <span className="text-[11px] text-[var(--text-3)] font-normal">
+                Настроение не указано
+              </span>
+            )}
           </div>
 
           {/* Line 3: Days Together */}
           <div className="text-[11px] sm:text-xs text-[var(--text-2)] flex items-center gap-1.5 font-normal">
-            <span className="text-[var(--text)] font-medium">{formatDaysTogetherDetailed(coupleStartDate)}</span>
+            {formattedDays ? (
+              <span className="text-[var(--text)] font-medium">{formattedDays}</span>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSetStartDate?.();
+                }}
+                className="inline-flex items-center gap-1 text-[var(--accent)] hover:underline font-medium cursor-pointer"
+              >
+                <CalendarHeart className="w-3.5 h-3.5" />
+                <span>Укажите дату начала отношений</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

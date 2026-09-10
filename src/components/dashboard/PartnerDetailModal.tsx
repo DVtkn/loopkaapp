@@ -1,6 +1,7 @@
 import React from 'react';
-import { X, Sparkles, MessageCircle } from 'lucide-react';
+import { X, Sparkles, MessageCircle, CalendarHeart } from 'lucide-react';
 import { ColoredAvatar, MoodBadge } from '../ColoredIcon.tsx';
+import { isMoodRecent, formatDaysTogetherDetailed } from './PartnerStatusCard.tsx';
 
 export function formatMoodTime(dateStr?: string): string {
   if (!dateStr) return '';
@@ -66,6 +67,8 @@ interface PartnerDetailModalProps {
     statusText: string;
     badgeText: string;
   };
+  coupleStartDate?: string;
+  onSetStartDate?: () => void;
   onSendSpecificTap: (tapType: string, customNote: string, label: string) => Promise<void>;
   onOpenChat: () => void;
 }
@@ -76,10 +79,15 @@ export const PartnerDetailModal: React.FC<PartnerDetailModalProps> = ({
   partnerName,
   safeOtherPartner,
   partnerStatusInfo,
+  coupleStartDate,
+  onSetStartDate,
   onSendSpecificTap,
   onOpenChat,
 }) => {
   if (!isOpen) return null;
+
+  const isMoodSet = !!(safeOtherPartner?.currentMood?.label && isMoodRecent(safeOtherPartner?.currentMood?.updatedAt));
+  const formattedDaysTogether = formatDaysTogetherDetailed(coupleStartDate);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
@@ -121,54 +129,116 @@ export const PartnerDetailModal: React.FC<PartnerDetailModalProps> = ({
           </button>
         </div>
 
-        {/* Current State */}
-        <div className="p-4 rounded-2xl bg-[var(--surface-2)] border border-[var(--divider)] space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-[var(--accent)]">Текущее настроение</span>
-            {safeOtherPartner.currentMood?.updatedAt && (
-              <span className="text-xs text-[var(--text-2)] font-normal">
-                {formatMoodTime(safeOtherPartner.currentMood.updatedAt)}
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3.5">
-            <MoodBadge
-              mood={safeOtherPartner.currentMood?.emoji || safeOtherPartner.currentMood?.label || 'inspire'}
-              showLabel={false}
-              size="lg"
-            />
-            <div>
-              <div className="text-lg font-bold text-[var(--text)] leading-tight">
-                {safeOtherPartner.currentMood?.label || 'В предвкушении'}
+        {/* Relationship Duration */}
+        <div className="p-3.5 rounded-2xl bg-[var(--surface-2)] border border-[var(--divider)] flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center shrink-0">
+              <CalendarHeart className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs font-bold text-[var(--text)] truncate">
+                {formattedDaysTogether || 'Дата начала отношений'}
               </div>
-              <div className="text-xs text-[var(--text-2)] mt-0.5">
-                {partnerStatusInfo.isOnline ? 'Активно делится состоянием' : 'Последнее обновление'}
+              <div className="text-[11px] text-[var(--text-2)] truncate">
+                {coupleStartDate
+                  ? `С ${new Date(coupleStartDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                  : 'Дата ещё не указана'}
               </div>
             </div>
           </div>
+          {onSetStartDate && (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onSetStartDate();
+              }}
+              className="px-2.5 py-1.5 rounded-lg bg-[var(--surface-solid)] hover:bg-[var(--surface-3)] border border-[var(--divider)] text-[11px] font-semibold text-[var(--accent)] transition-all cursor-pointer shrink-0"
+            >
+              {coupleStartDate ? 'Изменить' : 'Указать'}
+            </button>
+          )}
+        </div>
 
-          {safeOtherPartner.currentMood?.note?.trim() && (
-            <div className="p-3 rounded-xl bg-[var(--surface-solid)] border border-[var(--divider)]">
-              <div className="text-[11px] font-medium text-[var(--text-2)] mb-0.5">Слова партнёра:</div>
-              <p className="text-sm italic text-[var(--text)] font-medium leading-relaxed">
-                «{safeOtherPartner.currentMood.note.trim()}»
+        {/* Current State */}
+        {isMoodSet ? (
+          <div className="p-4 rounded-2xl bg-[var(--surface-2)] border border-[var(--divider)] space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-[var(--accent)]">Текущее настроение</span>
+              {safeOtherPartner.currentMood?.updatedAt && (
+                <span className="text-xs text-[var(--text-2)] font-normal">
+                  {formatMoodTime(safeOtherPartner.currentMood.updatedAt)}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3.5">
+              <MoodBadge
+                mood={safeOtherPartner.currentMood?.emoji || safeOtherPartner.currentMood?.label || 'inspire'}
+                showLabel={false}
+                size="lg"
+              />
+              <div>
+                <div className="text-lg font-bold text-[var(--text)] leading-tight">
+                  {safeOtherPartner.currentMood?.label}
+                </div>
+                <div className="text-xs text-[var(--text-2)] mt-0.5">
+                  {partnerStatusInfo.isOnline ? 'Активно делится состоянием' : 'Последнее обновление'}
+                </div>
+              </div>
+            </div>
+
+            {safeOtherPartner.currentMood?.note?.trim() && (
+              <div className="p-3 rounded-xl bg-[var(--surface-solid)] border border-[var(--divider)]">
+                <div className="text-[11px] font-medium text-[var(--text-2)] mb-0.5">Слова партнёра:</div>
+                <p className="text-sm italic text-[var(--text)] font-medium leading-relaxed">
+                  «{safeOtherPartner.currentMood.note.trim()}»
+                </p>
+              </div>
+            )}
+
+            <div className="p-3 rounded-xl bg-[var(--surface-blush)] border border-[var(--surface-blush-border)]">
+              <div className="text-[11px] font-bold text-[var(--accent)] mb-1 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Взгляд психолога Совы</span>
+              </div>
+              <p className="text-xs text-[var(--text)] leading-relaxed font-normal">
+                {getMoodBriefDescription(
+                  safeOtherPartner.currentMood?.label || safeOtherPartner.currentMood?.emoji || 'inspire'
+                )}
               </p>
             </div>
-          )}
-
-          <div className="p-3 rounded-xl bg-[var(--surface-blush)] border border-[var(--surface-blush-border)]">
-            <div className="text-[11px] font-bold text-[var(--accent)] mb-1 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Взгляд психолога Совы</span>
-            </div>
-            <p className="text-xs text-[var(--text)] leading-relaxed font-normal">
-              {getMoodBriefDescription(
-                safeOtherPartner.currentMood?.label || safeOtherPartner.currentMood?.emoji || 'inspire'
-              )}
-            </p>
           </div>
-        </div>
+        ) : (
+          <div className="p-4 rounded-2xl bg-[var(--surface-2)] border border-[var(--divider)] space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-[var(--accent)]">Настроение партнёра</span>
+            </div>
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-[var(--surface-solid)] border border-[var(--divider)] flex items-center justify-center text-xl shrink-0">
+                💭
+              </div>
+              <div>
+                <div className="text-base font-bold text-[var(--text)] leading-tight">
+                  Настроение не указано
+                </div>
+                <div className="text-xs text-[var(--text-2)] mt-0.5">
+                  Партнёр ещё не отмечал настроение сегодня
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                onSendSpecificTap('thinking', 'Как твоё настроение сегодня? 💭', 'Спросить о настроении');
+              }}
+              className="w-full py-2.5 px-3 rounded-xl bg-[var(--surface-solid)] hover:bg-[var(--surface-3)] border border-[var(--divider)] text-xs font-semibold text-[var(--text)] flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[var(--accent)]" />
+              <span>Спросить о настроении</span>
+            </button>
+          </div>
+        )}
 
         {/* Quick Actions */}
         <div className="space-y-2">

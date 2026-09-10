@@ -14,6 +14,7 @@ import { PairEventsFeed } from './dashboard/PairEventsFeed.tsx';
 import { PartnerDetailModal } from './dashboard/PartnerDetailModal.tsx';
 import { MoodPickerModal } from './dashboard/MoodPickerModal.tsx';
 import { QuickActionModal } from './dashboard/QuickActionModal.tsx';
+import { SetStartDateModal } from './dashboard/SetStartDateModal.tsx';
 
 interface DashboardViewProps {
   setActiveTab: (tab: NavigationTab) => void;
@@ -23,6 +24,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
   const {
     currentPartnerId,
     coupleProfile,
+    updateCoupleProfile,
     addMoodStatus,
     questionAnswer,
     answerQuestionOfDay,
@@ -47,19 +49,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
   const isPaired = !!currentUser?.partnerLogin;
 
   // Safe fallback to guarantee partner status always renders
-  const safeOtherPartner = otherPartner || {
-    id: currentPartnerId === 'partner1' ? 'partner2' : 'partner1',
-    name: isPaired ? (currentUser?.partnerLogin || 'Партнёр') : 'Партнёр не подключён',
-    avatar: 'heart',
-    login: currentUser?.partnerLogin || '',
-    loveLanguage: 'Не указан',
-    attachmentStyle: 'Не указан',
-    currentMood: {
-      emoji: 'calm',
-      label: 'Спокойствие',
-      note: '',
-      updatedAt: new Date().toISOString(),
-    },
+  const safeOtherPartner = {
+    id: otherPartner?.id || (currentPartnerId === 'partner1' ? 'partner2' : 'partner1'),
+    name: otherPartner?.name || (isPaired ? (currentUser?.partnerLogin || 'Партнёр') : 'Партнёр не подключён'),
+    avatar: otherPartner?.avatar || 'heart',
+    login: otherPartner?.login || currentUser?.partnerLogin || '',
+    gender: otherPartner?.gender,
+    lastActiveAt: otherPartner?.lastActiveAt,
+    loveLanguage: otherPartner?.loveLanguage || 'Не указан',
+    attachmentStyle: otherPartner?.attachmentStyle || 'Не указан',
+    currentMood: otherPartner?.currentMood || null,
   };
 
   const partnerName =
@@ -93,13 +92,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
       : 'Развитие'
     : 'Пройти тест';
 
-  // Calculate continuous activity streak (days in a row)
+  // Calculate continuous activity streak (days in a row) based on real interactions
   const streakDaysCount = useMemo(() => {
     const datesWithActivity = new Set<string>();
-    const todayStr = new Date().toISOString().split('T')[0];
 
     (xpHistory || []).forEach((e) => {
-      const entryTime = e.timestamp || (e as any).createdAt;
+      const entryTime = e.timestamp || (e as any).createdAt || (e as any).date;
       if (entryTime) datesWithActivity.add(entryTime.split('T')[0]);
     });
     (pulseHistory || []).forEach((p) => {
@@ -115,11 +113,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
       const fTime = (f as any).createdAt || (f as any).timestamp;
       if (fTime) datesWithActivity.add(fTime.split('T')[0]);
     });
+    (dateInvites || []).forEach((d) => {
+      if (d.createdAt) datesWithActivity.add(d.createdAt.split('T')[0]);
+    });
 
-    datesWithActivity.add(todayStr);
+    if (datesWithActivity.size === 0) {
+      return 0;
+    }
+
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    // Если ни сегодня, ни вчера не было активности — серия прервана
+    if (!datesWithActivity.has(todayStr) && !datesWithActivity.has(yesterdayStr)) {
+      return 0;
+    }
 
     let streak = 0;
-    const cur = new Date();
+    const cur = datesWithActivity.has(todayStr) ? new Date(now) : new Date(yesterday);
     while (true) {
       const dStr = cur.toISOString().split('T')[0];
       if (datesWithActivity.has(dStr)) {
@@ -129,8 +143,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
         break;
       }
     }
-    return Math.max(1, streak);
-  }, [xpHistory, pulseHistory, moodHistory, loveTaps, feedItems]);
+    return streak;
+  }, [xpHistory, pulseHistory, moodHistory, loveTaps, feedItems, dateInvites]);
 
   // Find nearest upcoming scheduled date if any
   const upcomingDate = (dateInvites || []).find(
@@ -140,6 +154,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
   // Interaction feedback states
   const [quickHugSent, setQuickHugSent] = useState<boolean>(false);
   const [showPartnerDetailModal, setShowPartnerDetailModal] = useState<boolean>(false);
+  const [showStartDateModal, setShowStartDateModal] = useState<boolean>(false);
   const [showMoodPicker, setShowMoodPicker] = useState<boolean>(false);
   const [activeQuickAction, setActiveQuickAction] = useState<string | null>(null);
   const [quickActionText, setQuickActionText] = useState<string>('');
@@ -286,6 +301,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
           coupleStartDate={coupleProfile?.startDate}
           onOpenDetails={() => setShowPartnerDetailModal(true)}
           onGoToProfile={() => setActiveTab('profile')}
+          onSetStartDate={() => setShowStartDateModal(true)}
         />
 
         {/* 2. Блок 2: Превью совместимости и стрик */}
@@ -367,11 +383,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
         partnerName={partnerName}
         safeOtherPartner={safeOtherPartner}
         partnerStatusInfo={partnerStatusInfo}
+        coupleStartDate={coupleProfile?.startDate}
+        onSetStartDate={() => setShowStartDateModal(true)}
         onSendSpecificTap={handleSendSpecificTap}
         onOpenChat={() => {
           setShowPartnerDetailModal(false);
           setActiveTab('chat');
         }}
+      />
+
+      <SetStartDateModal
+        isOpen={showStartDateModal}
+        onClose={() => setShowStartDateModal(false)}
+        currentStartDate={coupleProfile?.startDate}
+        onSave={(newStartDate) => updateCoupleProfile({ startDate: newStartDate })}
       />
 
       <ScheduleModal

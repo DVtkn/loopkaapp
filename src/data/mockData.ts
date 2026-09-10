@@ -16,7 +16,7 @@ import {
 export function createFreshCoupleProfile(
   partner1Name: string = 'Партнёр 1',
   partner2Name: string = 'Партнёр 2',
-  startDate: string = new Date().toISOString().split('T')[0],
+  startDate: string = '',
   city: string = 'Москва',
   gender1?: Gender,
   gender2?: Gender,
@@ -31,7 +31,7 @@ export function createFreshCoupleProfile(
     id: 'c-' + Date.now(),
     status: 'ACTIVE',
     linkCode: `LOOP-${randomCode}`,
-    startDate: startDate || new Date().toISOString().split('T')[0],
+    startDate: startDate || '',
     city: city || 'Москва',
     level: 1,
     levelName: 'Первый шаг',
@@ -46,12 +46,7 @@ export function createFreshCoupleProfile(
       birthDate: '',
       loveLanguage: 'Пройдите тест',
       attachmentStyle: 'Пройдите тест ECR',
-      currentMood: {
-        emoji: 'calm',
-        label: 'Начало пути',
-        note: 'Создано приватное пространство для нашей пары',
-        updatedAt: new Date().toISOString(),
-      },
+      currentMood: undefined,
     },
     partner2: {
       id: 'partner2',
@@ -63,12 +58,7 @@ export function createFreshCoupleProfile(
       birthDate: '',
       loveLanguage: 'Пройдите тест',
       attachmentStyle: 'Пройдите тест ECR',
-      currentMood: {
-        emoji: 'inspire',
-        label: 'В предвкушении',
-        note: 'Присоединился(-ась) к Loop',
-        updatedAt: new Date().toISOString(),
-      },
+      currentMood: undefined,
     },
   };
 }
@@ -94,7 +84,7 @@ export const initialCoupleProfile: CoupleProfile = {
   id: 'c-7729',
   status: 'ACTIVE',
   linkCode: 'TOGETHER-7492',
-  startDate: new Date().toISOString().split('T')[0],
+  startDate: '',
   city: 'Москва',
   level: 1,
   levelName: 'Первый шаг',
@@ -108,12 +98,7 @@ export const initialCoupleProfile: CoupleProfile = {
     birthDate: '',
     loveLanguage: 'Пройдите тест',
     attachmentStyle: 'Пройдите тест',
-    currentMood: {
-      emoji: 'calm',
-      label: 'Спокойствие',
-      note: 'Начало пути в Loop',
-      updatedAt: new Date().toISOString(),
-    },
+    currentMood: undefined,
   },
   partner2: {
     id: 'partner2',
@@ -124,12 +109,7 @@ export const initialCoupleProfile: CoupleProfile = {
     birthDate: '',
     loveLanguage: 'Пройдите тест',
     attachmentStyle: 'Пройдите тест',
-    currentMood: {
-      emoji: 'inspire',
-      label: 'В предвкушении',
-      note: 'Присоединилась к Loop',
-      updatedAt: new Date().toISOString(),
-    },
+    currentMood: undefined,
   },
 };
 

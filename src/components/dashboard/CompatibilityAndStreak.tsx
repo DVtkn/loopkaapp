@@ -63,17 +63,27 @@ export const CompatibilityAndStreak: React.FC<CompatibilityAndStreakProps> = ({
         whileHover={{ y: -1 }}
         className="p-3 sm:p-3.5 rounded-2xl bg-[var(--surface)] border border-[var(--divider)] shadow-xs flex items-center gap-2 sm:gap-2.5 transition-all text-left select-none"
       >
-        <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
-          <Flame className="w-4 h-4 fill-amber-500 text-amber-500" />
+        <div
+          className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+            streakDaysCount > 0 ? 'bg-amber-500/10 text-amber-500' : 'bg-zinc-500/10 text-zinc-400'
+          }`}
+        >
+          <Flame
+            className={`w-4 h-4 ${
+              streakDaysCount > 0 ? 'fill-amber-500 text-amber-500' : 'text-zinc-400'
+            }`}
+          />
         </div>
         <div className="min-w-0">
           <div className="text-xs sm:text-sm font-bold text-[var(--text)] leading-tight flex items-center gap-1">
             <span>
-              {streakDaysCount} {formatRussianPlural(streakDaysCount, 'день', 'дня', 'дней')}
+              {streakDaysCount > 0
+                ? `${streakDaysCount} ${formatRussianPlural(streakDaysCount, 'день', 'дня', 'дней')}`
+                : '0 дней'}
             </span>
           </div>
           <div className="text-[11px] text-[var(--text-2)] font-medium leading-snug mt-0.5 whitespace-nowrap">
-            подряд на связи
+            {streakDaysCount > 0 ? 'подряд на связи' : 'Начните серию сегодня'}
           </div>
         </div>
       </motion.div>

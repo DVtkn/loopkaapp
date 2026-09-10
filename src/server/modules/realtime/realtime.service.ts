@@ -3,6 +3,7 @@ import { logger } from "../../shared/utils/logger.ts";
 import { db, isSqlConfigured } from "../../db/client.ts";
 import { coupleEvents, users } from "../../db/schema.ts";
 import { eq, or, and, gt, desc } from "drizzle-orm";
+import { readEmergencyFile, writeEmergencyFile } from "../../services/storageService.ts";
 
 export interface PushSubscriptionRecord {
   subscription: any;
@@ -12,6 +13,41 @@ export interface PushSubscriptionRecord {
 }
 
 export const pushSubscriptions: PushSubscriptionRecord[] = [];
+
+// Cache to throttle DB lastActiveAt updates to at most once every 25 seconds per login
+const lastActiveCache = new Map<string, number>();
+
+export async function touchUserLastActive(login: string): Promise<void> {
+  const cleanLogin = String(login || "").toLowerCase().replace(/^@/, "").trim();
+  if (!cleanLogin) return;
+
+  const now = Date.now();
+  const lastTime = lastActiveCache.get(cleanLogin) || 0;
+  if (now - lastTime < 25000) {
+    return;
+  }
+  lastActiveCache.set(cleanLogin, now);
+
+  const nowIso = new Date(now).toISOString();
+
+  if (isSqlConfigured() && db) {
+    try {
+      await db.update(users).set({ lastActiveAt: nowIso }).where(eq(users.login, cleanLogin));
+    } catch (err: unknown) {
+      logger.warn("Ошибка обновления lastActiveAt в SQL", { login: cleanLogin }, err);
+    }
+  }
+
+  try {
+    const store = readEmergencyFile();
+    if (store.users && store.users[cleanLogin]) {
+      store.users[cleanLogin].lastActiveAt = nowIso;
+      writeEmergencyFile(store);
+    }
+  } catch {
+    // игнорируем ошибку записи в файл
+  }
+}
 
 export async function recordCoupleEvent(params: {
   coupleId: string;
@@ -142,32 +178,50 @@ export function getUserTouches(login: string) {
 }
 
 export async function handleHeartbeat(login: string) {
-  const cleanLogin = String(login || "").toLowerCase().replace(/^@/, "");
+  const cleanLogin = String(login || "").toLowerCase().replace(/^@/, "").trim();
   const nowIso = new Date().toISOString();
   let partnerLastActiveAt: string | null = null;
   let partnerLogin: string | null = null;
 
-  if (isSqlConfigured() && db && cleanLogin) {
-    try {
-      // 1. Обновляем активность текущего пользователя
-      await db.update(users).set({ lastActiveAt: nowIso }).where(eq(users.login, cleanLogin));
+  if (cleanLogin) {
+    await touchUserLastActive(cleanLogin);
 
-      // 2. Получаем партнёра для проверки его статуса
-      const [currentUserRecord] = await db.select().from(users).where(eq(users.login, cleanLogin)).limit(1);
-      if (currentUserRecord?.partnerLogin) {
-        partnerLogin = currentUserRecord.partnerLogin;
-        const [partnerRecord] = await db.select().from(users).where(eq(users.login, partnerLogin)).limit(1);
-        if (partnerRecord?.lastActiveAt) {
-          partnerLastActiveAt = partnerRecord.lastActiveAt;
+    if (isSqlConfigured() && db) {
+      try {
+        const [currentUserRecord] = await db.select().from(users).where(eq(users.login, cleanLogin)).limit(1);
+        if (currentUserRecord?.partnerLogin) {
+          partnerLogin = currentUserRecord.partnerLogin;
+          const [partnerRecord] = await db.select().from(users).where(eq(users.login, partnerLogin)).limit(1);
+          if (partnerRecord?.lastActiveAt) {
+            partnerLastActiveAt = partnerRecord.lastActiveAt;
+          }
         }
+      } catch (err: unknown) {
+        logger.warn("Heartbeat error in Neon DB", undefined, err);
       }
-    } catch (err: unknown) {
-      logger.warn("Heartbeat error in Neon DB", undefined, err);
+    }
+
+    // Fallback к emergency store в dev/test режиме или если SQL пуст
+    if (!partnerLastActiveAt) {
+      try {
+        const store = readEmergencyFile();
+        const userObj = store.users?.[cleanLogin];
+        if (userObj?.partnerLogin) {
+          partnerLogin = partnerLogin || userObj.partnerLogin;
+          const partnerObj = store.users?.[userObj.partnerLogin.toLowerCase()];
+          if (partnerObj?.lastActiveAt) {
+            partnerLastActiveAt = partnerObj.lastActiveAt;
+          }
+        }
+      } catch {
+        // ignore
+      }
     }
   }
 
+  // Партнёр считается «В сети» только если lastActiveAt был менее 3 минут назад (180 000 мс)
   const isPartnerOnline = partnerLastActiveAt
-    ? (Date.now() - new Date(partnerLastActiveAt).getTime()) < 60000
+    ? (Date.now() - new Date(partnerLastActiveAt).getTime()) < 180000
     : false;
 
   return {
@@ -186,10 +240,15 @@ export async function getEventsPoll(params: {
   lastEventId?: string;
   since?: string;
 }) {
-  const cleanLogin = String(params.login || "").toLowerCase().replace(/^@/, "");
+  const cleanLogin = String(params.login || "").toLowerCase().replace(/^@/, "").trim();
   const nowIso = new Date().toISOString();
   const events: any[] = [];
   let partnerLastActiveAt: string | null = null;
+
+  if (cleanLogin) {
+    // Обновляем активность пользователя при опросе
+    await touchUserLastActive(cleanLogin);
+  }
 
   // 1. Загружаем статус партнёра из БД
   if (isSqlConfigured() && db && cleanLogin) {
@@ -230,6 +289,22 @@ export async function getEventsPoll(params: {
     }
   }
 
+  // Fallback к emergency store в dev/test режиме если в SQL не найдено
+  if (!partnerLastActiveAt && cleanLogin) {
+    try {
+      const store = readEmergencyFile();
+      const u = store.users?.[cleanLogin];
+      if (u?.partnerLogin) {
+        const p = store.users?.[u.partnerLogin.toLowerCase()];
+        if (p?.lastActiveAt) {
+          partnerLastActiveAt = p.lastActiveAt;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   // Fallback к in-memory recentTouches если в БД пусто
   if (events.length === 0) {
     const memoryTouches = recentTouches.filter(
@@ -245,8 +320,9 @@ export async function getEventsPoll(params: {
     }
   }
 
+  // Партнёр считается «В сети» только если lastActiveAt был менее 3 минут назад (180 000 мс)
   const isPartnerOnline = partnerLastActiveAt
-    ? (Date.now() - new Date(partnerLastActiveAt).getTime()) < 60000
+    ? (Date.now() - new Date(partnerLastActiveAt).getTime()) < 180000
     : false;
 
   return {

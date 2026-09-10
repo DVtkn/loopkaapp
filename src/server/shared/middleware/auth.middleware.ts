@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { config } from "../../config.ts";
 import { logger } from "../utils/logger.ts";
+import { touchUserLastActive } from "../../modules/realtime/realtime.service.ts";
 
 export interface AuthenticatedUser {
   login: string;
@@ -33,6 +34,10 @@ export function requireAuth(req: AuthenticatedRequest, res: Response, next: Next
 
     req.userLogin = userLogin;
     req.user = { login: userLogin };
+    
+    // Фоновое обновление активности пользователя при любом авторизованном запросе
+    touchUserLastActive(userLogin).catch(() => {});
+
     next();
   } catch (err: unknown) {
     logger.warn("Ошибка валидации JWT токена", { ip: req.ip }, err);

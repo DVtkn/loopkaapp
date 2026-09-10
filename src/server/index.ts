@@ -197,11 +197,18 @@ async function initDatabase() {
 
       CREATE TABLE IF NOT EXISTS push_subscriptions (
         id text PRIMARY KEY,
-        user_login text NOT NULL,
+        user_login text,
+        login text,
         couple_id text,
-        subscription jsonb NOT NULL,
+        subscription jsonb,
+        endpoint text,
+        p256dh text,
+        auth text,
         created_at timestamp with time zone NOT NULL DEFAULT NOW()
       );
+      ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS user_login text;
+      ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS couple_id text;
+      ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS subscription jsonb;
 
       CREATE TABLE IF NOT EXISTS couple_events (
         id text PRIMARY KEY,
@@ -238,27 +245,33 @@ async function initDatabase() {
     logger.info("Таблицы и индексы базы данных успешно проверены/созданы в PostgreSQL");
   } catch (err: unknown) {
     logger.error("Ошибка инициализации базы данных в PostgreSQL", err);
+    throw err;
   }
 }
 
 let dbInitPromise: Promise<void> | null = null;
-export function ensureDatabaseInitialized(): Promise<void> {
+export async function ensureDatabaseInitialized(): Promise<void> {
   if (!dbInitPromise) {
     dbInitPromise = initDatabase().catch((err) => {
       logger.error("Failed to initialize database in serverless runtime", err);
       dbInitPromise = null;
+      throw err;
     });
   }
   return dbInitPromise;
 }
 
 // 1. SECURITY & MIDDLEWARE
-app.use(async (_req, _res, next) => {
+app.use(async (_req, res, next) => {
   if (isSqlConfigured()) {
     try {
       await ensureDatabaseInitialized();
-    } catch {
-      // safe continue
+    } catch (err) {
+      logger.error("Database initialization failed during request", err);
+      return res.status(500).json({
+        error: "Не удалось подключиться к базе данных. Проверьте настройки подключения.",
+        code: "DATABASE_INIT_ERROR",
+      });
     }
   }
   next();
@@ -281,8 +294,10 @@ app.use(
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-// 2. OBSERVABILITY: HEALTH CHECK
-app.get("/api/health", async (req, res) => {
+// 2. OBSERVABILITY & MODULAR API ROUTER
+const apiRouter = express.Router();
+
+apiRouter.get("/health", async (req, res) => {
   const memory = process.memoryUsage();
   let dbStatus = "not_configured";
   let dbLatencyMs: number | null = null;
@@ -327,7 +342,7 @@ app.get("/api/health", async (req, res) => {
 });
 
 // Admin endpoint for tests / staging resets
-app.post("/api/admin/clear-all-data", async (req, res) => {
+apiRouter.post("/admin/clear-all-data", async (req, res) => {
   try {
     if (isSqlConfigured() && db) {
       try {
@@ -354,7 +369,7 @@ app.post("/api/admin/clear-all-data", async (req, res) => {
 });
 
 // Client observability error logger
-app.post("/api/log-error", (req, res) => {
+apiRouter.post("/log-error", (req, res) => {
   try {
     fs.appendFileSync("client-errors.log", JSON.stringify(req.body) + "\n");
   } catch (err: unknown) {
@@ -368,17 +383,21 @@ app.post("/api/log-error", (req, res) => {
   return res.json({ ok: true });
 });
 
-// 3. MOUNT MODULAR API ROUTERS
-app.use("/api/auth", authRouter);
-app.use("/api/pair", pairingRouter);
-app.use("/api/couple", coupleRouter);
-app.use("/api/couple", realtimeRouter);
-app.use("/api/chat", chatRouter);
-app.use("/api/ai", aiRouter);
-app.use("/api/analytics", analyticsRouter);
-app.use("/api/tests", testsRouter);
-app.use("/api/photos", photoRouter);
-app.use("/api/push", pushRouter);
+// 3. MOUNT MODULAR SUB-ROUTERS
+apiRouter.use("/auth", authRouter);
+apiRouter.use("/pair", pairingRouter);
+apiRouter.use("/couple", coupleRouter);
+apiRouter.use("/couple", realtimeRouter);
+apiRouter.use("/chat", chatRouter);
+apiRouter.use("/ai", aiRouter);
+apiRouter.use("/analytics", analyticsRouter);
+apiRouter.use("/tests", testsRouter);
+apiRouter.use("/photos", photoRouter);
+apiRouter.use("/push", pushRouter);
+
+// Universal mount: allows both /api/* and /* (handles Vercel rewrite prefix stripping)
+app.use("/api", apiRouter);
+app.use("/", apiRouter);
 
 // Global Error Handler
 app.use(errorHandler);

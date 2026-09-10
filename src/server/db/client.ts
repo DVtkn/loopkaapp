@@ -9,23 +9,28 @@ declare global {
 }
 
 export const isSqlConfigured = (): boolean => {
-  if (process.env.MY_DATABASE_URL && process.env.MY_DATABASE_URL.trim() !== '') return true;
   if (process.env.DATABASE_URL && process.env.DATABASE_URL.trim() !== '') return true;
+  if (process.env.NEON_DATABASE_URL && process.env.NEON_DATABASE_URL.trim() !== '') return true;
+  if (process.env.MY_DATABASE_URL && process.env.MY_DATABASE_URL.trim() !== '') return true;
   if (process.env.SQL_HOST && process.env.SQL_USER && process.env.SQL_DB_NAME && process.env.SQL_HOST.trim() !== '') return true;
   return false;
 };
 
 export const getConnectionString = (): string | null => {
-  if (process.env.MY_DATABASE_URL && process.env.MY_DATABASE_URL.trim() !== '') {
-    return process.env.MY_DATABASE_URL;
-  }
   if (process.env.DATABASE_URL && process.env.DATABASE_URL.trim() !== '') {
     return process.env.DATABASE_URL;
   }
-  if (process.env.SQL_HOST && process.env.SQL_USER && process.env.SQL_DB_NAME && process.env.SQL_HOST.trim() !== '') {
+  if (process.env.NEON_DATABASE_URL && process.env.NEON_DATABASE_URL.trim() !== '') {
+    return process.env.NEON_DATABASE_URL;
+  }
+  if (process.env.MY_DATABASE_URL && process.env.MY_DATABASE_URL.trim() !== '') {
+    return process.env.MY_DATABASE_URL;
+  }
+  if (process.env.SQL_HOST && (process.env.SQL_USER || process.env.SQL_ADMIN_USER) && process.env.SQL_DB_NAME && process.env.SQL_HOST.trim() !== '') {
+    const user = process.env.SQL_USER || process.env.SQL_ADMIN_USER || '';
+    const password = process.env.SQL_PASSWORD || process.env.SQL_ADMIN_PASSWORD || '';
     const port = process.env.SQL_PORT || '5432';
-    const password = process.env.SQL_PASSWORD || '';
-    return `postgresql://${encodeURIComponent(process.env.SQL_USER)}:${encodeURIComponent(password)}@${process.env.SQL_HOST}:${port}/${process.env.SQL_DB_NAME}?sslmode=require`;
+    return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${process.env.SQL_HOST}:${port}/${process.env.SQL_DB_NAME}?sslmode=require`;
   }
   return null;
 };

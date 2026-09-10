@@ -35,7 +35,12 @@ export function loadConfig(): ServerConfig {
       logger.error(errMsg);
       throw new Error(errMsg);
     }
-    const hasDb = Boolean(process.env.DATABASE_URL?.trim() || process.env.MY_DATABASE_URL?.trim() || process.env.SQL_HOST?.trim());
+    const hasDb = Boolean(
+      process.env.DATABASE_URL?.trim() ||
+      process.env.NEON_DATABASE_URL?.trim() ||
+      process.env.MY_DATABASE_URL?.trim() ||
+      process.env.SQL_HOST?.trim()
+    );
     if (!hasDb) {
       const errMsg = 'FATAL: В production-режиме (NODE_ENV=production) обязательно наличие переменной DATABASE_URL / NEON_DATABASE_URL. Запуск сервера отклонён.';
       logger.error(errMsg);

@@ -100,7 +100,29 @@ realtimeRouter.get("/events-stream/:login", requireAuth, (req: AuthenticatedRequ
   });
 });
 
+import webpush from "web-push";
+
+// Инициализация VAPID для web-push
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:support@loopapp.io";
+
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  try {
+    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+    logger.info("Web Push (VAPID) успешно инициализирован");
+  } catch (err) {
+    logger.warn("Ошибка инициализации Web Push VAPID:", undefined, err);
+  }
+} else {
+  logger.info("VAPID ключи не заданы в .env, web-push работает в режиме заглушки");
+}
+
 export const pushRouter = Router();
+
+pushRouter.get("/vapid-public-key", (_req, res) => {
+  return res.json({ publicKey: VAPID_PUBLIC_KEY || null });
+});
 
 pushRouter.post("/subscribe", requireAuth, (req, res) => {
   const { subscription, partnerId, coupleId } = req.body;
@@ -116,11 +138,40 @@ pushRouter.post("/subscribe", requireAuth, (req, res) => {
   return res.json({ status: "subscribed", count: pushSubscriptions.length });
 });
 
-pushRouter.post("/send-test", requireAuth, (req, res) => {
+pushRouter.post("/send-test", requireAuth, async (req, res) => {
   const { title, body } = req.body;
+  const notificationTitle = title || "Loop • Внимание партнёра";
+  const notificationBody = body || "Тестовое уведомление доставлено.";
+
+  if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY && pushSubscriptions.length > 0) {
+    const payload = JSON.stringify({
+      title: notificationTitle,
+      body: notificationBody,
+      icon: "/icon.svg",
+      tag: "test-push",
+    });
+
+    const results = await Promise.allSettled(
+      pushSubscriptions.map((sub) =>
+        webpush.sendNotification(sub.subscription, payload)
+      )
+    );
+
+    const deliveredCount = results.filter((r) => r.status === "fulfilled").length;
+    return res.json({
+      status: "dispatched",
+      title: notificationTitle,
+      body: notificationBody,
+      sentCount: deliveredCount,
+      totalSubscriptions: pushSubscriptions.length,
+    });
+  }
+
   return res.json({
     status: "dispatched",
-    title: title || "Loop • Внимание партнёра",
-    body: body || "Тестовое уведомление доставлено.",
+    title: notificationTitle,
+    body: notificationBody,
+    sentCount: 0,
+    totalSubscriptions: pushSubscriptions.length,
   });
 });

@@ -104,9 +104,15 @@ export function useCoupleAuth(
         }),
       });
 
-      const data = await res.json();
+      let data: any = {};
+      try {
+        data = await res.json();
+      } catch {
+        // non-JSON response (e.g. gateway error HTML or plain text)
+      }
+
       if (!res.ok) {
-        return { success: false, error: data.error || 'Ошибка при регистрации' };
+        return { success: false, error: data?.error || (res.status === 500 ? 'Ошибка сервера при регистрации' : 'Ошибка при регистрации') };
       }
 
       const safeUser: UserAccount = data.user;
@@ -163,9 +169,15 @@ export function useCoupleAuth(
         body: JSON.stringify({ login: cleanLogin, password: cleanPass }),
       });
 
-      const data = await res.json();
+      let data: any = {};
+      try {
+        data = await res.json();
+      } catch {
+        // non-JSON response
+      }
+
       if (!res.ok) {
-        return { success: false, error: data.error || 'Неверный логин или пароль' };
+        return { success: false, error: data?.error || (res.status === 500 ? 'Ошибка сервера при входе' : 'Неверный логин или пароль') };
       }
 
       const safeUser: UserAccount = data.user;
@@ -221,9 +233,14 @@ export function useCoupleAuth(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ login: cleanLogin, newPassword: cleanNewPass }),
       });
-      const data = await res.json();
+      let data: any = {};
+      try {
+        data = await res.json();
+      } catch {
+        // non-JSON
+      }
       if (!res.ok) {
-        return { success: false, error: data.error || 'Ошибка сброса пароля' };
+        return { success: false, error: data?.error || 'Ошибка сброса пароля' };
       }
 
       const safeUser: UserAccount = data.user;
@@ -342,9 +359,14 @@ export function useCoupleAuth(
         }),
       });
 
-      const data = await res.json();
+      let data: any = {};
+      try {
+        data = await res.json();
+      } catch {
+        // non-JSON
+      }
       if (!res.ok) {
-        return { success: false, error: data.error || 'Ошибка смены пароля' };
+        return { success: false, error: data?.error || 'Ошибка смены пароля' };
       }
 
       const updated = { ...user, password: newPass.trim() };

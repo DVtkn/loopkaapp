@@ -2,10 +2,12 @@ import { db, isSqlConfigured } from './db/client.ts';
 import { chatMessages } from './db/schema.ts';
 import { logger } from './logger.ts';
 import { readEmergencyFile, writeEmergencyFile } from './services/storageService.ts';
+import { GoogleGenAI } from '@google/genai';
 import crypto from 'crypto';
 
 const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 const GROQ_MODELS = [
   'llama-3.3-70b-versatile',
@@ -13,47 +15,80 @@ const GROQ_MODELS = [
   'mixtral-8x7b-32768',
 ];
 
+async function callGeminiFallback(
+  messages: Array<{ role: string; content: string }>
+): Promise<string | null> {
+  if (!GEMINI_API_KEY) {
+    return null;
+  }
+  try {
+    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+    const formattedPrompt = messages
+      .map((m) => `${m.role === 'user' ? 'Пользователь' : m.role === 'assistant' ? 'Сова' : 'Инструкция'}: ${m.content}`)
+      .join('\n\n');
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: formattedPrompt,
+    });
+
+    if (response.text) {
+      logger.info('Ответ успешно получен через резервный Gemini API');
+      return response.text;
+    }
+  } catch (err) {
+    logger.warn('Резервный Gemini API вернул ошибку:', undefined, err);
+  }
+  return null;
+}
+
 export async function callGroqChat(
   messages: Array<{ role: string; content: string }>
 ): Promise<string | null> {
-  if (!GROQ_API_KEY) {
-    logger.warn('GROQ_API_KEY не задан в окружении (.env), переключение на психологический движок');
-    return null;
-  }
+  if (GROQ_API_KEY) {
+    for (const model of GROQ_MODELS) {
+      try {
+        const response = await fetch(GROQ_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${GROQ_API_KEY}`,
+          },
+          body: JSON.stringify({
+            messages,
+            model,
+            temperature: 0.5,
+            max_tokens: 650,
+            stream: false,
+          }),
+        });
 
-  for (const model of GROQ_MODELS) {
-    try {
-      const response = await fetch(GROQ_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${GROQ_API_KEY}`,
-        },
-        body: JSON.stringify({
-          messages,
-          model,
-          temperature: 0.5,
-          max_tokens: 650,
-          stream: false,
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const content = data.choices?.[0]?.message?.content;
-        if (content) {
-          logger.info(`Ответ Groq успешно получен (модель: ${model})`);
-          return content;
+        if (response.ok) {
+          const data = await response.json();
+          const content = data.choices?.[0]?.message?.content;
+          if (content) {
+            logger.info(`Ответ Groq успешно получен (модель: ${model})`);
+            return content;
+          }
         }
-      }
 
-      const errText = await response.text();
-      logger.warn(`Groq ${model} статус ${response.status}: ${errText.slice(0, 200)}`);
-      if (response.status === 401 || response.status === 403) return null;
-    } catch (err: unknown) {
-      logger.error(`Сетевая ошибка при запросе к Groq (${model})`, err);
+        const errText = await response.text();
+        logger.warn(`Groq ${model} статус ${response.status}: ${errText.slice(0, 200)}`);
+        // При ошибке лимита (429) или недоступности пробуем следующую модель
+      } catch (err: unknown) {
+        logger.error(`Сетевая ошибка при запросе к Groq (${model})`, err);
+      }
     }
+  } else {
+    logger.warn('GROQ_API_KEY не задан в окружении (.env), пробуем резервный Gemini API');
   }
+
+  // Автоматический фоллбэк на Gemini при исчерпании лимитов Groq
+  const geminiReply = await callGeminiFallback(messages);
+  if (geminiReply) {
+    return geminiReply;
+  }
+
   return null;
 }
 

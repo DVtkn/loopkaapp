@@ -184,13 +184,22 @@ export const UsView: React.FC = () => {
                         Исследования и совместимость
                       </h3>
                       <div className="flex items-center gap-2 mt-0.5">
-                        {analysis.hasData && analysis.compatibilityScore > 0 ? (
+                        {analysis.isCoupleReportReady && analysis.compatibilityScore ? (
                           <>
                             <span className="text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full">
                               {analysis.compatibilityScore}% Совместимость
                             </span>
                             <span className="text-xs text-[var(--text-3)] font-medium max-w-[140px] sm:max-w-[200px]">
                               {analysis.archetypeTitle}
+                            </span>
+                          </>
+                        ) : analysis.hasData ? (
+                          <>
+                            <span className="text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full">
+                              Калибровка союза
+                            </span>
+                            <span className="text-xs text-[var(--text-3)] font-medium">
+                              {analysis.waitingFor ? `Ожидание: ${analysis.waitingFor}` : 'Ожидание партнёра'}
                             </span>
                           </>
                         ) : (

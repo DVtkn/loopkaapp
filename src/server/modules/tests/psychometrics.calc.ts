@@ -8,7 +8,54 @@ export interface RawUserAnswer {
   rawPayload?: any;
 }
 
+export interface PsychProfile24Scales {
+  // Vector 1: Доверие и безопасность
+  s1: number; // Тревожность привязанности (ECR-R)
+  s2: number; // Избегание близости (ECR-R)
+  s3: number; // Базовый уровень подозрительности
+  s4: number; // Допуск партнёра к уязвимости
+
+  // Vector 2: Эмоциональная близость
+  s5: number; // Ведущий канал: Слова и валидация
+  s6: number; // Ведущий канал: Время и внимание
+  s7: number; // Ведущий канал: Помощь и забота
+  s8: number; // Ведущий канал: Физический контакт
+
+  // Vector 3: Конфликтная динамика
+  s9: number;  // Склонность к преследованию (Pursuit)
+  s10: number; // Склонность к отстранению (Withdrawal)
+  s11: number; // Реактивная критика / сарказм
+  s12: number; // Скорость физиологического остывания
+
+  // Vector 4: Ценности и горизонт
+  s13: number; // Автономия против слияния
+  s14: number; // Материальные амбиции vs комфорт
+  s15: number; // Отношение к детям и воспитанию
+  s16: number; // Роль традиций и внешней семьи
+
+  // Vector 5: Интимность и страсть
+  s17: number; // Эмоциональный триггер возбуждения
+  s18: number; // Спонтанность против предсказуемости
+  s19: number; // Инициативность в контакте
+  s20: number; // Степень табуированности желаний
+
+  // Vector 6: Быт и жизнестойкость
+  s21: number; // Контроль и порядок (Big Five C)
+  s22: number; // Отношение к совместным финансам
+  s23: number; // Социальная батарейка (Big Five E)
+  s24: number; // Готовность к внешним кризисам
+}
+
 export interface PsychProfileVectorResult {
+  traitScores: PsychProfile24Scales;
+  dominantVectors: {
+    trustSafety: number;
+    emotionalCloseness: number;
+    conflictDynamics: number;
+    valuesHorizon: number;
+    intimacyPassion: number;
+    lifestyleResilience: number;
+  };
   eSafety: number;
   aAutonomy: number;
   cCloseness: number;
@@ -18,11 +65,15 @@ export interface PsychProfileVectorResult {
 }
 
 export function calculateIndividualVector(userAnswers: RawUserAnswer[]): PsychProfileVectorResult {
-  let eSafety = 50;
-  let aAutonomy = 50;
-  let cCloseness = 50;
-  let rRepair = 50;
-  let vFuture = 50;
+  // Initialize all 24 scales with neutral baseline (50)
+  const scales: PsychProfile24Scales = {
+    s1: 50, s2: 50, s3: 50, s4: 50,
+    s5: 50, s6: 50, s7: 50, s8: 50,
+    s9: 50, s10: 50, s11: 50, s12: 50,
+    s13: 50, s14: 50, s15: 50, s16: 50,
+    s17: 50, s18: 50, s19: 50, s20: 50,
+    s21: 50, s22: 50, s23: 50, s24: 50,
+  };
 
   let totalToggles = 0;
   let rapidClicks = 0;
@@ -35,77 +86,157 @@ export function calculateIndividualVector(userAnswers: RawUserAnswer[]): PsychPr
     const val = Number(ans.selectedValue) || 0;
     let baseWeight = Number(ans.weight) || 1.0;
 
-    // Latency & toggle weighting
     const reactionMs = ans.reactionTimeMs != null ? Number(ans.reactionTimeMs) : null;
     const toggles = ans.toggleCount != null ? Number(ans.toggleCount) : 0;
     totalToggles += toggles;
 
     if (reactionMs !== null && reactionMs < 800) {
       rapidClicks++;
-      baseWeight *= 0.85; // Low confidence for hyper-fast click
+      baseWeight *= 0.85; // Low confidence for instant click
     }
 
     if (toggles >= 3) {
-      baseWeight *= 0.9; // Uncertainty / vacillation
+      baseWeight *= 0.9; // Uncertainty penalty
     }
 
-    // Process trade_off payload if present
+    // 1. Process trade-off payloads if present
     if (ans.rawPayload && typeof ans.rawPayload === 'object') {
-      const payload = ans.rawPayload;
-      if (payload.c_closeness != null) cCloseness += (Number(payload.c_closeness) - 2.5) * 4 * baseWeight;
-      if (payload.e_safety != null) eSafety += (Number(payload.e_safety) - 2.5) * 4 * baseWeight;
-      if (payload.a_autonomy != null) aAutonomy += (Number(payload.a_autonomy) - 2.5) * 4 * baseWeight;
-      if (payload.r_repair != null) rRepair += (Number(payload.r_repair) - 2.5) * 4 * baseWeight;
-      if (payload.v_future != null) vFuture += (Number(payload.v_future) - 2.5) * 4 * baseWeight;
-      
-      // Also check by raw item keys
-      if (payload.words != null) cCloseness += (Number(payload.words) - 2.5) * 3 * baseWeight;
-      if (payload.time != null) cCloseness += (Number(payload.time) - 2.5) * 3 * baseWeight;
-      if (payload.acts != null) eSafety += (Number(payload.acts) - 2.5) * 3 * baseWeight;
-      if (payload.touch != null) cCloseness += (Number(payload.touch) - 2.5) * 3 * baseWeight;
-      if (payload.intimacy != null) cCloseness += (Number(payload.intimacy) - 3.3) * 3.5 * baseWeight;
-      if (payload.passion != null) cCloseness += (Number(payload.passion) - 3.3) * 3.5 * baseWeight;
-      if (payload.commitment != null) vFuture += (Number(payload.commitment) - 3.3) * 4 * baseWeight;
-      if (payload.safety != null) eSafety += (Number(payload.safety) - 2.5) * 3 * baseWeight;
-      if (payload.autonomy != null) aAutonomy += (Number(payload.autonomy) - 2.5) * 4 * baseWeight;
-      if (payload.future != null) vFuture += (Number(payload.future) - 2.5) * 4 * baseWeight;
+      const p = ans.rawPayload;
+      if (p.s1 != null) scales.s1 += (Number(p.s1) - 2.5) * 6 * baseWeight;
+      if (p.s2 != null) scales.s2 += (Number(p.s2) - 2.5) * 6 * baseWeight;
+      if (p.s3 != null) scales.s3 += (Number(p.s3) - 2.5) * 6 * baseWeight;
+      if (p.s4 != null) scales.s4 += (Number(p.s4) - 2.5) * 6 * baseWeight;
+      if (p.s5 != null) scales.s5 += (Number(p.s5) - 2.5) * 6 * baseWeight;
+      if (p.s6 != null) scales.s6 += (Number(p.s6) - 2.5) * 6 * baseWeight;
+      if (p.s7 != null) scales.s7 += (Number(p.s7) - 2.5) * 6 * baseWeight;
+      if (p.s8 != null) scales.s8 += (Number(p.s8) - 2.5) * 6 * baseWeight;
+      if (p.words != null) scales.s5 += (Number(p.words) - 2.5) * 5 * baseWeight;
+      if (p.time != null) scales.s6 += (Number(p.time) - 2.5) * 5 * baseWeight;
+      if (p.acts != null) scales.s7 += (Number(p.acts) - 2.5) * 5 * baseWeight;
+      if (p.touch != null) scales.s8 += (Number(p.touch) - 2.5) * 5 * baseWeight;
+      if (p.intimacy != null) scales.s17 += (Number(p.intimacy) - 3.3) * 5 * baseWeight;
+      if (p.passion != null) scales.s18 += (Number(p.passion) - 3.3) * 5 * baseWeight;
+      if (p.commitment != null) scales.s15 += (Number(p.commitment) - 3.3) * 5 * baseWeight;
     }
 
-    // Process standard question contributions
+    // 2. Direct question mapping by IDs (q-s1..q-s6, situations)
     const qId = ans.questionId || '';
-    if (qId.startsWith('q-s1')) {
-      // Attachment ECR
-      eSafety += (val - 3) * 5 * baseWeight;
-      if (qId === 'q-s1-2' || qId === 'q-s1-4') cCloseness += (val - 3) * 4 * baseWeight;
-      if (qId === 'q-s1-3' || qId === 'q-s1-5') aAutonomy += (val - 3) * 4 * baseWeight;
-    } else if (qId.startsWith('q-s2')) {
-      // Love Languages
-      cCloseness += (val - 3) * 4 * baseWeight;
-      if (qId === 'q-s2-5') eSafety += (val - 3) * 4 * baseWeight;
-    } else if (qId.startsWith('q-s3')) {
-      // Gottman
-      rRepair += (val - 3) * 6 * baseWeight;
-      eSafety += (val - 3) * 3 * baseWeight;
-    } else if (qId.startsWith('q-c1')) {
-      // Ideal Day
-      cCloseness += (val - 3) * 3 * baseWeight;
-      aAutonomy += (val - 3) * 3 * baseWeight;
-      vFuture += (val - 3) * 4 * baseWeight;
-    } else if (qId.startsWith('q-s4')) {
-      // Sternberg
-      if (qId === 'q-s4-1') cCloseness += (val - 3) * 6 * baseWeight;
-      if (qId === 'q-s4-2') cCloseness += (val - 3) * 5 * baseWeight;
-      if (qId === 'q-s4-3') vFuture += (val - 3) * 6 * baseWeight;
-    } else if (qId.startsWith('q-d1')) {
-      // Family Scripts
-      vFuture += (val - 3) * 5 * baseWeight;
-      rRepair += (val - 3) * 4 * baseWeight;
-    } else if (qId.startsWith('q-d2')) {
-      // TKI Conflicts
-      rRepair += (val - 3) * 5 * baseWeight;
-      aAutonomy += (val - 3) * 3 * baseWeight;
+    const valStr = String(ans.selectedValue);
+
+    // Module 1: Стресс-контур и автоматические защиты (S1, S2, S9, S10)
+    if (qId.startsWith('q-s1') || qId.startsWith('sit-1')) {
+      if (valStr.includes('anxiety') || valStr.includes('pursuit') || valStr.includes('urgent')) {
+        scales.s1 += 12 * baseWeight;
+        scales.s9 += 10 * baseWeight;
+      } else if (valStr.includes('avoid') || valStr.includes('solitary') || valStr.includes('silence')) {
+        scales.s2 += 12 * baseWeight;
+        scales.s10 += 10 * baseWeight;
+      } else if (valStr.includes('secure') || valStr.includes('team') || valStr.includes('calm')) {
+        scales.s4 += 12 * baseWeight;
+        scales.s12 += 10 * baseWeight;
+        scales.s1 -= 6 * baseWeight;
+        scales.s2 -= 6 * baseWeight;
+      } else if (valStr.includes('care') || valStr.includes('tea')) {
+        scales.s7 += 10 * baseWeight;
+        scales.s4 += 6 * baseWeight;
+      }
+    }
+
+    // Module 2: Архитектура заботы (S5, S6, S7, S8)
+    else if (qId.startsWith('q-s2') || qId.startsWith('sit-2')) {
+      if (valStr.includes('words')) scales.s5 += 14 * baseWeight;
+      else if (valStr.includes('time')) scales.s6 += 14 * baseWeight;
+      else if (valStr.includes('acts')) scales.s7 += 14 * baseWeight;
+      else if (valStr.includes('touch')) scales.s8 += 14 * baseWeight;
+      else if (valStr.includes('gifts')) {
+        scales.s7 += 8 * baseWeight;
+        scales.s5 += 6 * baseWeight;
+      }
+    }
+
+    // Module 3: Границы «Я» и «Мы» & Конфликты (S13, S23, S9..S12)
+    else if (qId.startsWith('q-s3') || qId.startsWith('sit-3')) {
+      if (valStr.includes('soft_startup') || valStr.includes('empathy') || valStr.includes('gottman')) {
+        scales.s12 += 14 * baseWeight;
+        scales.s4 += 8 * baseWeight;
+        scales.s11 -= 8 * baseWeight;
+      } else if (valStr.includes('bottle') || valStr.includes('snark') || valStr.includes('criticism')) {
+        scales.s11 += 14 * baseWeight;
+        scales.s9 += 8 * baseWeight;
+      } else if (valStr.includes('stonewall') || valStr.includes('shut_down')) {
+        scales.s10 += 14 * baseWeight;
+        scales.s2 += 8 * baseWeight;
+      } else if (valStr.includes('autonomy') || valStr.includes('solitude')) {
+        scales.s13 += 14 * baseWeight;
+        scales.s23 -= 8 * baseWeight;
+      } else if (valStr.includes('together') || valStr.includes('fusion')) {
+        scales.s13 -= 10 * baseWeight;
+        scales.s6 += 8 * baseWeight;
+      }
+    }
+
+    // Module 4: Финансово-бытовой код (S14, S21, S22)
+    else if (qId.startsWith('q-c1') || qId.startsWith('sit-4')) {
+      if (valStr.includes('order') || valStr.includes('active') || valStr.includes('clean')) {
+        scales.s21 += 12 * baseWeight;
+      } else if (valStr.includes('cozy') || valStr.includes('relax') || valStr.includes('flexible')) {
+        scales.s21 -= 8 * baseWeight;
+      }
+      if (valStr.includes('common') || valStr.includes('shared_budget')) {
+        scales.s22 += 14 * baseWeight;
+      } else if (valStr.includes('split') || valStr.includes('separate')) {
+        scales.s22 -= 10 * baseWeight;
+        scales.s13 += 8 * baseWeight;
+      }
+      if (valStr.includes('ambition') || valStr.includes('invest')) {
+        scales.s14 += 12 * baseWeight;
+      } else if (valStr.includes('comfort') || valStr.includes('present')) {
+        scales.s14 -= 8 * baseWeight;
+      }
+    }
+
+    // Module 5: Интимность и страсть (S17, S18, S19, S20)
+    else if (qId.startsWith('q-s4') || qId.startsWith('sit-5')) {
+      if (valStr.includes('passion') || valStr.includes('spark') || valStr.includes('spontaneous')) {
+        scales.s18 += 14 * baseWeight;
+        scales.s19 += 10 * baseWeight;
+      } else if (valStr.includes('gentle') || valStr.includes('safety_first')) {
+        scales.s17 += 14 * baseWeight;
+      }
+      if (valStr.includes('open_fantasies') || valStr.includes('taboo_low')) {
+        scales.s20 += 14 * baseWeight;
+      } else if (valStr.includes('deep_dialogue')) {
+        scales.s4 += 10 * baseWeight;
+        scales.s17 += 8 * baseWeight;
+      }
+    }
+
+    // Module 6: Ценностный компас и кризисы (S15, S16, S24)
+    else if (qId.startsWith('q-d1') || qId.startsWith('q-d2') || qId.startsWith('sit-6')) {
+      if (valStr.includes('traditions') || valStr.includes('family')) scales.s16 += 14 * baseWeight;
+      if (valStr.includes('children') || valStr.includes('solid_commitment')) scales.s15 += 14 * baseWeight;
+      if (valStr.includes('crisis_hardy') || valStr.includes('team_bond') || valStr.includes('collaborating')) {
+        scales.s24 += 14 * baseWeight;
+        scales.s12 += 10 * baseWeight;
+      }
     }
   }
+
+  // Bound all 24 scales to [10..100]
+  const clamp = (v: number) => Math.round(Math.min(100, Math.max(10, v)) * 10) / 10;
+  for (const k of Object.keys(scales) as Array<keyof PsychProfile24Scales>) {
+    scales[k] = clamp(scales[k]);
+  }
+
+  // Calculate dominant vectors
+  const dominantVectors = {
+    trustSafety: clamp((scales.s4 + (100 - scales.s1) + (100 - scales.s2) + (100 - scales.s3)) / 4),
+    emotionalCloseness: clamp((scales.s5 + scales.s6 + scales.s7 + scales.s8) / 4),
+    conflictDynamics: clamp((scales.s12 + (100 - scales.s9) + (100 - scales.s10) + (100 - scales.s11)) / 4),
+    valuesHorizon: clamp((scales.s13 + scales.s14 + scales.s15 + scales.s16) / 4),
+    intimacyPassion: clamp((scales.s17 + scales.s18 + scales.s19 + scales.s20) / 4),
+    lifestyleResilience: clamp((scales.s21 + scales.s22 + scales.s23 + scales.s24) / 4),
+  };
 
   // Calculate consistency score [0-100]
   let consistency = 95;
@@ -118,11 +249,13 @@ export function calculateIndividualVector(userAnswers: RawUserAnswer[]): PsychPr
   consistency = Math.max(40, Math.min(100, Math.round(consistency)));
 
   return {
-    eSafety: Math.round(Math.min(100, Math.max(10, eSafety)) * 10) / 10,
-    aAutonomy: Math.round(Math.min(100, Math.max(10, aAutonomy)) * 10) / 10,
-    cCloseness: Math.round(Math.min(100, Math.max(10, cCloseness)) * 10) / 10,
-    rRepair: Math.round(Math.min(100, Math.max(10, rRepair)) * 10) / 10,
-    vFuture: Math.round(Math.min(100, Math.max(10, vFuture)) * 10) / 10,
-    consistencyScore: consistency
+    traitScores: scales,
+    dominantVectors,
+    eSafety: dominantVectors.trustSafety,
+    aAutonomy: scales.s13,
+    cCloseness: dominantVectors.emotionalCloseness,
+    rRepair: dominantVectors.conflictDynamics,
+    vFuture: dominantVectors.valuesHorizon,
+    consistencyScore: consistency,
   };
 }

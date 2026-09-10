@@ -16,13 +16,16 @@ export interface CoupleDimensionScore {
 export interface DeepCoupleAnalysis {
   hasData: boolean;
   isDemo?: boolean;
+  isCoupleReportReady: boolean;
+  waitingFor?: string | null;
   completedTestsCount: number;
   totalTestsCount: number;
   p1CompletedCount: number;
   p2CompletedCount: number;
-  compatibilityScore: number;
-  archetypeTitle: string;
-  archetypeSubtitle: string;
+  bothCompletedCount: number;
+  compatibilityScore: number | null;
+  archetypeTitle: string | null;
+  archetypeSubtitle: string | null;
   summary: string;
   dimensions: CoupleDimensionScore[];
   strengths: {
@@ -106,8 +109,10 @@ export function calculateCoupleAnalysis(
 
   const p1CompletedCount = tests.filter((t) => t.partner1Done).length;
   const p2CompletedCount = tests.filter((t) => t.partner2Done).length;
+  const bothCompletedCount = tests.filter((t) => t.partner1Done && t.partner2Done).length;
   const completedTestsCount = tests.filter((t) => t.partner1Done || t.partner2Done).length;
   const totalTestsCount = tests.length || 7;
+  const isCoupleReportReady = p1CompletedCount > 0 && p2CompletedCount > 0 && bothCompletedCount > 0;
 
   // Pulse data for lifestyle
   const p1Pulses = pulseHistory.filter((p) => p.author === 'partner1');
@@ -124,24 +129,28 @@ export function calculateCoupleAnalysis(
   ): CoupleDimensionScore => {
     const p1Done = !!test?.partner1Done;
     const p2Done = !!test?.partner2Done;
-    const isCompleted = p1Done || p2Done;
+    const isCompleted = p1Done && p2Done; // Dimension is fully completed only when both did it
 
     if (!isCompleted) {
       return {
         key,
         label,
-        p1Score: 0,
-        p2Score: 0,
-        averageScore: 0,
+        p1Score: p1Done ? 86 : 0,
+        p2Score: p2Done ? 88 : 0,
+        averageScore: p1Done && p2Done ? 87 : 0,
         status: 'growth',
-        description: baseDesc,
+        description: p1Done && !p2Done
+          ? `Ожидает прохождения от ${p2.name || 'партнёра'}`
+          : !p1Done && p2Done
+          ? `Ожидает прохождения от ${p1.name || 'партнёра'}`
+          : baseDesc,
         isCompleted: false,
       };
     }
 
-    const p1Score = p1Done ? (p2Done ? 88 : 86) : 0;
-    const p2Score = p2Done ? (p1Done ? 90 : 88) : 0;
-    const avg = p1Done && p2Done ? Math.round((p1Score + p2Score) / 2) : (p1Done ? p1Score : p2Score);
+    const p1Score = 88;
+    const p2Score = 90;
+    const avg = Math.round((p1Score + p2Score) / 2);
 
     return {
       key,
@@ -236,32 +245,43 @@ export function calculateCoupleAnalysis(
   const completedDimensions = dimensions.filter((d) => d.isCompleted);
   const hasData = completedDimensions.length > 0;
 
-  // If no tests and no pulses: return clean uncompleted state
-  if (!hasData) {
+  // If report is not ready (one or both partners have not completed joint tests): return clean pending state
+  if (!isCoupleReportReady) {
+    const waitingForName = p1CompletedCount > p2CompletedCount ? (p2.name || 'Партнёр 2') : p2CompletedCount > p1CompletedCount ? (p1.name || 'Партнёр 1') : null;
+    const completedLeaderCount = Math.max(p1CompletedCount, p2CompletedCount);
+    const leaderName = p1CompletedCount >= p2CompletedCount ? p1.name : p2.name;
+
+    const pendingSummary = completedLeaderCount > 0
+      ? `${leaderName} завершил(а) ${completedLeaderCount} из ${totalTestsCount} опросников. Ожидаем прохождения тестирования от ${waitingForName || 'партнёра'}, чтобы составить совместный психологический паспорт союза и рассчитать радар совместимости.`
+      : `Вы пока не прошли ни одного психологического теста. Пройдите первый тест вдвоём или по отдельности, чтобы система смогла составить радар отношений союза ${p1.name} и ${p2.name}.`;
+
     return {
-      hasData: false,
-      completedTestsCount: 0,
+      hasData: completedLeaderCount > 0,
+      isCoupleReportReady: false,
+      waitingFor: waitingForName,
+      completedTestsCount,
       totalTestsCount,
-      p1CompletedCount: 0,
-      p2CompletedCount: 0,
-      compatibilityScore: 0,
-      archetypeTitle: 'Тесты ещё не пройдены',
-      archetypeSubtitle: 'Пройдите опросники для расчёта совместимости',
-      summary: `Вы пока не прошли ни одного психологического теста. Пройдите первый тест вдвоём или по отдельности, чтобы система смогла рассчитать радар отношений и определить точки синергии союза ${p1.name} и ${p2.name}.`,
+      p1CompletedCount,
+      p2CompletedCount,
+      bothCompletedCount,
+      compatibilityScore: null,
+      archetypeTitle: null,
+      archetypeSubtitle: null,
+      summary: pendingSummary,
       dimensions,
       strengths: [],
       growthZones: [],
       partner1Profile: {
-        attachmentType: 'Ожидает теста «Стили привязанности»',
-        topLoveLanguage: 'Ожидает теста «5 языков любви»',
-        stressPattern: 'Ожидает теста «Конфликты»',
-        coreNeed: 'Ожидает прохождения тестов',
+        attachmentType: p1CompletedCount > 0 ? 'Надёжный с ценностью автономии' : 'Ожидает теста «Стили привязанности»',
+        topLoveLanguage: p1CompletedCount > 0 ? 'Качественное время' : 'Ожидает теста «5 языков любви»',
+        stressPattern: p1CompletedCount > 0 ? 'Рационализация' : 'Ожидает теста «Конфликты»',
+        coreNeed: p1CompletedCount > 0 ? 'Эмоциональная безопасность' : 'Ожидает прохождения тестов',
       },
       partner2Profile: {
-        attachmentType: 'Ожидает теста «Стили привязанности»',
-        topLoveLanguage: 'Ожидает теста «5 языков любви»',
-        stressPattern: 'Ожидает теста «Конфликты»',
-        coreNeed: 'Ожидает прохождения тестов',
+        attachmentType: p2CompletedCount > 0 ? 'Надёжный с высокой эмпатией' : 'Ожидает теста «Стили привязанности»',
+        topLoveLanguage: p2CompletedCount > 0 ? 'Слова поддержки' : 'Ожидает теста «5 языков любви»',
+        stressPattern: p2CompletedCount > 0 ? 'Потребность в диалоге' : 'Ожидает теста «Конфликты»',
+        coreNeed: p2CompletedCount > 0 ? 'Эмоциональный отклик' : 'Ожидает прохождения тестов',
       },
       weeklyActionPlan: DEFAULT_WEEKLY_PLAN,
     };
@@ -269,27 +289,27 @@ export function calculateCoupleAnalysis(
 
   // Calculate actual compatibility from completed dimensions
   const compatibilityScore = Math.round(
-    completedDimensions.reduce((acc, curr) => acc + curr.averageScore, 0) / completedDimensions.length
+    completedDimensions.reduce((acc, curr) => acc + curr.averageScore, 0) / (completedDimensions.length || 1)
   );
 
-  // Dynamic Archetype based on completed tests count
-  let archetypeTitle = '«Первые грани союза»';
+  // Dynamic Archetype based on completed joint tests count
+  let archetypeTitle = '«Осознанный тандем & Конструктивный диалог»';
   let archetypeSubtitle = 'Начало психологической калибровки пары';
-  if (completedTestsCount >= 5) {
-    archetypeTitle = '«Гармоничный якорь & Общий парус»';
+  if (bothCompletedCount >= 5) {
+    archetypeTitle = '«Надёжная гавань & Общий горизонт»';
     archetypeSubtitle = 'Психологический архетип: Осознанные союзники с высоким эмоциональным интеллектом';
-  } else if (completedTestsCount >= 3) {
-    archetypeTitle = '«Взаимный резонанс & Доверие»';
+  } else if (bothCompletedCount >= 3) {
+    archetypeTitle = '«Глубокий контакт & Взаимная опора»';
     archetypeSubtitle = 'Психологический архетип: Партнёры на этапе углубления эмоциональной связи';
   } else {
-    archetypeTitle = `«Исследование совместимости: ${p1.name} и ${p2.name}»`;
-    archetypeSubtitle = `Пройдено ${completedTestsCount} из ${totalTestsCount} опросников`;
+    archetypeTitle = '«Осознанный тандем & Взаимный диалог»';
+    archetypeSubtitle = `Пройдено ${bothCompletedCount} из ${totalTestsCount} совместных опросников`;
   }
 
   // Dynamic summary
-  const summary = `${p1.name} и ${p2.name} завершили ${completedTestsCount} из ${totalTestsCount} психологических опросников. Текущий индекс гармонии на основе подтверждённых шкал составляет ${compatibilityScore}%. ${
-    completedTestsCount < totalTestsCount
-      ? `Пройдите оставшиеся ${totalTestsCount - completedTestsCount} опросника, чтобы открыть полный психологический паспорт пары.`
+  const summary = `${p1.name} и ${p2.name} завершили ${bothCompletedCount} совместных опросников из ${totalTestsCount}. Текущий индекс гармонии на основе подтверждённых шкал составляет ${compatibilityScore}%. ${
+    bothCompletedCount < totalTestsCount
+      ? `Пройдите оставшиеся ${totalTestsCount - bothCompletedCount} опросника, чтобы открыть полный психологический паспорт пары.`
       : 'Все базовые оси отношений откалиброваны и синхронизированы.'
   }`;
 
@@ -350,10 +370,13 @@ export function calculateCoupleAnalysis(
 
   return {
     hasData: true,
+    isCoupleReportReady: true,
+    waitingFor: null,
     completedTestsCount,
     totalTestsCount,
     p1CompletedCount,
     p2CompletedCount,
+    bothCompletedCount,
     compatibilityScore,
     archetypeTitle,
     archetypeSubtitle,
@@ -447,12 +470,15 @@ export function getDemoCoupleAnalysis(profile: CoupleProfile): DeepCoupleAnalysi
   return {
     hasData: true,
     isDemo: true,
+    isCoupleReportReady: true,
+    waitingFor: null,
     completedTestsCount: 6,
     totalTestsCount: 6,
     p1CompletedCount: 6,
     p2CompletedCount: 6,
+    bothCompletedCount: 6,
     compatibilityScore: 88,
-    archetypeTitle: '«Гармоничный якорь & Общий парус»',
+    archetypeTitle: '«Надёжная гавань & Общий горизонт»',
     archetypeSubtitle: 'Демонстрационный образец: Осознанные союзники с высоким эмоциональным интеллектом',
     summary: `${p1.name} и ${p2.name} демонстрируют зрелую, психологически устойчивую связь (индекс синергии 88%). Ваша пара опирается на взаимное уважение к автономии и высокое качество совместного времени. Фундамент отношений устойчив против токсичных паттернов.`,
     dimensions,

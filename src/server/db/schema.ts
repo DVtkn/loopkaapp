@@ -96,22 +96,6 @@ export const testAnswers = pgTable('test_answers', {
   userIdIdx: index('test_answers_user_idx').on(t.userId),
 }));
 
-export const coupleReports = pgTable('couple_reports', {
-  id: text('id').primaryKey(),
-  sessionId: text('session_id').notNull(),
-  coupleId: text('couple_id').notNull().unique(),
-  radarTrust: numeric('radar_trust', { precision: 5, scale: 2 }).notNull(),
-  radarCloseness: numeric('radar_closeness', { precision: 5, scale: 2 }).notNull(),
-  radarCommunication: numeric('radar_communication', { precision: 5, scale: 2 }).notNull(),
-  radarIntimacy: numeric('radar_intimacy', { precision: 5, scale: 2 }).notNull(),
-  radarValues: numeric('radar_values', { precision: 5, scale: 2 }).notNull(),
-  archetypeTitle: text('archetype_title').notNull(),
-  archetypeDescription: text('archetype_description').notNull(),
-  leadSpheres: jsonb('lead_spheres').notNull(),
-  blindSpots: jsonb('blind_spots'),
-  calculatedAt: timestamp('calculated_at', { withTimezone: true }).defaultNow().notNull()
-});
-
 export const chatMessages = pgTable('chat_messages', {
   id: text('id').primaryKey(),
   coupleId: text('couple_id').notNull(),
@@ -235,12 +219,35 @@ export const userPsychProfiles = pgTable('user_psych_profiles', {
   userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }).primaryKey(),
   coupleId: text('couple_id').notNull(),
   sessionId: text('session_id').notNull(),
-  eSafety: numeric('e_safety', { precision: 5, scale: 2 }).notNull(),
-  aAutonomy: numeric('a_autonomy', { precision: 5, scale: 2 }).notNull(),
-  cCloseness: numeric('c_closeness', { precision: 5, scale: 2 }).notNull(),
-  rRepair: numeric('r_repair', { precision: 5, scale: 2 }).notNull(),
-  vFuture: numeric('v_future', { precision: 5, scale: 2 }).notNull(),
+  traitScores: jsonb('trait_scores'), // S1..S24 normalized 0..100
+  dominantVectors: jsonb('dominant_vectors'),
+  eSafety: numeric('e_safety', { precision: 5, scale: 2 }).notNull().default('50.00'),
+  aAutonomy: numeric('a_autonomy', { precision: 5, scale: 2 }).notNull().default('50.00'),
+  cCloseness: numeric('c_closeness', { precision: 5, scale: 2 }).notNull().default('50.00'),
+  rRepair: numeric('r_repair', { precision: 5, scale: 2 }).notNull().default('50.00'),
+  vFuture: numeric('v_future', { precision: 5, scale: 2 }).notNull().default('50.00'),
   consistencyScore: numeric('consistency_score', { precision: 5, scale: 2 }),
   rawResponses: jsonb('raw_responses'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
 });
+
+export const coupleReports = pgTable('couple_reports', {
+  id: text('id').primaryKey(),
+  sessionId: text('session_id').notNull(),
+  coupleId: text('couple_id').notNull().unique(),
+  radarMetrics: jsonb('radar_metrics'), // 6 integral spheres: trust, closeness, communication, values, intimacy, lifestyle
+  radarTrust: numeric('radar_trust', { precision: 5, scale: 2 }).notNull().default('50.00'),
+  radarCloseness: numeric('radar_closeness', { precision: 5, scale: 2 }).notNull().default('50.00'),
+  radarCommunication: numeric('radar_communication', { precision: 5, scale: 2 }).notNull().default('50.00'),
+  radarIntimacy: numeric('radar_intimacy', { precision: 5, scale: 2 }).notNull().default('50.00'),
+  radarValues: numeric('radar_values', { precision: 5, scale: 2 }).notNull().default('50.00'),
+  archetypeTitle: text('archetype_title').notNull(),
+  archetypeDescription: text('archetype_description').notNull(),
+  leadSpheres: jsonb('lead_spheres').notNull(),
+  synergyPoints: jsonb('synergy_points'),
+  growthZones: jsonb('growth_zones'),
+  blindSpots: jsonb('blind_spots'),
+  calculatedAt: timestamp('calculated_at', { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+});
+

@@ -82,14 +82,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ setActiveTab }) =>
     }
   }, [coupleProfile, pulseHistory, tests]);
 
-  const hasCompatibilityData = !!(coupleAnalysis?.hasData && coupleAnalysis.compatibilityScore > 0);
-  const compatibilityPercent = hasCompatibilityData ? coupleAnalysis.compatibilityScore : 0;
+  const hasCompatibilityData = !!(coupleAnalysis?.isCoupleReportReady && coupleAnalysis.compatibilityScore && coupleAnalysis.compatibilityScore > 0);
+  const compatibilityPercent = hasCompatibilityData && coupleAnalysis?.compatibilityScore ? coupleAnalysis.compatibilityScore : 0;
   const compatibilityStatus = hasCompatibilityData
     ? compatibilityPercent >= 85
       ? 'Высокая'
       : compatibilityPercent >= 70
       ? 'Тёплая'
       : 'Развитие'
+    : coupleAnalysis?.hasData
+    ? 'Калибровка'
     : 'Пройти тест';
 
   // Calculate continuous activity streak (days in a row) based on real interactions

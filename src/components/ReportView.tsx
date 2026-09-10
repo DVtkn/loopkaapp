@@ -133,18 +133,18 @@ export const ReportView: React.FC<{
           })}
         </div>
 
-        {/* 2. Archetype / Overview Callout if data exists */}
-        {analysis.hasData && (
+        {/* 2. Archetype Callout (Only when BOTH partners completed tests and report is ready) */}
+        {analysis.isCoupleReportReady && analysis.archetypeTitle ? (
           <div className="p-4 sm:p-5 rounded-2xl bg-[var(--surface)] border border-[var(--divider)] flex items-center justify-between gap-3 shadow-2xs">
             <div className="space-y-0.5 min-w-0">
               <span className="text-[11px] font-bold text-[var(--accent)]">
                 Психологический архетип пары
               </span>
               <h3 className="text-base font-bold text-[var(--text)]">
-                {analysis.archetypeTitle || 'Гармоничный союз'}
+                {analysis.archetypeTitle}
               </h3>
               <p className="text-xs text-[var(--text-2)] line-clamp-2 mt-0.5">
-                {analysis.summary || 'Высокая степень доверия и бережный эмоциональный контакт.'}
+                {analysis.summary}
               </p>
             </div>
 
@@ -157,6 +157,34 @@ export const ReportView: React.FC<{
             >
               <RefreshCw className={`w-4 h-4 ${isGeneratingAI ? 'animate-spin' : ''}`} />
             </button>
+          </div>
+        ) : (
+          <div className="p-4 sm:p-5 rounded-2xl bg-[var(--surface)] border border-[var(--divider)] space-y-2.5 shadow-2xs">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
+                <span className="text-xs font-bold text-amber-600 dark:text-amber-400">
+                  {analysis.hasData
+                    ? `Калибровка союза • ${analysis.waitingFor ? `Ожидание: ${analysis.waitingFor}` : 'Ожидание партнёра'}`
+                    : 'Исследования ещё не начаты'}
+                </span>
+              </div>
+              <span className="text-xs font-semibold text-[var(--text-3)]">
+                {analysis.completedTestsCount} из {analysis.totalTestsCount} тестов
+              </span>
+            </div>
+            <p className="text-xs sm:text-sm text-[var(--text-2)] leading-relaxed">
+              {analysis.summary}
+            </p>
+            <div className="pt-1 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleStartTest()}
+                className="px-3.5 py-1.5 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold transition-all cursor-pointer shadow-2xs"
+              >
+                Пройти опросники
+              </button>
+            </div>
           </div>
         )}
 

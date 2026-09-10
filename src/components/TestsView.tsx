@@ -182,11 +182,13 @@ export const TestsView: React.FC<{ initialMode?: 'catalog' | 'report' }> = ({
                 </div>
                 <div>
                   <div className="text-sm font-bold text-[var(--text)] group-hover:text-[var(--accent)] transition-colors">
-                    Аналитика союза: {analysis.hasData && analysis.compatibilityScore > 0 ? `${analysis.compatibilityScore}%` : 'Калибровка'}
+                    Аналитика союза: {analysis.isCoupleReportReady && analysis.compatibilityScore ? `${analysis.compatibilityScore}%` : 'Калибровка'}
                   </div>
                   <div className="text-xs text-[var(--text-2)] mt-0.5">
-                    {analysis.hasData && analysis.compatibilityScore > 0
-                      ? 'Карта 5 сфер, суперсилы и разбор союза'
+                    {analysis.isCoupleReportReady && analysis.compatibilityScore
+                      ? 'Карта 6 сфер, суперсилы и разбор союза'
+                      : analysis.hasData
+                      ? 'Ожидание прохождения тестов партнёром'
                       : 'Пройдите опросники, чтобы открыть аналитику'}
                   </div>
                 </div>

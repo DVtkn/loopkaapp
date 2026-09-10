@@ -87,6 +87,42 @@ export interface Question {
   tip?: string;
 }
 
+export interface PsychProfile24Scales {
+  s1: number;
+  s2: number;
+  s3: number;
+  s4: number;
+  s5: number;
+  s6: number;
+  s7: number;
+  s8: number;
+  s9: number;
+  s10: number;
+  s11: number;
+  s12: number;
+  s13: number;
+  s14: number;
+  s15: number;
+  s16: number;
+  s17: number;
+  s18: number;
+  s19: number;
+  s20: number;
+  s21: number;
+  s22: number;
+  s23: number;
+  s24: number;
+}
+
+export interface DominantVectors {
+  trustSafety: number;
+  emotionalCloseness: number;
+  conflictDynamics: number;
+  valuesHorizon: number;
+  intimacyPassion: number;
+  lifestyleResilience: number;
+}
+
 export interface PsychProfileVector {
   eSafety: number;
   aAutonomy: number;
@@ -94,6 +130,25 @@ export interface PsychProfileVector {
   rRepair: number;
   vFuture: number;
   consistencyScore?: number;
+  traitScores?: PsychProfile24Scales;
+  dominantVectors?: DominantVectors;
+}
+
+export interface SynergyItem {
+  sphere: string;
+  title: string;
+  description: string;
+  score: number;
+  statusLabel: string;
+}
+
+export interface GrowthZoneItem {
+  sphere: string;
+  title: string;
+  description: string;
+  gap: number;
+  statusLabel: string;
+  recommendation: string;
 }
 
 export interface CoupleReportData {
@@ -105,9 +160,20 @@ export interface CoupleReportData {
   radarCommunication: number;
   radarIntimacy: number;
   radarValues: number;
+  radarLifestyle?: number;
+  radarMetrics?: {
+    trust: number;
+    closeness: number;
+    communication: number;
+    values: number;
+    intimacy: number;
+    lifestyle: number;
+  };
   archetypeTitle: string;
   archetypeDescription: string;
   leadSpheres: string[];
+  synergyPoints?: SynergyItem[];
+  growthZones?: GrowthZoneItem[];
   blindSpots?: Record<string, any> | null;
   calculatedAt?: string;
 }

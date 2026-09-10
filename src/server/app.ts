@@ -128,31 +128,41 @@ export async function initDatabase() {
         updated_at timestamp with time zone NOT NULL DEFAULT now()
       )`,
       `ALTER TABLE user_psych_profiles ADD COLUMN IF NOT EXISTS consistency_score numeric(5, 2)`,
+      `ALTER TABLE user_psych_profiles ADD COLUMN IF NOT EXISTS trait_scores jsonb`,
+      `ALTER TABLE user_psych_profiles ADD COLUMN IF NOT EXISTS dominant_vectors jsonb`,
       `CREATE TABLE IF NOT EXISTS couple_reports (
         id text PRIMARY KEY,
         session_id text NOT NULL,
         couple_id text NOT NULL UNIQUE,
-        radar_trust numeric(5, 2) NOT NULL,
-        radar_closeness numeric(5, 2) NOT NULL,
-        radar_communication numeric(5, 2) NOT NULL,
-        radar_intimacy numeric(5, 2) NOT NULL,
-        radar_values numeric(5, 2) NOT NULL,
+        radar_trust numeric(5, 2) NOT NULL DEFAULT 50.00,
+        radar_closeness numeric(5, 2) NOT NULL DEFAULT 50.00,
+        radar_communication numeric(5, 2) NOT NULL DEFAULT 50.00,
+        radar_intimacy numeric(5, 2) NOT NULL DEFAULT 50.00,
+        radar_values numeric(5, 2) NOT NULL DEFAULT 50.00,
+        radar_metrics jsonb,
         archetype_title text NOT NULL,
         archetype_description text NOT NULL,
         lead_spheres jsonb NOT NULL,
+        synergy_points jsonb,
+        growth_zones jsonb,
         blind_spots jsonb,
-        calculated_at timestamp with time zone NOT NULL DEFAULT now()
+        calculated_at timestamp with time zone NOT NULL DEFAULT now(),
+        created_at timestamp with time zone NOT NULL DEFAULT now()
       )`,
       `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS radar_trust numeric(5, 2)`,
       `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS radar_closeness numeric(5, 2)`,
       `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS radar_communication numeric(5, 2)`,
       `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS radar_intimacy numeric(5, 2)`,
       `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS radar_values numeric(5, 2)`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS radar_metrics jsonb`,
       `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS archetype_title text`,
       `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS archetype_description text`,
       `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS lead_spheres jsonb`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS synergy_points jsonb`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS growth_zones jsonb`,
       `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS blind_spots jsonb`,
-      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS calculated_at timestamp with time zone DEFAULT now()`
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS calculated_at timestamp with time zone DEFAULT now()`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now()`
     ];
     for (const stmt of statements) {
       try {

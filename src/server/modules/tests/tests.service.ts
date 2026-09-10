@@ -6,7 +6,7 @@ import { logger } from "../../shared/utils/logger.ts";
 import { DatabaseUnavailableError } from "../../shared/errors/index.ts";
 import { getCoupleData, saveCoupleData } from "../../services/storageService.ts";
 import { calculateIndividualVector } from './psychometrics.calc.ts';
-import { calculateCoupleRadarMatrix } from './report.matrix.ts';
+import { calculateCoupleMatrix } from './couple-matrix.calc.ts';
 
 export interface SubmitAnswerParams {
   sessionId?: string;
@@ -28,7 +28,7 @@ export async function processTestCompletion(
   userId: string,
   coupleId: string
 ) {
-  // 1. СЛОЙ 2: Агрегируем личный профиль текущего пользователя
+  // 1. СЛОЙ 2: Агрегируем личный профиль текущего пользователя (24 шкалы)
   const rawUserAnswers = await tx
     .select()
     .from(testAnswers)
@@ -41,6 +41,8 @@ export async function processTestCompletion(
     userId,
     coupleId,
     sessionId,
+    traitScores: individualVector.traitScores,
+    dominantVectors: individualVector.dominantVectors,
     eSafety: individualVector.eSafety.toFixed(2),
     aAutonomy: individualVector.aAutonomy.toFixed(2),
     cCloseness: individualVector.cCloseness.toFixed(2),
@@ -51,6 +53,8 @@ export async function processTestCompletion(
   }).onConflictDoUpdate({
     target: userPsychProfiles.userId,
     set: {
+      traitScores: individualVector.traitScores,
+      dominantVectors: individualVector.dominantVectors,
       eSafety: individualVector.eSafety.toFixed(2),
       aAutonomy: individualVector.aAutonomy.toFixed(2),
       cCloseness: individualVector.cCloseness.toFixed(2),
@@ -63,11 +67,11 @@ export async function processTestCompletion(
 
   // 2. БАРЬЕР ОЖИДАНИЯ: Проверяем, есть ли готовый профиль у второго партнера
   const [couple] = await tx.select().from(couples).where(eq(couples.id, coupleId));
-  if (!couple) return { state: 'WAITING_FOR_PARTNER', personalVector: individualVector };
+  if (!couple) return { state: 'PARTNER_PENDING', personalVector: individualVector };
 
   const partnerId = couple.user1Id === userId ? couple.user2Id : couple.user1Id;
   if (!partnerId) {
-    return { state: 'WAITING_FOR_PARTNER', personalVector: individualVector };
+    return { state: 'PARTNER_PENDING', personalVector: individualVector };
   }
 
   const [partnerProfile] = await tx
@@ -77,26 +81,28 @@ export async function processTestCompletion(
 
   if (!partnerProfile) {
     return {
-      state: 'WAITING_FOR_PARTNER',
+      state: 'PARTNER_PENDING',
       personalVector: individualVector
     };
   }
 
-  // 3. ВЕРШИНА ПИРАМИДЫ: Оба вектора на месте
-  const partnerVector = {
-    eSafety: Number(partnerProfile.eSafety),
-    aAutonomy: Number(partnerProfile.aAutonomy),
-    cCloseness: Number(partnerProfile.cCloseness),
-    rRepair: Number(partnerProfile.rRepair),
-    vFuture: Number(partnerProfile.vFuture)
+  // 3. ВЕРШИНА ПИРАМИДЫ: Оба профиля на месте — строим 6-сферную матрицу союза
+  const partnerScales = (partnerProfile.traitScores as any) || {
+    s1: 50, s2: 50, s3: 50, s4: 50,
+    s5: 50, s6: 50, s7: 50, s8: 50,
+    s9: 50, s10: 50, s11: 50, s12: 50,
+    s13: 50, s14: 50, s15: 50, s16: 50,
+    s17: 50, s18: 50, s19: 50, s20: 50,
+    s21: 50, s22: 50, s23: 50, s24: 50,
   };
 
-  const radarReport = calculateCoupleRadarMatrix(individualVector, partnerVector);
+  const radarReport = calculateCoupleMatrix(individualVector.traitScores, partnerScales);
 
   await tx.insert(coupleReports).values({
     id: crypto.randomUUID(),
     sessionId,
     coupleId,
+    radarMetrics: radarReport.radar,
     radarTrust: radarReport.radar.trust.toFixed(2),
     radarCloseness: radarReport.radar.closeness.toFixed(2),
     radarCommunication: radarReport.radar.communication.toFixed(2),
@@ -105,11 +111,18 @@ export async function processTestCompletion(
     archetypeTitle: radarReport.archetype.title,
     archetypeDescription: radarReport.archetype.description,
     leadSpheres: radarReport.archetype.leadSpheres,
-    blindSpots: radarReport.blindSpots,
-    calculatedAt: new Date()
+    synergyPoints: radarReport.synergyPoints,
+    growthZones: radarReport.growthZones,
+    blindSpots: {
+      destructivePatterns: radarReport.destructivePatternsDetected,
+      growthZones: radarReport.growthZones,
+    },
+    calculatedAt: new Date(),
+    createdAt: new Date(),
   }).onConflictDoUpdate({
     target: coupleReports.coupleId,
     set: {
+      radarMetrics: radarReport.radar,
       radarTrust: radarReport.radar.trust.toFixed(2),
       radarCloseness: radarReport.radar.closeness.toFixed(2),
       radarCommunication: radarReport.radar.communication.toFixed(2),
@@ -118,13 +131,18 @@ export async function processTestCompletion(
       archetypeTitle: radarReport.archetype.title,
       archetypeDescription: radarReport.archetype.description,
       leadSpheres: radarReport.archetype.leadSpheres,
-      blindSpots: radarReport.blindSpots,
+      synergyPoints: radarReport.synergyPoints,
+      growthZones: radarReport.growthZones,
+      blindSpots: {
+        destructivePatterns: radarReport.destructivePatternsDetected,
+        growthZones: radarReport.growthZones,
+      },
       calculatedAt: new Date()
     }
   });
 
   return {
-    state: 'COUPLE_HARMONY_READY',
+    state: 'HARMONY_READY',
     personalVector: individualVector,
     coupleReport: radarReport
   };

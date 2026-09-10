@@ -7,6 +7,7 @@ import {
   generateWeeklyInsight,
   getCoupleReport,
   getUserPsychProfiles,
+  getDetailedCoupleAnalytics,
 } from "./analytics.service.ts";
 import { logger } from "../../shared/utils/logger.ts";
 
@@ -49,12 +50,22 @@ analyticsRouter.post("/insights/generate", requireAuth, requirePairOwnership, as
 analyticsRouter.get("/couple-report/:coupleId", requireAuth, requirePairOwnership, async (req: AuthenticatedRequest, res, next) => {
   try {
     const { coupleId } = req.params;
-    const report = await getCoupleReport(coupleId);
-    const profiles = await getUserPsychProfiles(coupleId);
-    return res.json({ report, profiles });
+    const result = await getDetailedCoupleAnalytics(coupleId, req.user?.login);
+    return res.json(result);
   } catch (err) {
     logger.error("Ошибка получения couple-report", err);
     return res.status(500).json({ error: "Не удалось получить отчет пары" });
+  }
+});
+
+analyticsRouter.get("/detailed/:coupleId", requireAuth, requirePairOwnership, async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const { coupleId } = req.params;
+    const result = await getDetailedCoupleAnalytics(coupleId, req.user?.login);
+    return res.json(result);
+  } catch (err) {
+    logger.error("Ошибка получения detailed analytics", err);
+    return res.status(500).json({ error: "Не удалось получить детальную аналитику" });
   }
 });
 

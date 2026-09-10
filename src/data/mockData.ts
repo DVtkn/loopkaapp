@@ -347,10 +347,10 @@ export const initialTests: TestCategory[] = [
         text: 'Когда партнёр говорит, что расстроен моим поступком, моя первая автоматическая реакция:',
         type: 'single',
         options: [
-          { label: 'Защититься и указать, что он сам(а) поступает так же (Защита)', value: 'defensiveness', categoryScores: { defensiveness: 5 } },
-          { label: 'Выслушать, вдохнуть и признать свою часть ответственности (Антидот)', value: 'responsibility', categoryScores: { responsibility: 5 } },
-          { label: 'Замолчать, уйти в другую комнату и не отвечать (Стеноуоллинг)', value: 'stonewalling', categoryScores: { stonewalling: 5 } },
-          { label: 'Пошутить или обесценить серьёзность темы (Презрение/Сарказм)', value: 'contempt', categoryScores: { contempt: 5 } },
+          { label: 'Я сразу начинаю объяснять логику своих действий и почему поступил именно так', value: 'defensiveness', categoryScores: { defensiveness: 5 } },
+          { label: 'Спрашиваю, что именно задело больше всего, даже если внутренне не согласен', value: 'responsibility', categoryScores: { responsibility: 5 } },
+          { label: 'Мне нужно время побыть одному, чтобы остыть и не наговорить лишнего', value: 'stonewalling', categoryScores: { stonewalling: 5 } },
+          { label: 'Стараюсь сразу сгладить напряжение и перевести ситуацию на позитив', value: 'contempt', categoryScores: { contempt: 5 } },
         ],
       },
       {
@@ -467,7 +467,7 @@ export const initialTests: TestCategory[] = [
     questions: [
       {
         id: 'q-s4-1',
-        text: 'Я чувствую глубокую душевную связь и могу доверить партнёру любые тайны (Близость).',
+        text: 'Я чувствую глубокую душевную связь и могу доверить партнёру любые тайны.',
         type: 'scale',
         options: [
           { label: '1 - Редко', value: 1 },
@@ -479,7 +479,7 @@ export const initialTests: TestCategory[] = [
       },
       {
         id: 'q-s4-2',
-        text: 'Между нами сохраняется сильное физическое притяжение и романтический трепет (Страсть).',
+        text: 'Между нами сохраняется сильное физическое притяжение и романтический трепет.',
         type: 'scale',
         options: [
           { label: '1 - Угасло', value: 1 },
@@ -491,7 +491,7 @@ export const initialTests: TestCategory[] = [
       },
       {
         id: 'q-s4-3',
-        text: 'Я твердо намерен(а) преодолевать любые трудности и строить совместное будущее (Обязательства).',
+        text: 'Я твердо намерен(а) преодолевать любые трудности и строить совместное будущее.',
         type: 'scale',
         options: [
           { label: '1 - Не уверен(а)', value: 1 },
@@ -599,11 +599,11 @@ export const initialTests: TestCategory[] = [
         text: 'Когда возникает острое разногласие, моя первая реакция:',
         type: 'single',
         options: [
-          { label: 'Доказать свою правоту, потому что я уверен в фактах (Соперничество)', value: 'competing', categoryScores: { assertiveness: 5, cooperativeness: 1 } },
-          { label: 'Найти решение, которое полностью устроит обоих (Сотрудничество)', value: 'collaborating', categoryScores: { assertiveness: 5, cooperativeness: 5 } },
-          { label: 'Быстро найти средний вариант, чтобы закрыть вопрос (Компромисс)', value: 'compromising', categoryScores: { assertiveness: 3, cooperativeness: 3 } },
-          { label: 'Уйти от разговора, сменить тему или промолчать (Избегание)', value: 'avoiding', categoryScores: { assertiveness: 1, cooperativeness: 1 } },
-          { label: 'Уступить партнёру, чтобы сохранить мир (Приспособление)', value: 'accommodating', categoryScores: { assertiveness: 1, cooperativeness: 5 } },
+          { label: 'Достаточно долго отстаиваю свою позицию, если уверен(а) в её логике', value: 'competing', categoryScores: { assertiveness: 5, cooperativeness: 1 } },
+          { label: 'Стараюсь досконально обсудить ситуацию, чтобы найти решение, устраивающее нас обоих на 100%', value: 'collaborating', categoryScores: { assertiveness: 5, cooperativeness: 5 } },
+          { label: 'Предлагаю найти золотую середину, чтобы каждый немного уступил и мы могли закрыть вопрос', value: 'compromising', categoryScores: { assertiveness: 3, cooperativeness: 3 } },
+          { label: 'Стараюсь перевести тему, отшутиться или отложить сложный разговор на потом', value: 'avoiding', categoryScores: { assertiveness: 1, cooperativeness: 1 } },
+          { label: 'Чаще всего соглашаюсь с мнением партнёра, чтобы не накалять обстановку и сохранить мир', value: 'accommodating', categoryScores: { assertiveness: 1, cooperativeness: 5 } },
         ],
       },
       {

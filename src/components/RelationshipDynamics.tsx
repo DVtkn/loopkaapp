@@ -150,7 +150,7 @@ export const RelationshipDynamics: React.FC<DynamicsProps> = ({ coupleId }) => {
       {/* AI Insight Section */}
       <div className="border-t border-[var(--divider)] pt-5 mt-5">
         <div className="flex items-center justify-between mb-4">
-          <h4 className="text-sm font-extrabold text-[var(--text)]">Еженедельный ИИ-анализ</h4>
+          <h4 className="text-sm font-extrabold text-[var(--text)]">Еженедельный анализ</h4>
           <button 
             onClick={async () => {
               setIsGenerating(true);

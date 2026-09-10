@@ -49,13 +49,9 @@ export const TestsView: React.FC<{ initialMode?: 'catalog' | 'report' }> = ({
   }, [tests, activeCategory]);
 
   const featuredTest = useMemo(() => {
-    const loveLanguages = tests.find((t) => t.id === 'TEST-S2');
     const myDone = (t: TestCategory) => (currentPartnerId === 'partner1' ? t.partner1Done : t.partner2Done);
-    if (loveLanguages && !myDone(loveLanguages)) {
-      return loveLanguages;
-    }
     const firstUncompleted = tests.find((t) => !myDone(t));
-    return firstUncompleted || loveLanguages || tests[0];
+    return firstUncompleted || null;
   }, [tests, currentPartnerId]);
 
   const handleStartTest = (test: TestCategory) => {
@@ -140,7 +136,7 @@ export const TestsView: React.FC<{ initialMode?: 'catalog' | 'report' }> = ({
 
   return (
     <PageLayout
-      title={subMode === 'report' ? 'Радар и ИИ-отчёт' : 'Исследования пары'}
+      title={subMode === 'report' ? 'Аналитика отношений' : 'Исследования пары'}
       subtitle={
         subMode === 'report'
           ? 'Карта гармонии и психологический профиль союза'
@@ -182,8 +178,8 @@ export const TestsView: React.FC<{ initialMode?: 'catalog' | 'report' }> = ({
                   </div>
                   <div className="text-xs text-[var(--text-2)] mt-0.5">
                     {analysis.hasData && analysis.compatibilityScore > 0
-                      ? 'Анализ 5 сфер отношений, суперсилы и ИИ-отчёт'
-                      : 'Пройдите опросники, чтобы открыть радар и ИИ-отчёт'}
+                      ? 'Анализ 5 сфер, суперсилы и разбор союза'
+                      : 'Пройдите опросники, чтобы открыть аналитику'}
                   </div>
                 </div>
               </div>
@@ -230,8 +226,26 @@ export const TestsView: React.FC<{ initialMode?: 'catalog' | 'report' }> = ({
             </div>
 
             {/* Featured Test Spotlight */}
-            {featuredTest && activeCategory === 'all' && (
-              <TestFeaturedCard featuredTest={featuredTest} onStartTest={handleStartTest} />
+            {activeCategory === 'all' && (
+              featuredTest ? (
+                <TestFeaturedCard featuredTest={featuredTest} onStartTest={handleStartTest} />
+              ) : (
+                <div 
+                  onClick={() => setSubMode('report')}
+                  className="bg-[var(--surface-blush)] border border-[var(--accent)]/30 p-6 rounded-3xl cursor-pointer hover:border-[var(--accent)]/60 transition-all text-center flex flex-col items-center justify-center space-y-3 shadow-2xs"
+                >
+                  <div className="w-14 h-14 rounded-full bg-[var(--accent)]/10 text-[var(--accent)] flex items-center justify-center mb-1 shadow-sm">
+                    <span className="text-2xl">🎉</span>
+                  </div>
+                  <h3 className="text-[var(--text)] font-extrabold text-xl tracking-tight">Все исследования пройдены!</h3>
+                  <p className="text-[var(--text-2)] text-sm max-w-sm mx-auto leading-relaxed">
+                    Вы завершили все доступные тесты. Посмотрите обновлённую аналитику союза и ваши суперсилы.
+                  </p>
+                  <div className="mt-3 inline-flex items-center gap-1.5 text-[var(--surface)] font-bold text-sm bg-[var(--accent)] px-5 py-2.5 rounded-2xl hover:bg-[var(--accent-2)] transition-colors shadow-md">
+                    Перейти к аналитике <ChevronRight className="w-4 h-4" />
+                  </div>
+                </div>
+              )
             )}
 
             {/* Tests List */}

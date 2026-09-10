@@ -203,6 +203,16 @@ async function initDatabase() {
         created_at timestamp with time zone NOT NULL DEFAULT NOW()
       );
 
+      CREATE TABLE IF NOT EXISTS couple_events (
+        id text PRIMARY KEY,
+        couple_id text NOT NULL,
+        target_login text NOT NULL,
+        sender_login text NOT NULL,
+        event_type text NOT NULL,
+        payload jsonb NOT NULL,
+        created_at text NOT NULL
+      );
+
       -- Индексы производительности (Drizzle & PostgreSQL)
       CREATE INDEX IF NOT EXISTS users_partner_login_idx ON users(partner_login);
       CREATE INDEX IF NOT EXISTS pair_requests_from_to_idx ON pair_requests(from_login, to_login);
@@ -222,6 +232,8 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS care_notes_couple_id_idx ON care_notes(couple_id);
       CREATE INDEX IF NOT EXISTS time_capsules_couple_id_idx ON time_capsules(couple_id);
       CREATE INDEX IF NOT EXISTS push_subscriptions_user_idx ON push_subscriptions(user_login);
+      CREATE INDEX IF NOT EXISTS couple_events_target_idx ON couple_events(target_login, created_at DESC);
+      CREATE INDEX IF NOT EXISTS couple_events_couple_idx ON couple_events(couple_id, created_at DESC);
     `);
     logger.info("Таблицы и индексы базы данных успешно проверены/созданы в PostgreSQL");
   } catch (err: unknown) {
@@ -229,7 +241,28 @@ async function initDatabase() {
   }
 }
 
+let dbInitPromise: Promise<void> | null = null;
+export function ensureDatabaseInitialized(): Promise<void> {
+  if (!dbInitPromise) {
+    dbInitPromise = initDatabase().catch((err) => {
+      logger.error("Failed to initialize database in serverless runtime", err);
+      dbInitPromise = null;
+    });
+  }
+  return dbInitPromise;
+}
+
 // 1. SECURITY & MIDDLEWARE
+app.use(async (_req, _res, next) => {
+  if (isSqlConfigured()) {
+    try {
+      await ensureDatabaseInitialized();
+    } catch {
+      // safe continue
+    }
+  }
+  next();
+});
 app.use(
   helmet({
     contentSecurityPolicy: false,
@@ -372,9 +405,11 @@ export async function startServer() {
     }
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    logger.info(`Loop backend listening on port ${PORT} [${config.nodeEnv}]`);
-  });
+  if (!process.env.VERCEL) {
+    app.listen(PORT, "0.0.0.0", () => {
+      logger.info(`Loop backend listening on port ${PORT} [${config.nodeEnv}]`);
+    });
+  }
 }
 
 export default app;

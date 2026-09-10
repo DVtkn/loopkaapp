@@ -6399,6 +6399,40 @@
       "currentMood": null,
       "lastActiveAt": "2026-09-09T16:13:09.045Z",
       "createdAt": "2026-09-09T16:13:09.045Z"
+    },
+    "test_alex": {
+      "id": "3f97e92a-39ca-4cbe-b55d-48f8a34a03fb",
+      "login": "test_alex",
+      "passwordHash": "$2b$10$i./hrN5QZf1S4nrQ.iM7UOAWCslWGpz/yQw1MsKotWoLeHi7O7Mxi",
+      "name": "Алексей",
+      "gender": "male",
+      "avatarEmoji": "sparkles",
+      "partnerLogin": null,
+      "pairedAt": null,
+      "startDate": null,
+      "city": null,
+      "loveLanguage": null,
+      "attachmentStyle": null,
+      "currentMood": null,
+      "lastActiveAt": "2026-09-10T02:46:54.574Z",
+      "createdAt": "2026-09-10T02:46:54.574Z"
+    },
+    "test_masha": {
+      "id": "d4d225c5-ea67-4cb4-961d-956226a7c2bf",
+      "login": "test_masha",
+      "passwordHash": "$2b$10$35FYjAWMGa8rVZdsDdiqEOQUUl/zBOLYK.YwvbkSmQvbOEtu8R8Dq",
+      "name": "Маша",
+      "gender": "female",
+      "avatarEmoji": "sparkles",
+      "partnerLogin": null,
+      "pairedAt": null,
+      "startDate": null,
+      "city": null,
+      "loveLanguage": null,
+      "attachmentStyle": null,
+      "currentMood": null,
+      "lastActiveAt": "2026-09-10T02:47:04.653Z",
+      "createdAt": "2026-09-10T02:47:04.653Z"
     }
   },
   "pairRequests": [

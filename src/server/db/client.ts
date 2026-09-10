@@ -5,6 +5,7 @@ import { logger } from '../logger.ts';
 
 declare global {
   var _neonPool: Pool | undefined;
+  var _neonDb: ReturnType<typeof drizzle> | undefined;
 }
 
 export const isSqlConfigured = (): boolean => {
@@ -34,21 +35,28 @@ export const createPool = (): Pool | null => {
   if (!connStr) {
     return null;
   }
-  if (!global._neonPool) {
-    global._neonPool = new Pool({
+  if (!globalThis._neonPool) {
+    globalThis._neonPool = new Pool({
       connectionString: connStr,
       max: 10,
       connectionTimeoutMillis: 10000,
     });
-    global._neonPool.on('error', (err: Error) => {
+    globalThis._neonPool.on('error', (err: Error) => {
       logger.warn('Neon pool connection notice:', undefined, err);
     });
   }
-  return global._neonPool;
+  return globalThis._neonPool;
 };
 
-const pool = isSqlConfigured() ? createPool() : null;
+export const getDb = () => {
+  if (globalThis._neonDb) {
+    return globalThis._neonDb;
+  }
+  const pool = isSqlConfigured() ? createPool() : null;
+  globalThis._neonDb = pool
+    ? drizzle(pool, { schema })
+    : (drizzle(new Pool({ connectionString: 'postgresql://dummy:dummy@127.0.0.1:5432/dummy' }), { schema }));
+  return globalThis._neonDb;
+};
 
-export const db = pool
-  ? drizzle(pool, { schema })
-  : (drizzle(new Pool({ connectionString: 'postgresql://dummy:dummy@127.0.0.1:5432/dummy' }), { schema }));
+export const db = getDb();

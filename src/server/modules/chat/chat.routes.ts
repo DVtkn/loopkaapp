@@ -19,6 +19,7 @@ import {
   saveAIMessageToDb,
 } from "./chat.service.ts";
 import { sendSSEEventToUser } from "../../shared/utils/sse.ts";
+import { recordCoupleEvent } from "../realtime/realtime.service.ts";
 import { evaluateSafetyRisk } from "./safety.filter.ts";
 import { calculateCoupleAnalysis } from "../../../utils/psychologyEngine.ts";
 import { logger } from "../../shared/utils/logger.ts";
@@ -112,6 +113,15 @@ chatRouter.post(["/messages", "/message"], requireAuth, async (req: Authenticate
         if (targetLogin && targetLogin !== "ai") {
           sendSSEEventToUser(targetLogin, "chat_message", { message, coupleId, mode: mode || "together" });
           sendSSEEventToUser(targetLogin, "new_message", { message, coupleId, mode: mode || "together" });
+          if (targetLogin !== cleanSender) {
+            recordCoupleEvent({
+              coupleId,
+              targetLogin,
+              senderLogin: cleanSender,
+              eventType: "chat_message",
+              payload: { message, coupleId, mode: mode || "together" },
+            }).catch(() => {});
+          }
         }
       });
     } catch (sseErr) {

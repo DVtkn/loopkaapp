@@ -8,15 +8,52 @@ import {
   registerSSEClient,
   removeSSEClient,
   pushSubscriptions,
+  handleHeartbeat,
+  getEventsPoll,
 } from "./realtime.service.ts";
 import { logger } from "../../shared/utils/logger.ts";
 
 export const realtimeRouter = Router();
 
+// Heartbeat endpoint for Vercel Serverless (client pings every 25-30s)
+realtimeRouter.post("/heartbeat", async (req: AuthenticatedRequest, res) => {
+  try {
+    const login = req.user?.login || req.body?.login;
+    if (!login) {
+      return res.status(400).json({ error: "Не указан логин" });
+    }
+    const result = await handleHeartbeat(login);
+    return res.json(result);
+  } catch (err) {
+    logger.error("Ошибка обработки heartbeat", err);
+    return res.status(500).json({ error: "Ошибка heartbeat" });
+  }
+});
+
+// Smart Polling endpoint for Vercel Serverless (client polls every 2-3s in active tab)
+realtimeRouter.get("/events-poll", async (req: AuthenticatedRequest, res) => {
+  try {
+    const login = (req.user?.login || req.query?.login || "") as string;
+    if (!login) {
+      return res.status(400).json({ error: "Не указан логин" });
+    }
+    const result = await getEventsPoll({
+      login,
+      coupleId: req.query?.coupleId as string,
+      lastEventId: req.query?.lastEventId as string,
+      since: req.query?.since as string,
+    });
+    return res.json(result);
+  } catch (err) {
+    logger.error("Ошибка опроса событий events-poll", err);
+    return res.status(500).json({ error: "Ошибка опроса событий" });
+  }
+});
+
 // Endpoint for sending a quick touch action to partner
 realtimeRouter.post("/touch", requireAuth, validateBody(touchEventSchema), async (req: AuthenticatedRequest, res, next) => {
   try {
-    const result = sendQuickTouch(req.body);
+    const result = await sendQuickTouch(req.body);
     return res.json(result);
   } catch (err) {
     logger.error("Ошибка отправки быстрого касания", err);

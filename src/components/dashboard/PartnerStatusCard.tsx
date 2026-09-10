@@ -68,23 +68,25 @@ export function getPartnerStatusDetails(partner: {
   try {
     const last = new Date(partner.lastActiveAt);
     const now = new Date();
-    const diffMs = now.getTime() - last.getTime();
+    const diffMs = Math.max(0, now.getTime() - last.getTime());
+    const diffSecs = Math.floor(diffMs / 1000);
     const diffMins = Math.floor(diffMs / 60000);
     const isFemale = partner.gender === 'female';
 
-    if (diffMins < 15) {
+    if (diffSecs < 60) {
       return {
         isOnline: true,
-        statusText: 'В сети сейчас',
+        statusText: 'В сети',
         badgeText: 'В сети',
       };
     }
 
     if (diffMins < 60) {
+      const displayMins = Math.max(1, diffMins);
       return {
         isOnline: false,
-        statusText: `${isFemale ? 'Была' : 'Был'} ${diffMins} мин назад`,
-        badgeText: `${diffMins}м назад`,
+        statusText: `${isFemale ? 'Была' : 'Был'} ${displayMins} мин назад`,
+        badgeText: `${displayMins}м назад`,
       };
     }
 

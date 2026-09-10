@@ -206,3 +206,17 @@ export const pushSubscriptions = pgTable('push_subscriptions', {
   userLoginIdx: index('push_subscriptions_user_idx').on(t.userLogin),
 }));
 
+export const coupleEvents = pgTable('couple_events', {
+  id: text('id').primaryKey(),
+  coupleId: text('couple_id').notNull(),
+  targetLogin: text('target_login').notNull(),
+  senderLogin: text('sender_login').notNull(),
+  eventType: text('event_type').notNull(), // 'touch' | 'chat_message' | 'couple_updated'
+  payload: jsonb('payload').notNull(),
+  createdAt: text('created_at').notNull(),
+}, (t) => ({
+  coupleTargetIdx: index('couple_events_target_idx').on(t.targetLogin, t.createdAt),
+  coupleIdIdx: index('couple_events_couple_idx').on(t.coupleId, t.createdAt),
+}));
+
+

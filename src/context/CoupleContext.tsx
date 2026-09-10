@@ -757,86 +757,203 @@ export const CoupleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return () => clearInterval(interval);
   }, [currentUser?.login, currentUser?.partnerLogin, handleIncomingTouch, setCurrentUserState, setAccountsDb, setPairRequests, triggerConfetti, lastHandledTouchIdsRef]);
 
-  // Realtime Server-Sent Events (SSE) listener
+  // 1. Heartbeat онлайн-статуса (раз в 25 секунд при активной вкладке)
+  useEffect(() => {
+    if (!currentUser?.login) return;
+    const cleanLogin = currentUser.login.toLowerCase().replace(/^@/, '');
+
+    const sendHeartbeat = async () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        return;
+      }
+      try {
+        const res = await apiFetch('/api/couple/heartbeat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ login: cleanLogin }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.partnerLastActiveAt) {
+            setCoupleProfile((prev) => {
+              const targetKey = currentPartnerId === 'partner1' ? 'partner2' : 'partner1';
+              if (prev[targetKey]?.lastActiveAt === data.partnerLastActiveAt) return prev;
+              return {
+                ...prev,
+                [targetKey]: {
+                  ...prev[targetKey],
+                  lastActiveAt: data.partnerLastActiveAt,
+                },
+              };
+            });
+          }
+        }
+      } catch {
+        // тихий fallback
+      }
+    };
+
+    sendHeartbeat();
+    const hbInterval = setInterval(sendHeartbeat, 25000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        sendHeartbeat();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(hbInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [currentUser?.login, currentPartnerId]);
+
+  // 2. Realtime SSE с бесшовным Smart Polling Fallback для Vercel Serverless
   useEffect(() => {
     if (!currentUser?.login) return;
     const cleanLogin = currentUser.login.toLowerCase().replace(/^@/, '');
     let eventSource: EventSource | null = null;
     let isSubscribed = true;
+    let pollInterval: NodeJS.Timeout | null = null;
+    let lastPollEventId: string | undefined = undefined;
+    let lastPollTimestamp: string = new Date(Date.now() - 45000).toISOString();
+
+    const applyEvent = (type: string, data: any) => {
+      if (!isSubscribed || !data) return;
+
+      if (type === 'touch') {
+        if (data.senderLogin !== cleanLogin && !lastHandledTouchIdsRef.current.has(data.id)) {
+          handleIncomingTouch(data);
+        }
+      } else if (type === 'chat_message' || type === 'new_message') {
+        const newMsg = data?.message || data;
+        if (newMsg && newMsg.id) {
+          setPartnerMessages((prev) => {
+            if (prev.some((m) => m.id === newMsg.id)) return prev;
+            const next = [...prev, newMsg];
+            safeSetStorage('together_partner_messages', next);
+            return next;
+          });
+          if (newMsg.senderLogin !== cleanLogin) {
+            dispatchInAppNotification({
+              title: newMsg.senderLogin === 'ai' ? 'Сова' : `@${newMsg.senderLogin}`,
+              body: newMsg.content,
+              icon: newMsg.senderLogin === 'ai' ? 'bot' : 'chat',
+            });
+            playNotificationSound();
+            setUnreadChatCount((c) => c + 1);
+          }
+        }
+      } else if (type === 'schedule_updated' || type === 'couple_updated') {
+        fetchCoupleDataRef.current?.();
+      }
+    };
+
+    // Smart Polling опрос каждые 2.5 секунды в активном окне
+    const executeSmartPoll = async () => {
+      if (!isSubscribed) return;
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        return;
+      }
+      try {
+        const queryParams = new URLSearchParams({
+          login: cleanLogin,
+          since: lastPollTimestamp,
+        });
+        if (lastPollEventId) {
+          queryParams.set('lastEventId', lastPollEventId);
+        }
+        const res = await apiFetch(`/api/couple/events-poll?${queryParams.toString()}`);
+        if (res.ok) {
+          const pollData = await res.json();
+          if (pollData.serverTime) {
+            lastPollTimestamp = pollData.serverTime;
+          }
+
+          if (Array.isArray(pollData.events) && pollData.events.length > 0) {
+            for (const ev of pollData.events) {
+              lastPollEventId = ev.id;
+              applyEvent(ev.type, ev.data);
+            }
+          }
+
+          if (pollData.partnerLastActiveAt) {
+            setCoupleProfile((prev) => {
+              const targetKey = currentPartnerId === 'partner1' ? 'partner2' : 'partner1';
+              if (prev[targetKey]?.lastActiveAt === pollData.partnerLastActiveAt) return prev;
+              return {
+                ...prev,
+                [targetKey]: {
+                  ...prev[targetKey],
+                  lastActiveAt: pollData.partnerLastActiveAt,
+                },
+              };
+            });
+          }
+        }
+      } catch {
+        // тихий fallback
+      }
+    };
+
+    const startSmartPolling = () => {
+      if (pollInterval) return;
+      executeSmartPoll();
+      pollInterval = setInterval(executeSmartPoll, 2500);
+    };
 
     try {
       eventSource = new EventSource(`/api/couple/events-stream/${cleanLogin}`);
       eventSource.addEventListener('touch', (event: MessageEvent) => {
-        if (!isSubscribed) return;
         try {
-          const data = JSON.parse(event.data);
-          if (data && data.senderLogin !== cleanLogin) {
-            handleIncomingTouch(data);
-          }
-        } catch {
-          // ignore
-        }
+          applyEvent('touch', JSON.parse(event.data));
+        } catch {}
       });
       eventSource.addEventListener('chat_message', (event: MessageEvent) => {
-        if (!isSubscribed) return;
         try {
-          const data = JSON.parse(event.data);
-          const newMsg = data?.message || data;
-          if (newMsg && newMsg.id) {
-            setPartnerMessages((prev) => {
-              if (prev.some((m) => m.id === newMsg.id)) return prev;
-              const next = [...prev, newMsg];
-              safeSetStorage('together_partner_messages', next);
-              return next;
-            });
-            if (newMsg.senderLogin !== cleanLogin) {
-              dispatchInAppNotification({
-                title: newMsg.senderLogin === 'ai' ? 'Сова' : `@${newMsg.senderLogin}`,
-                body: newMsg.content,
-                icon: newMsg.senderLogin === 'ai' ? 'bot' : 'chat',
-              });
-              playNotificationSound();
-              setUnreadChatCount((c) => c + 1);
-            }
-          }
-        } catch {
-          // ignore
-        }
+          applyEvent('chat_message', JSON.parse(event.data));
+        } catch {}
       });
       eventSource.addEventListener('new_message', (event: MessageEvent) => {
-        if (!isSubscribed) return;
         try {
-          const data = JSON.parse(event.data);
-          const newMsg = data?.message || data;
-          if (newMsg && newMsg.id) {
-            setPartnerMessages((prev) => {
-              if (prev.some((m) => m.id === newMsg.id)) return prev;
-              const next = [...prev, newMsg];
-              safeSetStorage('together_partner_messages', next);
-              return next;
-            });
-          }
-        } catch {
-          // ignore
-        }
+          applyEvent('new_message', JSON.parse(event.data));
+        } catch {}
       });
       eventSource.addEventListener('schedule_updated', () => {
-        if (!isSubscribed) return;
-        fetchCoupleDataRef.current?.();
+        applyEvent('schedule_updated', {});
       });
       eventSource.addEventListener('couple_updated', () => {
-        if (!isSubscribed) return;
-        fetchCoupleDataRef.current?.();
+        applyEvent('couple_updated', {});
       });
+      eventSource.onerror = () => {
+        // На Vercel serverless SSE закрывается платформой через 10-15 сек
+        if (eventSource) {
+          eventSource.close();
+          eventSource = null;
+        }
+        startSmartPolling();
+      };
     } catch {
-      // fallback to polling
+      startSmartPolling();
     }
+
+    startSmartPolling();
+
+    const handleTabActive = () => {
+      if (document.visibilityState === 'visible') {
+        executeSmartPoll();
+      }
+    };
+    document.addEventListener('visibilitychange', handleTabActive);
 
     return () => {
       isSubscribed = false;
       if (eventSource) eventSource.close();
+      if (pollInterval) clearInterval(pollInterval);
+      document.removeEventListener('visibilitychange', handleTabActive);
     };
-  }, [currentUser?.login, handleIncomingTouch]);
+  }, [currentUser?.login, currentPartnerId, handleIncomingTouch]);
 
   // Cloud Database Sync
   const isInitialRemoteLoadDone = useRef(false);

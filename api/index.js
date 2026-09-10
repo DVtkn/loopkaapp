@@ -37,7 +37,7 @@ __export(schema_exports, {
   userPsychProfiles: () => userPsychProfiles,
   users: () => users
 });
-import { numeric, pgTable, text, timestamp, boolean, jsonb, integer, real, unique, index, customType, foreignKey } from "drizzle-orm/pg-core";
+import { numeric, pgTable, text, timestamp, boolean, jsonb, integer, real, unique, index, customType, foreignKey, varchar } from "drizzle-orm/pg-core";
 var bytea = customType({
   dataType() {
     return "bytea";
@@ -123,26 +123,17 @@ var testAnswers = pgTable("test_answers", {
   scaleId: text("scale_id"),
   selectedValue: numeric("selected_value", { precision: 8, scale: 2 }).notNull(),
   weight: numeric("weight", { precision: 5, scale: 2 }).default("1.00").notNull(),
+  reactionTimeMs: integer("reaction_time_ms"),
+  toggleCount: integer("toggle_count").default(0).notNull(),
+  targetType: varchar("target_type", { length: 24 }).default("self").notNull(),
+  // 'self' | 'partner_observation'
+  rawPayload: jsonb("raw_payload"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 }, (t) => ({
   uniqUserQuestion: unique("uniq_user_session_question").on(t.sessionId, t.userId, t.questionId),
   sessionIdx: index("test_answers_session_idx").on(t.sessionId),
   userIdIdx: index("test_answers_user_idx").on(t.userId)
 }));
-var coupleReports = pgTable("couple_reports", {
-  id: text("id").primaryKey(),
-  sessionId: text("session_id").notNull(),
-  coupleId: text("couple_id").notNull().unique(),
-  radarTrust: numeric("radar_trust", { precision: 5, scale: 2 }).notNull(),
-  radarCloseness: numeric("radar_closeness", { precision: 5, scale: 2 }).notNull(),
-  radarCommunication: numeric("radar_communication", { precision: 5, scale: 2 }).notNull(),
-  radarIntimacy: numeric("radar_intimacy", { precision: 5, scale: 2 }).notNull(),
-  radarValues: numeric("radar_values", { precision: 5, scale: 2 }).notNull(),
-  archetypeTitle: text("archetype_title").notNull(),
-  archetypeDescription: text("archetype_description").notNull(),
-  leadSpheres: jsonb("lead_spheres").notNull(),
-  calculatedAt: timestamp("calculated_at", { withTimezone: true }).defaultNow().notNull()
-});
 var chatMessages = pgTable("chat_messages", {
   id: text("id").primaryKey(),
   coupleId: text("couple_id").notNull(),
@@ -261,13 +252,37 @@ var userPsychProfiles = pgTable("user_psych_profiles", {
   userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).primaryKey(),
   coupleId: text("couple_id").notNull(),
   sessionId: text("session_id").notNull(),
-  eSafety: numeric("e_safety", { precision: 5, scale: 2 }).notNull(),
-  aAutonomy: numeric("a_autonomy", { precision: 5, scale: 2 }).notNull(),
-  cCloseness: numeric("c_closeness", { precision: 5, scale: 2 }).notNull(),
-  rRepair: numeric("r_repair", { precision: 5, scale: 2 }).notNull(),
-  vFuture: numeric("v_future", { precision: 5, scale: 2 }).notNull(),
+  traitScores: jsonb("trait_scores"),
+  // S1..S24 normalized 0..100
+  dominantVectors: jsonb("dominant_vectors"),
+  eSafety: numeric("e_safety", { precision: 5, scale: 2 }).notNull().default("50.00"),
+  aAutonomy: numeric("a_autonomy", { precision: 5, scale: 2 }).notNull().default("50.00"),
+  cCloseness: numeric("c_closeness", { precision: 5, scale: 2 }).notNull().default("50.00"),
+  rRepair: numeric("r_repair", { precision: 5, scale: 2 }).notNull().default("50.00"),
+  vFuture: numeric("v_future", { precision: 5, scale: 2 }).notNull().default("50.00"),
+  consistencyScore: numeric("consistency_score", { precision: 5, scale: 2 }),
   rawResponses: jsonb("raw_responses"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull()
+});
+var coupleReports = pgTable("couple_reports", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id").notNull(),
+  coupleId: text("couple_id").notNull().unique(),
+  radarMetrics: jsonb("radar_metrics"),
+  // 6 integral spheres: trust, closeness, communication, values, intimacy, lifestyle
+  radarTrust: numeric("radar_trust", { precision: 5, scale: 2 }).notNull().default("50.00"),
+  radarCloseness: numeric("radar_closeness", { precision: 5, scale: 2 }).notNull().default("50.00"),
+  radarCommunication: numeric("radar_communication", { precision: 5, scale: 2 }).notNull().default("50.00"),
+  radarIntimacy: numeric("radar_intimacy", { precision: 5, scale: 2 }).notNull().default("50.00"),
+  radarValues: numeric("radar_values", { precision: 5, scale: 2 }).notNull().default("50.00"),
+  archetypeTitle: text("archetype_title").notNull(),
+  archetypeDescription: text("archetype_description").notNull(),
+  leadSpheres: jsonb("lead_spheres").notNull(),
+  synergyPoints: jsonb("synergy_points"),
+  growthZones: jsonb("growth_zones"),
+  blindSpots: jsonb("blind_spots"),
+  calculatedAt: timestamp("calculated_at", { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull()
 });
 
 // src/server/logger.ts
@@ -2920,30 +2935,32 @@ function calculateCoupleAnalysis(profile, pulseHistory, tests) {
   const testIntimacy = tests.find((t) => t.id === "TEST-S4" || t.slug === "sternberg-love-triangle");
   const p1CompletedCount = tests.filter((t) => t.partner1Done).length;
   const p2CompletedCount = tests.filter((t) => t.partner2Done).length;
+  const bothCompletedCount = tests.filter((t) => t.partner1Done && t.partner2Done).length;
   const completedTestsCount = tests.filter((t) => t.partner1Done || t.partner2Done).length;
   const totalTestsCount = tests.length || 7;
+  const isCoupleReportReady = p1CompletedCount > 0 && p2CompletedCount > 0 && bothCompletedCount > 0;
   const p1Pulses = pulseHistory.filter((p) => p.author === "partner1");
   const p2Pulses = pulseHistory.filter((p) => p.author === "partner2");
   const hasPulseData = p1Pulses.length > 0 || p2Pulses.length > 0;
   const makeDim = (key, label, test, baseDesc, completedDesc) => {
     const p1Done = !!test?.partner1Done;
     const p2Done = !!test?.partner2Done;
-    const isCompleted = p1Done || p2Done;
+    const isCompleted = p1Done && p2Done;
     if (!isCompleted) {
       return {
         key,
         label,
-        p1Score: 0,
-        p2Score: 0,
-        averageScore: 0,
+        p1Score: p1Done ? 86 : 0,
+        p2Score: p2Done ? 88 : 0,
+        averageScore: p1Done && p2Done ? 87 : 0,
         status: "growth",
-        description: baseDesc,
+        description: p1Done && !p2Done ? `\u041E\u0436\u0438\u0434\u0430\u0435\u0442 \u043F\u0440\u043E\u0445\u043E\u0436\u0434\u0435\u043D\u0438\u044F \u043E\u0442 ${p2.name || "\u043F\u0430\u0440\u0442\u043D\u0451\u0440\u0430"}` : !p1Done && p2Done ? `\u041E\u0436\u0438\u0434\u0430\u0435\u0442 \u043F\u0440\u043E\u0445\u043E\u0436\u0434\u0435\u043D\u0438\u044F \u043E\u0442 ${p1.name || "\u043F\u0430\u0440\u0442\u043D\u0451\u0440\u0430"}` : baseDesc,
         isCompleted: false
       };
     }
-    const p1Score = p1Done ? p2Done ? 88 : 86 : 0;
-    const p2Score = p2Done ? p1Done ? 90 : 88 : 0;
-    const avg = p1Done && p2Done ? Math.round((p1Score + p2Score) / 2) : p1Done ? p1Score : p2Score;
+    const p1Score = 88;
+    const p2Score = 90;
+    const avg = Math.round((p1Score + p2Score) / 2);
     return {
       key,
       label,
@@ -3027,51 +3044,58 @@ function calculateCoupleAnalysis(profile, pulseHistory, tests) {
   ];
   const completedDimensions = dimensions.filter((d) => d.isCompleted);
   const hasData = completedDimensions.length > 0;
-  if (!hasData) {
+  if (!isCoupleReportReady) {
+    const waitingForName = p1CompletedCount > p2CompletedCount ? p2.name || "\u041F\u0430\u0440\u0442\u043D\u0451\u0440 2" : p2CompletedCount > p1CompletedCount ? p1.name || "\u041F\u0430\u0440\u0442\u043D\u0451\u0440 1" : null;
+    const completedLeaderCount = Math.max(p1CompletedCount, p2CompletedCount);
+    const leaderName = p1CompletedCount >= p2CompletedCount ? p1.name : p2.name;
+    const pendingSummary = completedLeaderCount > 0 ? `${leaderName} \u0437\u0430\u0432\u0435\u0440\u0448\u0438\u043B(\u0430) ${completedLeaderCount} \u0438\u0437 ${totalTestsCount} \u043E\u043F\u0440\u043E\u0441\u043D\u0438\u043A\u043E\u0432. \u041E\u0436\u0438\u0434\u0430\u0435\u043C \u043F\u0440\u043E\u0445\u043E\u0436\u0434\u0435\u043D\u0438\u044F \u0442\u0435\u0441\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F \u043E\u0442 ${waitingForName || "\u043F\u0430\u0440\u0442\u043D\u0451\u0440\u0430"}, \u0447\u0442\u043E\u0431\u044B \u0441\u043E\u0441\u0442\u0430\u0432\u0438\u0442\u044C \u0441\u043E\u0432\u043C\u0435\u0441\u0442\u043D\u044B\u0439 \u043F\u0441\u0438\u0445\u043E\u043B\u043E\u0433\u0438\u0447\u0435\u0441\u043A\u0438\u0439 \u043F\u0430\u0441\u043F\u043E\u0440\u0442 \u0441\u043E\u044E\u0437\u0430 \u0438 \u0440\u0430\u0441\u0441\u0447\u0438\u0442\u0430\u0442\u044C \u0440\u0430\u0434\u0430\u0440 \u0441\u043E\u0432\u043C\u0435\u0441\u0442\u0438\u043C\u043E\u0441\u0442\u0438.` : `\u0412\u044B \u043F\u043E\u043A\u0430 \u043D\u0435 \u043F\u0440\u043E\u0448\u043B\u0438 \u043D\u0438 \u043E\u0434\u043D\u043E\u0433\u043E \u043F\u0441\u0438\u0445\u043E\u043B\u043E\u0433\u0438\u0447\u0435\u0441\u043A\u043E\u0433\u043E \u0442\u0435\u0441\u0442\u0430. \u041F\u0440\u043E\u0439\u0434\u0438\u0442\u0435 \u043F\u0435\u0440\u0432\u044B\u0439 \u0442\u0435\u0441\u0442 \u0432\u0434\u0432\u043E\u0451\u043C \u0438\u043B\u0438 \u043F\u043E \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u043E\u0441\u0442\u0438, \u0447\u0442\u043E\u0431\u044B \u0441\u0438\u0441\u0442\u0435\u043C\u0430 \u0441\u043C\u043E\u0433\u043B\u0430 \u0441\u043E\u0441\u0442\u0430\u0432\u0438\u0442\u044C \u0440\u0430\u0434\u0430\u0440 \u043E\u0442\u043D\u043E\u0448\u0435\u043D\u0438\u0439 \u0441\u043E\u044E\u0437\u0430 ${p1.name} \u0438 ${p2.name}.`;
     return {
-      hasData: false,
-      completedTestsCount: 0,
+      hasData: completedLeaderCount > 0,
+      isCoupleReportReady: false,
+      waitingFor: waitingForName,
+      completedTestsCount,
       totalTestsCount,
-      p1CompletedCount: 0,
-      p2CompletedCount: 0,
-      compatibilityScore: 0,
-      archetypeTitle: "\u0422\u0435\u0441\u0442\u044B \u0435\u0449\u0451 \u043D\u0435 \u043F\u0440\u043E\u0439\u0434\u0435\u043D\u044B",
-      archetypeSubtitle: "\u041F\u0440\u043E\u0439\u0434\u0438\u0442\u0435 \u043E\u043F\u0440\u043E\u0441\u043D\u0438\u043A\u0438 \u0434\u043B\u044F \u0440\u0430\u0441\u0447\u0451\u0442\u0430 \u0441\u043E\u0432\u043C\u0435\u0441\u0442\u0438\u043C\u043E\u0441\u0442\u0438",
-      summary: `\u0412\u044B \u043F\u043E\u043A\u0430 \u043D\u0435 \u043F\u0440\u043E\u0448\u043B\u0438 \u043D\u0438 \u043E\u0434\u043D\u043E\u0433\u043E \u043F\u0441\u0438\u0445\u043E\u043B\u043E\u0433\u0438\u0447\u0435\u0441\u043A\u043E\u0433\u043E \u0442\u0435\u0441\u0442\u0430. \u041F\u0440\u043E\u0439\u0434\u0438\u0442\u0435 \u043F\u0435\u0440\u0432\u044B\u0439 \u0442\u0435\u0441\u0442 \u0432\u0434\u0432\u043E\u0451\u043C \u0438\u043B\u0438 \u043F\u043E \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u043E\u0441\u0442\u0438, \u0447\u0442\u043E\u0431\u044B \u0441\u0438\u0441\u0442\u0435\u043C\u0430 \u0441\u043C\u043E\u0433\u043B\u0430 \u0440\u0430\u0441\u0441\u0447\u0438\u0442\u0430\u0442\u044C \u0440\u0430\u0434\u0430\u0440 \u043E\u0442\u043D\u043E\u0448\u0435\u043D\u0438\u0439 \u0438 \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0438\u0442\u044C \u0442\u043E\u0447\u043A\u0438 \u0441\u0438\u043D\u0435\u0440\u0433\u0438\u0438 \u0441\u043E\u044E\u0437\u0430 ${p1.name} \u0438 ${p2.name}.`,
+      p1CompletedCount,
+      p2CompletedCount,
+      bothCompletedCount,
+      compatibilityScore: null,
+      archetypeTitle: null,
+      archetypeSubtitle: null,
+      summary: pendingSummary,
       dimensions,
       strengths: [],
       growthZones: [],
       partner1Profile: {
-        attachmentType: "\u041E\u0436\u0438\u0434\u0430\u0435\u0442 \u0442\u0435\u0441\u0442\u0430 \xAB\u0421\u0442\u0438\u043B\u0438 \u043F\u0440\u0438\u0432\u044F\u0437\u0430\u043D\u043D\u043E\u0441\u0442\u0438\xBB",
-        topLoveLanguage: "\u041E\u0436\u0438\u0434\u0430\u0435\u0442 \u0442\u0435\u0441\u0442\u0430 \xAB5 \u044F\u0437\u044B\u043A\u043E\u0432 \u043B\u044E\u0431\u0432\u0438\xBB",
-        stressPattern: "\u041E\u0436\u0438\u0434\u0430\u0435\u0442 \u0442\u0435\u0441\u0442\u0430 \xAB\u041A\u043E\u043D\u0444\u043B\u0438\u043A\u0442\u044B\xBB",
-        coreNeed: "\u041E\u0436\u0438\u0434\u0430\u0435\u0442 \u043F\u0440\u043E\u0445\u043E\u0436\u0434\u0435\u043D\u0438\u044F \u0442\u0435\u0441\u0442\u043E\u0432"
+        attachmentType: p1CompletedCount > 0 ? "\u041D\u0430\u0434\u0451\u0436\u043D\u044B\u0439 \u0441 \u0446\u0435\u043D\u043D\u043E\u0441\u0442\u044C\u044E \u0430\u0432\u0442\u043E\u043D\u043E\u043C\u0438\u0438" : "\u041E\u0436\u0438\u0434\u0430\u0435\u0442 \u0442\u0435\u0441\u0442\u0430 \xAB\u0421\u0442\u0438\u043B\u0438 \u043F\u0440\u0438\u0432\u044F\u0437\u0430\u043D\u043D\u043E\u0441\u0442\u0438\xBB",
+        topLoveLanguage: p1CompletedCount > 0 ? "\u041A\u0430\u0447\u0435\u0441\u0442\u0432\u0435\u043D\u043D\u043E\u0435 \u0432\u0440\u0435\u043C\u044F" : "\u041E\u0436\u0438\u0434\u0430\u0435\u0442 \u0442\u0435\u0441\u0442\u0430 \xAB5 \u044F\u0437\u044B\u043A\u043E\u0432 \u043B\u044E\u0431\u0432\u0438\xBB",
+        stressPattern: p1CompletedCount > 0 ? "\u0420\u0430\u0446\u0438\u043E\u043D\u0430\u043B\u0438\u0437\u0430\u0446\u0438\u044F" : "\u041E\u0436\u0438\u0434\u0430\u0435\u0442 \u0442\u0435\u0441\u0442\u0430 \xAB\u041A\u043E\u043D\u0444\u043B\u0438\u043A\u0442\u044B\xBB",
+        coreNeed: p1CompletedCount > 0 ? "\u042D\u043C\u043E\u0446\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u0430\u044F \u0431\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u043E\u0441\u0442\u044C" : "\u041E\u0436\u0438\u0434\u0430\u0435\u0442 \u043F\u0440\u043E\u0445\u043E\u0436\u0434\u0435\u043D\u0438\u044F \u0442\u0435\u0441\u0442\u043E\u0432"
       },
       partner2Profile: {
-        attachmentType: "\u041E\u0436\u0438\u0434\u0430\u0435\u0442 \u0442\u0435\u0441\u0442\u0430 \xAB\u0421\u0442\u0438\u043B\u0438 \u043F\u0440\u0438\u0432\u044F\u0437\u0430\u043D\u043D\u043E\u0441\u0442\u0438\xBB",
-        topLoveLanguage: "\u041E\u0436\u0438\u0434\u0430\u0435\u0442 \u0442\u0435\u0441\u0442\u0430 \xAB5 \u044F\u0437\u044B\u043A\u043E\u0432 \u043B\u044E\u0431\u0432\u0438\xBB",
-        stressPattern: "\u041E\u0436\u0438\u0434\u0430\u0435\u0442 \u0442\u0435\u0441\u0442\u0430 \xAB\u041A\u043E\u043D\u0444\u043B\u0438\u043A\u0442\u044B\xBB",
-        coreNeed: "\u041E\u0436\u0438\u0434\u0430\u0435\u0442 \u043F\u0440\u043E\u0445\u043E\u0436\u0434\u0435\u043D\u0438\u044F \u0442\u0435\u0441\u0442\u043E\u0432"
+        attachmentType: p2CompletedCount > 0 ? "\u041D\u0430\u0434\u0451\u0436\u043D\u044B\u0439 \u0441 \u0432\u044B\u0441\u043E\u043A\u043E\u0439 \u044D\u043C\u043F\u0430\u0442\u0438\u0435\u0439" : "\u041E\u0436\u0438\u0434\u0430\u0435\u0442 \u0442\u0435\u0441\u0442\u0430 \xAB\u0421\u0442\u0438\u043B\u0438 \u043F\u0440\u0438\u0432\u044F\u0437\u0430\u043D\u043D\u043E\u0441\u0442\u0438\xBB",
+        topLoveLanguage: p2CompletedCount > 0 ? "\u0421\u043B\u043E\u0432\u0430 \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u043A\u0438" : "\u041E\u0436\u0438\u0434\u0430\u0435\u0442 \u0442\u0435\u0441\u0442\u0430 \xAB5 \u044F\u0437\u044B\u043A\u043E\u0432 \u043B\u044E\u0431\u0432\u0438\xBB",
+        stressPattern: p2CompletedCount > 0 ? "\u041F\u043E\u0442\u0440\u0435\u0431\u043D\u043E\u0441\u0442\u044C \u0432 \u0434\u0438\u0430\u043B\u043E\u0433\u0435" : "\u041E\u0436\u0438\u0434\u0430\u0435\u0442 \u0442\u0435\u0441\u0442\u0430 \xAB\u041A\u043E\u043D\u0444\u043B\u0438\u043A\u0442\u044B\xBB",
+        coreNeed: p2CompletedCount > 0 ? "\u042D\u043C\u043E\u0446\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u044B\u0439 \u043E\u0442\u043A\u043B\u0438\u043A" : "\u041E\u0436\u0438\u0434\u0430\u0435\u0442 \u043F\u0440\u043E\u0445\u043E\u0436\u0434\u0435\u043D\u0438\u044F \u0442\u0435\u0441\u0442\u043E\u0432"
       },
       weeklyActionPlan: DEFAULT_WEEKLY_PLAN
     };
   }
   const compatibilityScore = Math.round(
-    completedDimensions.reduce((acc, curr) => acc + curr.averageScore, 0) / completedDimensions.length
+    completedDimensions.reduce((acc, curr) => acc + curr.averageScore, 0) / (completedDimensions.length || 1)
   );
-  let archetypeTitle = "\xAB\u041F\u0435\u0440\u0432\u044B\u0435 \u0433\u0440\u0430\u043D\u0438 \u0441\u043E\u044E\u0437\u0430\xBB";
+  let archetypeTitle = "\xAB\u041E\u0441\u043E\u0437\u043D\u0430\u043D\u043D\u044B\u0439 \u0442\u0430\u043D\u0434\u0435\u043C & \u041A\u043E\u043D\u0441\u0442\u0440\u0443\u043A\u0442\u0438\u0432\u043D\u044B\u0439 \u0434\u0438\u0430\u043B\u043E\u0433\xBB";
   let archetypeSubtitle = "\u041D\u0430\u0447\u0430\u043B\u043E \u043F\u0441\u0438\u0445\u043E\u043B\u043E\u0433\u0438\u0447\u0435\u0441\u043A\u043E\u0439 \u043A\u0430\u043B\u0438\u0431\u0440\u043E\u0432\u043A\u0438 \u043F\u0430\u0440\u044B";
-  if (completedTestsCount >= 5) {
-    archetypeTitle = "\xAB\u0413\u0430\u0440\u043C\u043E\u043D\u0438\u0447\u043D\u044B\u0439 \u044F\u043A\u043E\u0440\u044C & \u041E\u0431\u0449\u0438\u0439 \u043F\u0430\u0440\u0443\u0441\xBB";
+  if (bothCompletedCount >= 5) {
+    archetypeTitle = "\xAB\u041D\u0430\u0434\u0451\u0436\u043D\u0430\u044F \u0433\u0430\u0432\u0430\u043D\u044C & \u041E\u0431\u0449\u0438\u0439 \u0433\u043E\u0440\u0438\u0437\u043E\u043D\u0442\xBB";
     archetypeSubtitle = "\u041F\u0441\u0438\u0445\u043E\u043B\u043E\u0433\u0438\u0447\u0435\u0441\u043A\u0438\u0439 \u0430\u0440\u0445\u0435\u0442\u0438\u043F: \u041E\u0441\u043E\u0437\u043D\u0430\u043D\u043D\u044B\u0435 \u0441\u043E\u044E\u0437\u043D\u0438\u043A\u0438 \u0441 \u0432\u044B\u0441\u043E\u043A\u0438\u043C \u044D\u043C\u043E\u0446\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u044B\u043C \u0438\u043D\u0442\u0435\u043B\u043B\u0435\u043A\u0442\u043E\u043C";
-  } else if (completedTestsCount >= 3) {
-    archetypeTitle = "\xAB\u0412\u0437\u0430\u0438\u043C\u043D\u044B\u0439 \u0440\u0435\u0437\u043E\u043D\u0430\u043D\u0441 & \u0414\u043E\u0432\u0435\u0440\u0438\u0435\xBB";
+  } else if (bothCompletedCount >= 3) {
+    archetypeTitle = "\xAB\u0413\u043B\u0443\u0431\u043E\u043A\u0438\u0439 \u043A\u043E\u043D\u0442\u0430\u043A\u0442 & \u0412\u0437\u0430\u0438\u043C\u043D\u0430\u044F \u043E\u043F\u043E\u0440\u0430\xBB";
     archetypeSubtitle = "\u041F\u0441\u0438\u0445\u043E\u043B\u043E\u0433\u0438\u0447\u0435\u0441\u043A\u0438\u0439 \u0430\u0440\u0445\u0435\u0442\u0438\u043F: \u041F\u0430\u0440\u0442\u043D\u0451\u0440\u044B \u043D\u0430 \u044D\u0442\u0430\u043F\u0435 \u0443\u0433\u043B\u0443\u0431\u043B\u0435\u043D\u0438\u044F \u044D\u043C\u043E\u0446\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u043E\u0439 \u0441\u0432\u044F\u0437\u0438";
   } else {
-    archetypeTitle = `\xAB\u0418\u0441\u0441\u043B\u0435\u0434\u043E\u0432\u0430\u043D\u0438\u0435 \u0441\u043E\u0432\u043C\u0435\u0441\u0442\u0438\u043C\u043E\u0441\u0442\u0438: ${p1.name} \u0438 ${p2.name}\xBB`;
-    archetypeSubtitle = `\u041F\u0440\u043E\u0439\u0434\u0435\u043D\u043E ${completedTestsCount} \u0438\u0437 ${totalTestsCount} \u043E\u043F\u0440\u043E\u0441\u043D\u0438\u043A\u043E\u0432`;
+    archetypeTitle = "\xAB\u041E\u0441\u043E\u0437\u043D\u0430\u043D\u043D\u044B\u0439 \u0442\u0430\u043D\u0434\u0435\u043C & \u0412\u0437\u0430\u0438\u043C\u043D\u044B\u0439 \u0434\u0438\u0430\u043B\u043E\u0433\xBB";
+    archetypeSubtitle = `\u041F\u0440\u043E\u0439\u0434\u0435\u043D\u043E ${bothCompletedCount} \u0438\u0437 ${totalTestsCount} \u0441\u043E\u0432\u043C\u0435\u0441\u0442\u043D\u044B\u0445 \u043E\u043F\u0440\u043E\u0441\u043D\u0438\u043A\u043E\u0432`;
   }
-  const summary = `${p1.name} \u0438 ${p2.name} \u0437\u0430\u0432\u0435\u0440\u0448\u0438\u043B\u0438 ${completedTestsCount} \u0438\u0437 ${totalTestsCount} \u043F\u0441\u0438\u0445\u043E\u043B\u043E\u0433\u0438\u0447\u0435\u0441\u043A\u0438\u0445 \u043E\u043F\u0440\u043E\u0441\u043D\u0438\u043A\u043E\u0432. \u0422\u0435\u043A\u0443\u0449\u0438\u0439 \u0438\u043D\u0434\u0435\u043A\u0441 \u0433\u0430\u0440\u043C\u043E\u043D\u0438\u0438 \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043D\u043D\u044B\u0445 \u0448\u043A\u0430\u043B \u0441\u043E\u0441\u0442\u0430\u0432\u043B\u044F\u0435\u0442 ${compatibilityScore}%. ${completedTestsCount < totalTestsCount ? `\u041F\u0440\u043E\u0439\u0434\u0438\u0442\u0435 \u043E\u0441\u0442\u0430\u0432\u0448\u0438\u0435\u0441\u044F ${totalTestsCount - completedTestsCount} \u043E\u043F\u0440\u043E\u0441\u043D\u0438\u043A\u0430, \u0447\u0442\u043E\u0431\u044B \u043E\u0442\u043A\u0440\u044B\u0442\u044C \u043F\u043E\u043B\u043D\u044B\u0439 \u043F\u0441\u0438\u0445\u043E\u043B\u043E\u0433\u0438\u0447\u0435\u0441\u043A\u0438\u0439 \u043F\u0430\u0441\u043F\u043E\u0440\u0442 \u043F\u0430\u0440\u044B.` : "\u0412\u0441\u0435 \u0431\u0430\u0437\u043E\u0432\u044B\u0435 \u043E\u0441\u0438 \u043E\u0442\u043D\u043E\u0448\u0435\u043D\u0438\u0439 \u043E\u0442\u043A\u0430\u043B\u0438\u0431\u0440\u043E\u0432\u0430\u043D\u044B \u0438 \u0441\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u043D\u044B."}`;
+  const summary = `${p1.name} \u0438 ${p2.name} \u0437\u0430\u0432\u0435\u0440\u0448\u0438\u043B\u0438 ${bothCompletedCount} \u0441\u043E\u0432\u043C\u0435\u0441\u0442\u043D\u044B\u0445 \u043E\u043F\u0440\u043E\u0441\u043D\u0438\u043A\u043E\u0432 \u0438\u0437 ${totalTestsCount}. \u0422\u0435\u043A\u0443\u0449\u0438\u0439 \u0438\u043D\u0434\u0435\u043A\u0441 \u0433\u0430\u0440\u043C\u043E\u043D\u0438\u0438 \u043D\u0430 \u043E\u0441\u043D\u043E\u0432\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043D\u043D\u044B\u0445 \u0448\u043A\u0430\u043B \u0441\u043E\u0441\u0442\u0430\u0432\u043B\u044F\u0435\u0442 ${compatibilityScore}%. ${bothCompletedCount < totalTestsCount ? `\u041F\u0440\u043E\u0439\u0434\u0438\u0442\u0435 \u043E\u0441\u0442\u0430\u0432\u0448\u0438\u0435\u0441\u044F ${totalTestsCount - bothCompletedCount} \u043E\u043F\u0440\u043E\u0441\u043D\u0438\u043A\u0430, \u0447\u0442\u043E\u0431\u044B \u043E\u0442\u043A\u0440\u044B\u0442\u044C \u043F\u043E\u043B\u043D\u044B\u0439 \u043F\u0441\u0438\u0445\u043E\u043B\u043E\u0433\u0438\u0447\u0435\u0441\u043A\u0438\u0439 \u043F\u0430\u0441\u043F\u043E\u0440\u0442 \u043F\u0430\u0440\u044B.` : "\u0412\u0441\u0435 \u0431\u0430\u0437\u043E\u0432\u044B\u0435 \u043E\u0441\u0438 \u043E\u0442\u043D\u043E\u0448\u0435\u043D\u0438\u0439 \u043E\u0442\u043A\u0430\u043B\u0438\u0431\u0440\u043E\u0432\u0430\u043D\u044B \u0438 \u0441\u0438\u043D\u0445\u0440\u043E\u043D\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u043D\u044B."}`;
   const strengths = [];
   if (dimAttachment.isCompleted) {
     strengths.push({
@@ -3125,10 +3149,13 @@ function calculateCoupleAnalysis(profile, pulseHistory, tests) {
   }
   return {
     hasData: true,
+    isCoupleReportReady: true,
+    waitingFor: null,
     completedTestsCount,
     totalTestsCount,
     p1CompletedCount,
     p2CompletedCount,
+    bothCompletedCount,
     compatibilityScore,
     archetypeTitle,
     archetypeSubtitle,
@@ -3557,6 +3584,78 @@ async function fetchAiInsights(coupleId) {
   const insights = await db.select().from(aiInsights).where(eq7(aiInsights.coupleId, coupleId)).orderBy(desc2(aiInsights.createdAt)).limit(10);
   return insights;
 }
+async function getUserPsychProfiles(coupleId) {
+  if (!isSqlConfigured() || !db) {
+    return [];
+  }
+  const profiles = await db.select().from(userPsychProfiles).where(eq7(userPsychProfiles.coupleId, coupleId));
+  return profiles;
+}
+async function getDetailedCoupleAnalytics(coupleId, currentUserIdOrLogin) {
+  if (!isSqlConfigured() || !db) {
+    return {
+      isCoupleReportReady: false,
+      completedTestsCount: 0,
+      totalTestsCount: 7,
+      waitingFor: null,
+      userProfile: null,
+      coupleReport: null,
+      archetype: null,
+      overallMatchPercentage: null,
+      profiles: []
+    };
+  }
+  const [couple] = await db.select().from(couples).where(eq7(couples.id, coupleId)).limit(1);
+  const profiles = await db.select().from(userPsychProfiles).where(eq7(userPsychProfiles.coupleId, coupleId));
+  const [report] = await db.select().from(coupleReports).where(eq7(coupleReports.coupleId, coupleId)).limit(1);
+  const sessions = await db.select().from(testSessions).where(eq7(testSessions.coupleId, coupleId));
+  const completedSessions = sessions.filter((s) => s.status === "completed");
+  const allUsers = await db.select().from(users);
+  let currentUser = allUsers.find((u) => u.id === currentUserIdOrLogin || u.login === currentUserIdOrLogin);
+  let partnerUser;
+  if (couple) {
+    if (currentUser?.id === couple.user1Id) {
+      partnerUser = allUsers.find((u) => u.id === couple.user2Id);
+    } else if (currentUser?.id === couple.user2Id) {
+      partnerUser = allUsers.find((u) => u.id === couple.user1Id);
+    } else {
+      currentUser = allUsers.find((u) => u.id === couple.user1Id);
+      partnerUser = allUsers.find((u) => u.id === couple.user2Id);
+    }
+  }
+  const currentUserProfile = currentUser ? profiles.find((p) => p.userId === currentUser?.id) || profiles[0] || null : profiles[0] || null;
+  const partnerProfile = partnerUser ? profiles.find((p) => p.userId === partnerUser?.id) : profiles.length >= 2 ? profiles[1] : null;
+  const partnerName = partnerUser?.name || partnerUser?.login || "\u041F\u0430\u0440\u0442\u043D\u0451\u0440";
+  const isReady = Boolean(report && profiles.length >= 2 && partnerProfile);
+  if (!isReady || !report) {
+    return {
+      isCoupleReportReady: false,
+      completedTestsCount: completedSessions.length > 0 ? completedSessions.length : profiles.length > 0 ? 1 : 0,
+      totalTestsCount: 7,
+      waitingFor: partnerProfile ? null : partnerName,
+      userProfile: currentUserProfile,
+      coupleReport: null,
+      archetype: null,
+      overallMatchPercentage: null,
+      profiles
+    };
+  }
+  const radar = report.radarMetrics || {};
+  const sphereKeys = ["trust", "closeness", "communication", "values", "intimacy", "lifestyle"];
+  const validScores = sphereKeys.map((k) => Number(radar[k] || 0)).filter((s) => s > 0);
+  const overallMatch = validScores.length ? Math.round(validScores.reduce((a, b) => a + b, 0) / validScores.length) : 85;
+  return {
+    isCoupleReportReady: true,
+    completedTestsCount: completedSessions.length || 7,
+    totalTestsCount: 7,
+    waitingFor: null,
+    userProfile: currentUserProfile,
+    coupleReport: report,
+    archetype: report.archetypeTitle,
+    overallMatchPercentage: overallMatch,
+    profiles
+  };
+}
 
 // src/server/modules/analytics/analytics.routes.ts
 var analyticsRouter = Router5();
@@ -3589,6 +3688,36 @@ analyticsRouter.post("/insights/generate", requireAuth, requirePairOwnership, as
   } catch (err) {
     logger.error("\u041E\u0448\u0438\u0431\u043A\u0430 \u0433\u0435\u043D\u0435\u0440\u0430\u0446\u0438\u0438 \u043D\u0435\u0434\u0435\u043B\u044C\u043D\u043E\u0433\u043E \u0438\u043D\u0441\u0430\u0439\u0442\u0430", err);
     return res.status(500).json({ error: "\u041E\u0448\u0438\u0431\u043A\u0430 \u0433\u0435\u043D\u0435\u0440\u0430\u0446\u0438\u0438 \u0438\u043D\u0441\u0430\u0439\u0442\u0430" });
+  }
+});
+analyticsRouter.get("/couple-report/:coupleId", requireAuth, requirePairOwnership, async (req, res, next) => {
+  try {
+    const { coupleId } = req.params;
+    const result = await getDetailedCoupleAnalytics(coupleId, req.user?.login);
+    return res.json(result);
+  } catch (err) {
+    logger.error("\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u044F couple-report", err);
+    return res.status(500).json({ error: "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u043E\u043B\u0443\u0447\u0438\u0442\u044C \u043E\u0442\u0447\u0435\u0442 \u043F\u0430\u0440\u044B" });
+  }
+});
+analyticsRouter.get("/detailed/:coupleId", requireAuth, requirePairOwnership, async (req, res, next) => {
+  try {
+    const { coupleId } = req.params;
+    const result = await getDetailedCoupleAnalytics(coupleId, req.user?.login);
+    return res.json(result);
+  } catch (err) {
+    logger.error("\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u044F detailed analytics", err);
+    return res.status(500).json({ error: "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u043E\u043B\u0443\u0447\u0438\u0442\u044C \u0434\u0435\u0442\u0430\u043B\u044C\u043D\u0443\u044E \u0430\u043D\u0430\u043B\u0438\u0442\u0438\u043A\u0443" });
+  }
+});
+analyticsRouter.get("/psych-profiles/:coupleId", requireAuth, requirePairOwnership, async (req, res, next) => {
+  try {
+    const { coupleId } = req.params;
+    const profiles = await getUserPsychProfiles(coupleId);
+    return res.json({ profiles });
+  } catch (err) {
+    logger.error("\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u044F psych-profiles", err);
+    return res.status(500).json({ error: "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u043E\u043B\u0443\u0447\u0438\u0442\u044C \u043F\u0440\u043E\u0444\u0438\u043B\u0438" });
   }
 });
 
@@ -4327,54 +4456,539 @@ import { z as z6 } from "zod";
 
 // src/server/modules/tests/tests.service.ts
 import crypto8 from "crypto";
-import { eq as eq8, sql as sql3 } from "drizzle-orm";
+import { eq as eq8, sql as sql3, and as and5, or as or5, inArray } from "drizzle-orm";
 
 // src/server/modules/tests/psychometrics.calc.ts
 function calculateIndividualVector(userAnswers) {
-  let eSafety = 50, aAutonomy = 50, cCloseness = 50, rRepair = 50, vFuture = 50;
+  const scales = {
+    s1: 50,
+    s2: 50,
+    s3: 50,
+    s4: 50,
+    s5: 50,
+    s6: 50,
+    s7: 50,
+    s8: 50,
+    s9: 50,
+    s10: 50,
+    s11: 50,
+    s12: 50,
+    s13: 50,
+    s14: 50,
+    s15: 50,
+    s16: 50,
+    s17: 50,
+    s18: 50,
+    s19: 50,
+    s20: 50,
+    s21: 50,
+    s22: 50,
+    s23: 50,
+    s24: 50
+  };
+  let totalToggles = 0;
+  let rapidClicks = 0;
+  let totalValidAnswers = 0;
   for (const ans of userAnswers) {
+    if (!ans) continue;
+    totalValidAnswers++;
     const val = Number(ans.selectedValue) || 0;
-    const w = Number(ans.weight) || 1;
-    if (ans.questionId.startsWith("q-s1")) eSafety += val * w * 2;
-    else if (ans.questionId.startsWith("q-s2")) cCloseness += val * w * 2;
-    else if (ans.questionId.startsWith("q-s3")) rRepair += val * w * 2;
-    else if (ans.questionId.startsWith("q-c1")) vFuture += val * w * 2;
-    else if (ans.questionId.startsWith("q-s4")) aAutonomy += val * w * 2;
+    let baseWeight = Number(ans.weight) || 1;
+    const reactionMs = ans.reactionTimeMs != null ? Number(ans.reactionTimeMs) : null;
+    const toggles = ans.toggleCount != null ? Number(ans.toggleCount) : 0;
+    totalToggles += toggles;
+    if (reactionMs !== null && reactionMs < 800) {
+      rapidClicks++;
+      baseWeight *= 0.85;
+    }
+    if (toggles >= 3) {
+      baseWeight *= 0.9;
+    }
+    if (ans.rawPayload && typeof ans.rawPayload === "object") {
+      const p = ans.rawPayload;
+      if (p.s1 != null) scales.s1 += (Number(p.s1) - 2.5) * 6 * baseWeight;
+      if (p.s2 != null) scales.s2 += (Number(p.s2) - 2.5) * 6 * baseWeight;
+      if (p.s3 != null) scales.s3 += (Number(p.s3) - 2.5) * 6 * baseWeight;
+      if (p.s4 != null) scales.s4 += (Number(p.s4) - 2.5) * 6 * baseWeight;
+      if (p.s5 != null) scales.s5 += (Number(p.s5) - 2.5) * 6 * baseWeight;
+      if (p.s6 != null) scales.s6 += (Number(p.s6) - 2.5) * 6 * baseWeight;
+      if (p.s7 != null) scales.s7 += (Number(p.s7) - 2.5) * 6 * baseWeight;
+      if (p.s8 != null) scales.s8 += (Number(p.s8) - 2.5) * 6 * baseWeight;
+      if (p.words != null) scales.s5 += (Number(p.words) - 2.5) * 5 * baseWeight;
+      if (p.time != null) scales.s6 += (Number(p.time) - 2.5) * 5 * baseWeight;
+      if (p.acts != null) scales.s7 += (Number(p.acts) - 2.5) * 5 * baseWeight;
+      if (p.touch != null) scales.s8 += (Number(p.touch) - 2.5) * 5 * baseWeight;
+      if (p.intimacy != null) scales.s17 += (Number(p.intimacy) - 3.3) * 5 * baseWeight;
+      if (p.passion != null) scales.s18 += (Number(p.passion) - 3.3) * 5 * baseWeight;
+      if (p.commitment != null) scales.s15 += (Number(p.commitment) - 3.3) * 5 * baseWeight;
+    }
+    const qId = ans.questionId || "";
+    const valStr = String(ans.selectedValue);
+    if (qId.startsWith("q-s1") || qId.startsWith("sit-1")) {
+      if (valStr.includes("anxiety") || valStr.includes("pursuit") || valStr.includes("urgent")) {
+        scales.s1 += 12 * baseWeight;
+        scales.s9 += 10 * baseWeight;
+      } else if (valStr.includes("avoid") || valStr.includes("solitary") || valStr.includes("silence")) {
+        scales.s2 += 12 * baseWeight;
+        scales.s10 += 10 * baseWeight;
+      } else if (valStr.includes("secure") || valStr.includes("team") || valStr.includes("calm")) {
+        scales.s4 += 12 * baseWeight;
+        scales.s12 += 10 * baseWeight;
+        scales.s1 -= 6 * baseWeight;
+        scales.s2 -= 6 * baseWeight;
+      } else if (valStr.includes("care") || valStr.includes("tea")) {
+        scales.s7 += 10 * baseWeight;
+        scales.s4 += 6 * baseWeight;
+      }
+    } else if (qId.startsWith("q-s2") || qId.startsWith("sit-2")) {
+      if (valStr.includes("words")) scales.s5 += 14 * baseWeight;
+      else if (valStr.includes("time")) scales.s6 += 14 * baseWeight;
+      else if (valStr.includes("acts")) scales.s7 += 14 * baseWeight;
+      else if (valStr.includes("touch")) scales.s8 += 14 * baseWeight;
+      else if (valStr.includes("gifts")) {
+        scales.s7 += 8 * baseWeight;
+        scales.s5 += 6 * baseWeight;
+      }
+    } else if (qId.startsWith("q-s3") || qId.startsWith("sit-3")) {
+      if (valStr.includes("soft_startup") || valStr.includes("empathy") || valStr.includes("gottman")) {
+        scales.s12 += 14 * baseWeight;
+        scales.s4 += 8 * baseWeight;
+        scales.s11 -= 8 * baseWeight;
+      } else if (valStr.includes("bottle") || valStr.includes("snark") || valStr.includes("criticism")) {
+        scales.s11 += 14 * baseWeight;
+        scales.s9 += 8 * baseWeight;
+      } else if (valStr.includes("stonewall") || valStr.includes("shut_down")) {
+        scales.s10 += 14 * baseWeight;
+        scales.s2 += 8 * baseWeight;
+      } else if (valStr.includes("autonomy") || valStr.includes("solitude")) {
+        scales.s13 += 14 * baseWeight;
+        scales.s23 -= 8 * baseWeight;
+      } else if (valStr.includes("together") || valStr.includes("fusion")) {
+        scales.s13 -= 10 * baseWeight;
+        scales.s6 += 8 * baseWeight;
+      }
+    } else if (qId.startsWith("q-c1") || qId.startsWith("sit-4")) {
+      if (valStr.includes("order") || valStr.includes("active") || valStr.includes("clean")) {
+        scales.s21 += 12 * baseWeight;
+      } else if (valStr.includes("cozy") || valStr.includes("relax") || valStr.includes("flexible")) {
+        scales.s21 -= 8 * baseWeight;
+      }
+      if (valStr.includes("common") || valStr.includes("shared_budget")) {
+        scales.s22 += 14 * baseWeight;
+      } else if (valStr.includes("split") || valStr.includes("separate")) {
+        scales.s22 -= 10 * baseWeight;
+        scales.s13 += 8 * baseWeight;
+      }
+      if (valStr.includes("ambition") || valStr.includes("invest")) {
+        scales.s14 += 12 * baseWeight;
+      } else if (valStr.includes("comfort") || valStr.includes("present")) {
+        scales.s14 -= 8 * baseWeight;
+      }
+    } else if (qId.startsWith("q-s4") || qId.startsWith("sit-5")) {
+      if (valStr.includes("passion") || valStr.includes("spark") || valStr.includes("spontaneous")) {
+        scales.s18 += 14 * baseWeight;
+        scales.s19 += 10 * baseWeight;
+      } else if (valStr.includes("gentle") || valStr.includes("safety_first")) {
+        scales.s17 += 14 * baseWeight;
+      }
+      if (valStr.includes("open_fantasies") || valStr.includes("taboo_low")) {
+        scales.s20 += 14 * baseWeight;
+      } else if (valStr.includes("deep_dialogue")) {
+        scales.s4 += 10 * baseWeight;
+        scales.s17 += 8 * baseWeight;
+      }
+    } else if (qId.startsWith("q-d1") || qId.startsWith("q-d2") || qId.startsWith("sit-6")) {
+      if (valStr.includes("traditions") || valStr.includes("family")) scales.s16 += 14 * baseWeight;
+      if (valStr.includes("children") || valStr.includes("solid_commitment")) scales.s15 += 14 * baseWeight;
+      if (valStr.includes("crisis_hardy") || valStr.includes("team_bond") || valStr.includes("collaborating")) {
+        scales.s24 += 14 * baseWeight;
+        scales.s12 += 10 * baseWeight;
+      }
+    }
   }
+  const clamp = (v) => Math.round(Math.min(100, Math.max(10, v)) * 10) / 10;
+  for (const k of Object.keys(scales)) {
+    scales[k] = clamp(scales[k]);
+  }
+  const dominantVectors = {
+    trustSafety: clamp((scales.s4 + (100 - scales.s1) + (100 - scales.s2) + (100 - scales.s3)) / 4),
+    emotionalCloseness: clamp((scales.s5 + scales.s6 + scales.s7 + scales.s8) / 4),
+    conflictDynamics: clamp((scales.s12 + (100 - scales.s9) + (100 - scales.s10) + (100 - scales.s11)) / 4),
+    valuesHorizon: clamp((scales.s13 + scales.s14 + scales.s15 + scales.s16) / 4),
+    intimacyPassion: clamp((scales.s17 + scales.s18 + scales.s19 + scales.s20) / 4),
+    lifestyleResilience: clamp((scales.s21 + scales.s22 + scales.s23 + scales.s24) / 4)
+  };
+  let consistency = 95;
+  if (totalValidAnswers > 0) {
+    const rapidRate = rapidClicks / totalValidAnswers;
+    const toggleRate = totalToggles / totalValidAnswers;
+    consistency -= rapidRate * 30;
+    consistency -= Math.min(25, toggleRate * 10);
+  }
+  consistency = Math.max(40, Math.min(100, Math.round(consistency)));
   return {
-    eSafety: Math.min(100, Math.max(0, eSafety)),
-    aAutonomy: Math.min(100, Math.max(0, aAutonomy)),
-    cCloseness: Math.min(100, Math.max(0, cCloseness)),
-    rRepair: Math.min(100, Math.max(0, rRepair)),
-    vFuture: Math.min(100, Math.max(0, vFuture))
+    traitScores: scales,
+    dominantVectors,
+    eSafety: dominantVectors.trustSafety,
+    aAutonomy: scales.s13,
+    cCloseness: dominantVectors.emotionalCloseness,
+    rRepair: dominantVectors.conflictDynamics,
+    vFuture: dominantVectors.valuesHorizon,
+    consistencyScore: consistency
   };
 }
 
-// src/server/modules/tests/report.matrix.ts
-function calculateCoupleRadarMatrix(individualVector, partnerVector) {
-  const trust = 50 + (individualVector.eSafety + partnerVector.eSafety) / 4;
-  const closeness = 50 + (individualVector.cCloseness + partnerVector.cCloseness) / 4;
-  const communication = 50 + (individualVector.rRepair + partnerVector.rRepair) / 4;
-  const intimacy = 50 + (individualVector.aAutonomy + partnerVector.aAutonomy) / 4;
-  const deltaValues = Math.abs(individualVector.vFuture - partnerVector.vFuture);
-  const values = 100 - (deltaValues * 0.6 + Math.pow(deltaValues, 2) * 0.4 / 100);
-  return {
-    radar: {
-      trust: Math.min(100, Math.max(0, trust)),
-      closeness: Math.min(100, Math.max(0, closeness)),
-      communication: Math.min(100, Math.max(0, communication)),
-      intimacy: Math.min(100, Math.max(0, intimacy)),
-      values: Math.min(100, Math.max(0, values))
+// src/server/modules/tests/couple-matrix.calc.ts
+function calculateCoupleMatrix(p1Scales, p2Scales) {
+  const clamp = (v) => Math.round(Math.min(100, Math.max(10, v)) * 10) / 10;
+  const avgS4 = (p1Scales.s4 + p2Scales.s4) / 2;
+  const avgSuspicionSafety = (200 - p1Scales.s3 - p2Scales.s3) / 2;
+  const deltaAttachment = (Math.abs(p1Scales.s1 - p2Scales.s1) + Math.abs(p1Scales.s2 - p2Scales.s2)) / 2;
+  const trustScore = clamp(avgS4 * 0.45 + avgSuspicionSafety * 0.35 + (100 - deltaAttachment) * 0.2);
+  const avgChannels = (p1Scales.s5 + p2Scales.s5 + p1Scales.s6 + p2Scales.s6 + p1Scales.s7 + p2Scales.s7 + p1Scales.s8 + p2Scales.s8) / 8;
+  const touchMatch = 100 - Math.abs(p1Scales.s8 - p2Scales.s8);
+  const timeMatch = 100 - Math.abs(p1Scales.s6 - p2Scales.s6);
+  const closenessScore = clamp(avgChannels * 0.6 + touchMatch * 0.2 + timeMatch * 0.2);
+  const avgSoothing = (p1Scales.s12 + p2Scales.s12) / 2;
+  const avgLowCriticism = (200 - p1Scales.s11 - p2Scales.s11) / 2;
+  let conflictBase = avgSoothing * 0.55 + avgLowCriticism * 0.45;
+  const destructivePatterns = [];
+  const isP1PursuitP2Withdraw = p1Scales.s9 >= 65 && p2Scales.s10 >= 65;
+  const isP2PursuitP1Withdraw = p2Scales.s9 >= 65 && p1Scales.s10 >= 65;
+  if (isP1PursuitP2Withdraw || isP2PursuitP1Withdraw) {
+    conflictBase -= 20;
+    destructivePatterns.push("\u041F\u0430\u0442\u0442\u0435\u0440\u043D \xAB\u041F\u0440\u0435\u0441\u043B\u0435\u0434\u043E\u0432\u0430\u0442\u0435\u043B\u044C \u2014 \u0414\u0438\u0441\u0442\u0430\u043D\u0446\u0438\u0440\u0443\u044E\u0449\u0438\u0439\u0441\u044F\xBB (Pursuit-Withdrawal loop)");
+  }
+  const communicationScore = clamp(conflictBase);
+  const deltaAutonomy = Math.abs(p1Scales.s13 - p2Scales.s13);
+  const deltaAmbitions = Math.abs(p1Scales.s14 - p2Scales.s14);
+  const deltaKids = Math.abs(p1Scales.s15 - p2Scales.s15);
+  const deltaTraditions = Math.abs(p1Scales.s16 - p2Scales.s16);
+  const avgFutureCommitment = (p1Scales.s15 + p2Scales.s15) / 2;
+  const valuesPenalty = deltaKids * 0.35 + deltaAmbitions * 0.25 + deltaAutonomy * 0.25 + deltaTraditions * 0.15;
+  const valuesScore = clamp(avgFutureCommitment * 0.4 + (100 - valuesPenalty) * 0.6);
+  const avgDesireTrigger = (p1Scales.s17 + p2Scales.s17) / 2;
+  const avgInitiative = (p1Scales.s19 + p2Scales.s19) / 2;
+  const avgOpenness = (p1Scales.s20 + p2Scales.s20) / 2;
+  const deltaSpontaneity = Math.abs(p1Scales.s18 - p2Scales.s18);
+  const intimacyScore = clamp(avgDesireTrigger * 0.35 + avgInitiative * 0.25 + avgOpenness * 0.2 + (100 - deltaSpontaneity) * 0.2);
+  const deltaOrder = Math.abs(p1Scales.s21 - p2Scales.s21);
+  const deltaBudget = Math.abs(p1Scales.s22 - p2Scales.s22);
+  const avgCrisisHardiness = (p1Scales.s24 + p2Scales.s24) / 2;
+  const lifestyleScore = clamp(avgCrisisHardiness * 0.4 + (100 - deltaOrder * 0.4 - deltaBudget * 0.4) * 0.6);
+  const radar = {
+    trust: trustScore,
+    closeness: closenessScore,
+    communication: communicationScore,
+    values: valuesScore,
+    intimacy: intimacyScore,
+    lifestyle: lifestyleScore
+  };
+  const overallScore = Math.round(
+    (trustScore + closenessScore + communicationScore + valuesScore + intimacyScore + lifestyleScore) / 6
+  );
+  const spheresList = [
+    { key: "trust", score: trustScore, nameRu: "\u0414\u043E\u0432\u0435\u0440\u0438\u0435" },
+    { key: "closeness", score: closenessScore, nameRu: "\u0411\u043B\u0438\u0437\u043E\u0441\u0442\u044C" },
+    { key: "communication", score: communicationScore, nameRu: "\u041E\u0431\u0449\u0435\u043D\u0438\u0435" },
+    { key: "values", score: valuesScore, nameRu: "\u0426\u0435\u043D\u043D\u043E\u0441\u0442\u0438" },
+    { key: "intimacy", score: intimacyScore, nameRu: "\u0418\u043D\u0442\u0438\u043C\u043D\u043E\u0441\u0442\u044C" },
+    { key: "lifestyle", score: lifestyleScore, nameRu: "\u0411\u044B\u0442" }
+  ].sort((a, b) => b.score - a.score);
+  const leadKeys = [spheresList[0].key, spheresList[1].key];
+  const leadPair = `${leadKeys[0]}_${leadKeys[1]}`;
+  const reverseLeadPair = `${leadKeys[1]}_${leadKeys[0]}`;
+  const ARCHETYPE_MAP = {
+    "trust_values": {
+      title: "\xAB\u041D\u0430\u0434\u0451\u0436\u043D\u0430\u044F \u0433\u0430\u0432\u0430\u043D\u044C & \u041E\u0431\u0449\u0438\u0439 \u0433\u043E\u0440\u0438\u0437\u043E\u043D\u0442\xBB",
+      desc: "\u0412\u0430\u0448 \u0441\u043E\u044E\u0437 \u0431\u0430\u0437\u0438\u0440\u0443\u0435\u0442\u0441\u044F \u043D\u0430 \u0433\u043B\u0443\u0431\u043E\u043A\u043E\u043C \u0432\u0437\u0430\u0438\u043C\u043D\u043E\u043C \u0434\u043E\u0432\u0435\u0440\u0438\u0438, \u044D\u043C\u043E\u0446\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u043E\u0439 \u0437\u0430\u0449\u0438\u0449\u0451\u043D\u043D\u043E\u0441\u0442\u0438 \u0438 \u0441\u043E\u0437\u0432\u0443\u0447\u0438\u0438 \u0433\u043B\u0430\u0432\u043D\u044B\u0445 \u0436\u0438\u0437\u043D\u0435\u043D\u043D\u044B\u0445 \u0446\u0435\u043B\u0435\u0439."
     },
-    archetype: {
-      title: "\xAB\u041D\u0430\u0434\u0451\u0436\u043D\u0430\u044F \u0433\u0430\u0432\u0430\u043D\u044C & \u0412\u0434\u043E\u0445\u043D\u043E\u0432\u043B\u044F\u044E\u0449\u0438\u0439 \u0432\u0435\u0442\u0435\u0440\xBB",
-      description: "\u0412\u0430\u0448 \u0441\u043E\u044E\u0437 \u0441\u0431\u0430\u043B\u0430\u043D\u0441\u0438\u0440\u043E\u0432\u0430\u043D, \u0432\u044B \u0434\u043E\u043F\u043E\u043B\u043D\u044F\u0435\u0442\u0435 \u0434\u0440\u0443\u0433 \u0434\u0440\u0443\u0433\u0430.",
-      leadSpheres: ["trust", "values"]
+    "closeness_communication": {
+      title: "\xAB\u0413\u043B\u0443\u0431\u043E\u043A\u0438\u0439 \u043A\u043E\u043D\u0442\u0430\u043A\u0442 & \u0411\u0435\u0440\u0435\u0436\u043D\u044B\u0439 \u0442\u044B\u043B\xBB",
+      desc: "\u0412\u044B\u0441\u043E\u043A\u0430\u044F \u044D\u043C\u043E\u0446\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u0430\u044F \u0447\u0443\u0442\u043A\u043E\u0441\u0442\u044C, \u0443\u043C\u0435\u043D\u0438\u0435 \u0432\u043E\u0432\u0440\u0435\u043C\u044F \u0441\u043B\u044B\u0448\u0430\u0442\u044C \u0434\u0440\u0443\u0433 \u0434\u0440\u0443\u0433\u0430 \u0438 \u0440\u0435\u0448\u0430\u0442\u044C \u043B\u044E\u0431\u044B\u0435 \u0440\u0430\u0437\u043D\u043E\u0433\u043B\u0430\u0441\u0438\u044F \u0447\u0435\u0440\u0435\u0437 \u0438\u0441\u043A\u0440\u0435\u043D\u043D\u0438\u0439 \u0434\u0438\u0430\u043B\u043E\u0433."
+    },
+    "intimacy_closeness": {
+      title: "\xAB\u0416\u0438\u0432\u043E\u0435 \u043F\u043B\u0430\u043C\u044F & \u042D\u043C\u043E\u0446\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u044B\u0439 \u0440\u0435\u0437\u043E\u043D\u0430\u043D\u0441\xBB",
+      desc: "\u0413\u0430\u0440\u043C\u043E\u043D\u0438\u0447\u043D\u043E\u0435 \u0441\u043E\u0447\u0435\u0442\u0430\u043D\u0438\u0435 \u0440\u043E\u043C\u0430\u043D\u0442\u0438\u0447\u0435\u0441\u043A\u043E\u0433\u043E \u0432\u043B\u0435\u0447\u0435\u043D\u0438\u044F, \u043D\u0435\u0436\u043D\u043E\u0441\u0442\u0438 \u0438 \u0441\u043F\u043E\u0441\u043E\u0431\u043D\u043E\u0441\u0442\u0438 \u043E\u0442\u043A\u0440\u044B\u0442\u043E \u0434\u0435\u043B\u0438\u0442\u044C\u0441\u044F \u0441\u043E\u043A\u0440\u043E\u0432\u0435\u043D\u043D\u044B\u043C\u0438 \u0436\u0435\u043B\u0430\u043D\u0438\u044F\u043C\u0438."
+    },
+    "values_lifestyle": {
+      title: "\xAB\u0422\u0430\u043D\u0434\u0435\u043C \u0430\u0440\u0445\u0438\u0442\u0435\u043A\u0442\u043E\u0440\u043E\u0432 & \u041F\u0440\u043E\u0447\u043D\u044B\u0439 \u0444\u0443\u043D\u0434\u0430\u043C\u0435\u043D\u0442\xBB",
+      desc: "\u0421\u043B\u0430\u0436\u0435\u043D\u043D\u0430\u044F \u043A\u043E\u043C\u0430\u043D\u0434\u0430 \u0435\u0434\u0438\u043D\u043E\u043C\u044B\u0448\u043B\u0435\u043D\u043D\u0438\u043A\u043E\u0432: \u0435\u0434\u0438\u043D\u044B\u0435 \u0444\u0438\u043D\u0430\u043D\u0441\u043E\u0432\u044B\u0435 \u043E\u0440\u0438\u0435\u043D\u0442\u0438\u0440\u044B, \u0441\u043E\u0433\u043B\u0430\u0441\u043E\u0432\u0430\u043D\u043D\u044B\u0439 \u0431\u044B\u0442\u043E\u0432\u043E\u0439 \u0443\u043A\u043B\u0430\u0434 \u0438 \u0443\u0432\u0435\u0440\u0435\u043D\u043D\u043E\u0441\u0442\u044C \u0432 \u0431\u0443\u0434\u0443\u0449\u0435\u043C."
+    },
+    "trust_communication": {
+      title: "\xAB\u041E\u0442\u043A\u0440\u044B\u0442\u0430\u044F \u0433\u0430\u0432\u0430\u043D\u044C & \u041E\u0441\u043E\u0437\u043D\u0430\u043D\u043D\u044B\u0439 \u0434\u0438\u0430\u043B\u043E\u0433\xBB",
+      desc: "\u0421\u043F\u043E\u043A\u043E\u0439\u043D\u0430\u044F \u043F\u0441\u0438\u0445\u043E\u043B\u043E\u0433\u0438\u0447\u0435\u0441\u043A\u0430\u044F \u0431\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u043E\u0441\u0442\u044C \u0438 \u043C\u0430\u0441\u0442\u0435\u0440\u0441\u0442\u0432\u043E \u044D\u043A\u043E\u043B\u043E\u0433\u0438\u0447\u043D\u043E\u0439 \u043A\u043E\u043C\u043C\u0443\u043D\u0438\u043A\u0430\u0446\u0438\u0438 \u0434\u0430\u0436\u0435 \u0432 \u0441\u0442\u0440\u0435\u0441\u0441\u043E\u0432\u044B\u0445 \u0441\u0438\u0442\u0443\u0430\u0446\u0438\u044F\u0445."
+    },
+    "lifestyle_trust": {
+      title: "\xAB\u0423\u0432\u0435\u0440\u0435\u043D\u043D\u044B\u0439 \u0442\u044B\u043B & \u0412\u0437\u0430\u0438\u043C\u043D\u0430\u044F \u043E\u043F\u043E\u0440\u0430\xBB",
+      desc: "\u0412\u044B\u0441\u043E\u043A\u0430\u044F \u0436\u0438\u0437\u043D\u0435\u0441\u0442\u043E\u0439\u043A\u043E\u0441\u0442\u044C, \u043F\u0440\u0435\u0434\u0441\u043A\u0430\u0437\u0443\u0435\u043C\u043E\u0441\u0442\u044C \u0434\u043E\u0433\u043E\u0432\u043E\u0440\u0451\u043D\u043D\u043E\u0441\u0442\u0435\u0439 \u0438 \u0432\u0437\u0430\u0438\u043C\u043D\u0430\u044F \u0437\u0430\u0431\u043E\u0442\u0430 \u0432 \u043F\u043E\u0432\u0441\u0435\u0434\u043D\u0435\u0432\u043D\u044B\u0445 \u0434\u0435\u043B\u0430\u0445."
+    },
+    "trust_closeness": {
+      title: "\xAB\u0422\u0451\u043F\u043B\u0430\u044F \u0433\u0430\u0432\u0430\u043D\u044C & \u0411\u0435\u0437\u0443\u0441\u043B\u043E\u0432\u043D\u043E\u0435 \u043F\u0440\u0438\u043D\u044F\u0442\u0438\u0435\xBB",
+      desc: "\u041F\u0440\u043E\u0441\u0442\u0440\u0430\u043D\u0441\u0442\u0432\u043E \u043D\u0435\u0436\u043D\u043E\u0441\u0442\u0438, \u0433\u0434\u0435 \u043A\u0430\u0436\u0434\u044B\u0439 \u043C\u043E\u0436\u0435\u0442 \u0431\u044B\u0442\u044C \u0443\u044F\u0437\u0432\u0438\u043C\u044B\u043C \u0438 \u0447\u0443\u0432\u0441\u0442\u0432\u043E\u0432\u0430\u0442\u044C \u0441\u0435\u0431\u044F \u043F\u043E-\u043D\u0430\u0441\u0442\u043E\u044F\u0449\u0435\u043C\u0443 \u043D\u0443\u0436\u043D\u044B\u043C \u0438 \u043B\u044E\u0431\u0438\u043C\u044B\u043C."
+    },
+    "communication_values": {
+      title: "\xAB\u0421\u0442\u0440\u0430\u0442\u0435\u0433\u0438\u0447\u0435\u0441\u043A\u0438\u0439 \u0441\u043E\u044E\u0437 & \u041E\u0441\u043E\u0437\u043D\u0430\u043D\u043D\u044B\u0439 \u0433\u043E\u0440\u0438\u0437\u043E\u043D\u0442\xBB",
+      desc: "\u042F\u0441\u043D\u043E\u0435 \u043F\u043E\u043D\u0438\u043C\u0430\u043D\u0438\u0435 \u0441\u043E\u0432\u043C\u0435\u0441\u0442\u043D\u043E\u0433\u043E \u0431\u0443\u0434\u0443\u0449\u0435\u0433\u043E, \u0443\u043C\u0435\u043D\u0438\u0435 \u0434\u043E\u0433\u043E\u0432\u0430\u0440\u0438\u0432\u0430\u0442\u044C\u0441\u044F \u043F\u043E \u043A\u043B\u044E\u0447\u0435\u0432\u044B\u043C \u0440\u0430\u0437\u0432\u0438\u043B\u043A\u0430\u043C \u0431\u0435\u0437 \u0441\u043A\u0440\u044B\u0442\u043E\u0433\u043E \u043D\u0430\u043F\u0440\u044F\u0436\u0435\u043D\u0438\u044F."
+    },
+    "intimacy_trust": {
+      title: "\xAB\u0418\u0441\u043A\u0440\u044F\u0449\u0430\u044F\u0441\u044F \u0433\u043B\u0443\u0431\u0438\u043D\u0430 & \u0414\u043E\u0432\u0435\u0440\u0438\u0442\u0435\u043B\u044C\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0430\u043A\u0442\xBB",
+      desc: "\u0413\u043B\u0443\u0431\u043E\u043A\u043E\u0435 \u0434\u043E\u0432\u0435\u0440\u0438\u0435 \u043A \u0442\u0435\u043B\u0443 \u0438 \u0447\u0443\u0432\u0441\u0442\u0432\u0430\u043C \u043F\u0430\u0440\u0442\u043D\u0451\u0440\u0430, \u0434\u0435\u043B\u0430\u044E\u0449\u0435\u0435 \u0438\u043D\u0442\u0438\u043C\u043D\u0443\u044E \u0431\u043B\u0438\u0437\u043E\u0441\u0442\u044C \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u043E\u043C \u0432\u0437\u0430\u0438\u043C\u043D\u043E\u0433\u043E \u0440\u0435\u0441\u0443\u0440\u0441\u0430."
+    },
+    "lifestyle_closeness": {
+      title: "\xAB\u0423\u044E\u0442\u043D\u044B\u0439 \u043E\u0447\u0430\u0433 & \u0422\u0451\u043F\u043B\u043E\u0435 \u0441\u043E\u0437\u0432\u0443\u0447\u0438\u0435\xBB",
+      desc: "\u0420\u0430\u0434\u043E\u0441\u0442\u044C \u0441\u043E\u0432\u043C\u0435\u0441\u0442\u043D\u043E\u0433\u043E \u0431\u044B\u0442\u0430, \u0431\u0435\u0440\u0435\u0436\u043D\u044B\u0435 \u0440\u0438\u0442\u0443\u0430\u043B\u044B \u0437\u0430\u0431\u043E\u0442\u044B \u0438 \u043A\u043E\u043C\u0444\u043E\u0440\u0442\u043D\u043E\u0435 \u0440\u0430\u0441\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u0438\u0435 \u0434\u043E\u043C\u0430\u0448\u043D\u0435\u0433\u043E \u0432\u0440\u0435\u043C\u0435\u043D\u0438."
     }
+  };
+  const matchedArchetype = ARCHETYPE_MAP[leadPair] || ARCHETYPE_MAP[reverseLeadPair] || {
+    title: "\xAB\u0413\u0430\u0440\u043C\u043E\u043D\u0438\u0447\u043D\u044B\u0439 \u0442\u0430\u043D\u0434\u0435\u043C & \u0421\u043E\u0432\u043C\u0435\u0441\u0442\u043D\u044B\u0439 \u0440\u043E\u0441\u0442\xBB",
+    desc: "\u041E\u0442\u043D\u043E\u0448\u0435\u043D\u0438\u044F \u0440\u0430\u0437\u0432\u0438\u0432\u0430\u044E\u0442\u0441\u044F \u043D\u0430 \u0441\u0431\u0430\u043B\u0430\u043D\u0441\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u043E\u0439 \u043E\u0441\u043D\u043E\u0432\u0435 \u044D\u043C\u043E\u0446\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u043E\u0433\u043E \u0442\u0435\u043F\u043B\u0430, \u0443\u0432\u0430\u0436\u0435\u043D\u0438\u044F \u043A \u0433\u0440\u0430\u043D\u0438\u0446\u0430\u043C \u0438 \u043E\u0431\u0449\u0438\u0445 \u0446\u0435\u043B\u0435\u0439."
+  };
+  const synergyPoints = [];
+  if (trustScore >= 75) {
+    synergyPoints.push({
+      sphere: "trust",
+      title: "\u0412\u044B\u0441\u043E\u043A\u0430\u044F \u044D\u043C\u043E\u0446\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u0430\u044F \u0431\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u043E\u0441\u0442\u044C",
+      description: "\u0423\u0432\u0435\u0440\u0435\u043D\u043D\u043E\u0441\u0442\u044C \u0432 \u043D\u0430\u0434\u0451\u0436\u043D\u043E\u0441\u0442\u0438 \u043F\u0430\u0440\u0442\u043D\u0451\u0440\u0430 \u0438 \u0433\u043E\u0442\u043E\u0432\u043D\u043E\u0441\u0442\u044C \u0431\u044B\u0442\u044C \u043E\u0442\u043A\u0440\u044B\u0442\u044B\u043C\u0438 \u0431\u0435\u0437 \u0441\u0442\u0440\u0430\u0445\u0430 \u043E\u0441\u0443\u0436\u0434\u0435\u043D\u0438\u044F.",
+      score: trustScore,
+      statusLabel: "\u0421\u0438\u043D\u0445\u0440\u043E\u043D\u043D\u044B\u0439 \u0440\u0435\u0437\u043E\u043D\u0430\u043D\u0441"
+    });
+  } else if (trustScore >= 50) {
+    synergyPoints.push({
+      sphere: "trust",
+      title: "\u0411\u0430\u0437\u043E\u0432\u043E\u0435 \u0434\u043E\u0432\u0435\u0440\u0438\u0435 \u0438 \u043E\u043F\u043E\u0440\u0430",
+      description: "\u0425\u043E\u0440\u043E\u0448\u0438\u0439 \u0444\u0443\u043D\u0434\u0430\u043C\u0435\u043D\u0442 \u0431\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u043E\u0441\u0442\u0438 \u0441 \u043F\u043E\u0442\u0435\u043D\u0446\u0438\u0430\u043B\u043E\u043C \u0434\u043B\u044F \u0435\u0449\u0451 \u0431\u043E\u043B\u044C\u0448\u0435\u0439 \u0433\u043B\u0443\u0431\u0438\u043D\u044B \u043A\u043E\u043D\u0442\u0430\u043A\u0442\u0430.",
+      score: trustScore,
+      statusLabel: "\u0417\u043E\u043D\u0430 \u0441\u0438\u043D\u0435\u0440\u0433\u0438\u0438"
+    });
+  }
+  if (closenessScore >= 75) {
+    synergyPoints.push({
+      sphere: "closeness",
+      title: "\u042D\u043C\u043E\u0446\u0438\u043E\u043D\u0430\u043B\u044C\u043D\u044B\u0439 \u0440\u0435\u0437\u043E\u043D\u0430\u043D\u0441 \u0438 \u0442\u0435\u043F\u043B\u043E",
+      description: "\u0421\u043E\u0432\u043F\u0430\u0434\u0435\u043D\u0438\u0435 \u0433\u043B\u0430\u0432\u043D\u044B\u0445 \u043A\u0430\u043D\u0430\u043B\u043E\u0432 \u0437\u0430\u0431\u043E\u0442\u044B \u0438 \u0432\u0437\u0430\u0438\u043C\u043D\u0430\u044F \u0447\u0443\u0442\u043A\u043E\u0441\u0442\u044C \u043A \u043D\u0430\u0441\u0442\u0440\u043E\u0435\u043D\u0438\u044E \u0434\u0440\u0443\u0433 \u0434\u0440\u0443\u0433\u0430.",
+      score: closenessScore,
+      statusLabel: "\u0421\u0438\u043D\u0445\u0440\u043E\u043D\u043D\u044B\u0439 \u0440\u0435\u0437\u043E\u043D\u0430\u043D\u0441"
+    });
+  }
+  if (valuesScore >= 75) {
+    synergyPoints.push({
+      sphere: "values",
+      title: "\u0415\u0434\u0438\u043D\u0441\u0442\u0432\u043E \u0436\u0438\u0437\u043D\u0435\u043D\u043D\u044B\u0445 \u043F\u0440\u0438\u043E\u0440\u0438\u0442\u0435\u0442\u043E\u0432",
+      description: "\u0421\u043E\u0433\u043B\u0430\u0441\u043E\u0432\u0430\u043D\u043D\u044B\u0439 \u0432\u0437\u0433\u043B\u044F\u0434 \u043D\u0430 \u0440\u0430\u0437\u0432\u0438\u0442\u0438\u0435 \u0441\u043E\u044E\u0437\u0430, \u0441\u0435\u043C\u0435\u0439\u043D\u044B\u0435 \u0446\u0435\u043D\u043D\u043E\u0441\u0442\u0438 \u0438 \u0434\u043E\u043B\u0433\u043E\u0441\u0440\u043E\u0447\u043D\u044B\u0435 \u0446\u0435\u043B\u0438.",
+      score: valuesScore,
+      statusLabel: "\u0421\u0438\u043D\u0445\u0440\u043E\u043D\u043D\u044B\u0439 \u0440\u0435\u0437\u043E\u043D\u0430\u043D\u0441"
+    });
+  }
+  if (lifestyleScore >= 70) {
+    synergyPoints.push({
+      sphere: "lifestyle",
+      title: "\u0421\u043B\u0430\u0436\u0435\u043D\u043D\u043E\u0441\u0442\u044C \u0432 \u0431\u044B\u0442\u0443 \u0438 \u043A\u0440\u0438\u0437\u0438\u0441\u0430\u0445",
+      description: "\u0423\u043C\u0435\u043D\u0438\u0435 \u0431\u044B\u0441\u0442\u0440\u043E \u043D\u0430\u0445\u043E\u0434\u0438\u0442\u044C \u043A\u043E\u043D\u0441\u0435\u043D\u0441\u0443\u0441 \u0432 \u043F\u0440\u0430\u043A\u0442\u0438\u0447\u0435\u0441\u043A\u0438\u0445 \u0432\u043E\u043F\u0440\u043E\u0441\u0430\u0445 \u0438 \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0442\u044C \u043F\u043E\u0440\u044F\u0434\u043E\u043A.",
+      score: lifestyleScore,
+      statusLabel: "\u0421\u0438\u043D\u0445\u0440\u043E\u043D\u043D\u044B\u0439 \u0440\u0435\u0437\u043E\u043D\u0430\u043D\u0441"
+    });
+  }
+  const growthZones = [];
+  if (deltaAutonomy >= 25) {
+    growthZones.push({
+      sphere: "values",
+      title: "\u0420\u0430\u0437\u043D\u044B\u0439 \u0442\u0435\u043C\u043F \u0430\u0432\u0442\u043E\u043D\u043E\u043C\u0438\u0438 \u0438 \u0441\u043E\u0432\u043C\u0435\u0441\u0442\u043D\u043E\u0441\u0442\u0438",
+      description: "\u041E\u0434\u0438\u043D \u0438\u0437 \u0432\u0430\u0441 \u043D\u0443\u0436\u0434\u0430\u0435\u0442\u0441\u044F \u0432 \u0447\u0443\u0442\u044C \u0431\u043E\u043B\u044C\u0448\u0435\u043C \u043B\u0438\u0447\u043D\u043E\u043C \u043F\u0440\u043E\u0441\u0442\u0440\u0430\u043D\u0441\u0442\u0432\u0435 \u0434\u043B\u044F \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F, \u0442\u043E\u0433\u0434\u0430 \u043A\u0430\u043A \u0432\u0442\u043E\u0440\u043E\u0439 \u0446\u0435\u043D\u0438\u0442 \u0431\u043E\u043B\u0435\u0435 \u043F\u043B\u043E\u0442\u043D\u044B\u0439 \u043A\u043E\u043D\u0442\u0430\u043A\u0442.",
+      gap: Math.round(deltaAutonomy),
+      statusLabel: deltaAutonomy >= 40 ? "\u0422\u043E\u0447\u043A\u0430 \u0440\u0430\u0441\u0441\u0438\u043D\u0445\u0440\u043E\u043D\u0430" : "\u0417\u043E\u043D\u0430 \u0441\u0438\u043D\u0435\u0440\u0433\u0438\u0438 \u0438 \u0440\u043E\u0441\u0442\u0430",
+      recommendation: "\u0417\u0430\u0440\u0430\u043D\u0435\u0435 \u043F\u043B\u0430\u043D\u0438\u0440\u0443\u0439\u0442\u0435 \xAB\u0447\u0430\u0441\u044B \u0430\u0432\u0442\u043E\u043D\u043E\u043C\u0438\u0438\xBB \u0431\u0435\u0437 \u0447\u0443\u0432\u0441\u0442\u0432\u0430 \u0432\u0438\u043D\u044B \u0438 \u043E\u0431\u0438\u0434."
+    });
+  }
+  if (destructivePatterns.length > 0) {
+    growthZones.push({
+      sphere: "communication",
+      title: "\u042D\u0441\u043A\u0430\u043B\u0430\u0446\u0438\u044F: \u0434\u0430\u0432\u043B\u0435\u043D\u0438\u0435 \u043F\u0440\u043E\u0442\u0438\u0432 \u0443\u0445\u043E\u0434\u0430 \u0432 \u043F\u0430\u0443\u0437\u0443",
+      description: "\u041F\u0440\u0438 \u0441\u0442\u0440\u0435\u0441\u0441\u0435 \u043E\u0434\u0438\u043D \u043F\u0430\u0440\u0442\u043D\u0451\u0440 \u0441\u0442\u0440\u0435\u043C\u0438\u0442\u0441\u044F \u043D\u0435\u043C\u0435\u0434\u043B\u0435\u043D\u043D\u043E \u0432\u0441\u0451 \u0432\u044B\u044F\u0441\u043D\u0438\u0442\u044C, \u0430 \u0432\u0442\u043E\u0440\u043E\u0439 \u0443\u0445\u043E\u0434\u0438\u0442 \u0432 \u0433\u043B\u0443\u0445\u0443\u044E \u043F\u0430\u0443\u0437\u0443, \u0443\u0441\u0438\u043B\u0438\u0432\u0430\u044F \u0442\u0440\u0435\u0432\u043E\u0433\u0443 \u043F\u0435\u0440\u0432\u043E\u0433\u043E.",
+      gap: Math.round(Math.abs(p1Scales.s9 - p2Scales.s10)),
+      statusLabel: "\u0422\u043E\u0447\u043A\u0430 \u0440\u0430\u0441\u0441\u0438\u043D\u0445\u0440\u043E\u043D\u0430",
+      recommendation: "\u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 \u043F\u0440\u0430\u0432\u0438\u043B\u043E \u0413\u043E\u0442\u0442\u043C\u0430\u043D\u0430: \u0447\u0451\u0442\u043A\u0430\u044F \u0434\u043E\u0433\u043E\u0432\u043E\u0440\u0451\u043D\u043D\u043E\u0441\u0442\u044C \u043E 20-\u043C\u0438\u043D\u0443\u0442\u043D\u043E\u043C \u0442\u0430\u0439\u043C-\u0430\u0443\u0442\u0435 \u0441 \u0442\u043E\u0447\u043D\u044B\u043C \u043E\u0431\u0435\u0449\u0430\u043D\u0438\u0435\u043C \u0432\u0435\u0440\u043D\u0443\u0442\u044C\u0441\u044F \u043A \u0434\u0438\u0430\u043B\u043E\u0433\u0443."
+    });
+  }
+  if (deltaBudget >= 25) {
+    growthZones.push({
+      sphere: "lifestyle",
+      title: "\u0420\u0430\u0437\u043D\u0438\u0446\u0430 \u0432 \u0444\u0438\u043D\u0430\u043D\u0441\u043E\u0432\u043E\u043C \u043F\u043B\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u0438",
+      description: "\u041D\u0435\u0431\u043E\u043B\u044C\u0448\u0438\u0435 \u0440\u0430\u0437\u043B\u0438\u0447\u0438\u044F \u0432 \u0431\u0430\u043B\u0430\u043D\u0441\u0435 \u043C\u0435\u0436\u0434\u0443 \u0441\u0438\u044E\u043C\u0438\u043D\u0443\u0442\u043D\u044B\u043C\u0438 \u0440\u0430\u0434\u043E\u0441\u0442\u044F\u043C\u0438 \u0438 \u0434\u043E\u043B\u0433\u043E\u0441\u0440\u043E\u0447\u043D\u043E\u0439 \u043F\u043E\u0434\u0443\u0448\u043A\u043E\u0439 \u0431\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u043E\u0441\u0442\u0438.",
+      gap: Math.round(deltaBudget),
+      statusLabel: deltaBudget >= 40 ? "\u0422\u043E\u0447\u043A\u0430 \u0440\u0430\u0441\u0441\u0438\u043D\u0445\u0440\u043E\u043D\u0430" : "\u0417\u043E\u043D\u0430 \u0441\u0438\u043D\u0435\u0440\u0433\u0438\u0438 \u0438 \u0440\u043E\u0441\u0442\u0430",
+      recommendation: "\u0412\u044B\u0434\u0435\u043B\u0438\u0442\u0435 \u043D\u0435\u043F\u0440\u0438\u043A\u043E\u0441\u043D\u043E\u0432\u0435\u043D\u043D\u044B\u0439 \u043B\u0438\u0447\u043D\u044B\u0439 \u0431\u044E\u0434\u0436\u0435\u0442 \u0434\u043B\u044F \u043A\u0430\u0436\u0434\u043E\u0433\u043E \u043F\u0430\u0440\u0442\u043D\u0451\u0440\u0430 \u0431\u0435\u0437 \u043E\u0442\u0447\u0451\u0442\u0430 \u043F\u043E \u0442\u0440\u0430\u0442\u0430\u043C."
+    });
+  }
+  if (growthZones.length === 0) {
+    growthZones.push({
+      sphere: "communication",
+      title: "\u0421\u043F\u043E\u043D\u0442\u0430\u043D\u043D\u044B\u0435 \u0440\u0438\u0442\u0443\u0430\u043B\u044B \u043E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F",
+      description: "\u0414\u043B\u044F \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u0430\u043D\u0438\u044F \u044F\u0440\u043A\u043E\u0441\u0442\u0438 \u0447\u0443\u0432\u0441\u0442\u0432 \u043F\u043E\u043B\u0435\u0437\u043D\u043E \u0440\u0435\u0433\u0443\u043B\u044F\u0440\u043D\u043E \u0432\u0432\u043E\u0434\u0438\u0442\u044C \u043D\u043E\u0432\u044B\u0435 \u0441\u043E\u0432\u043C\u0435\u0441\u0442\u043D\u044B\u0435 \u0430\u043A\u0442\u0438\u0432\u043D\u043E\u0441\u0442\u0438 \u0438 \u0432\u043F\u0435\u0447\u0430\u0442\u043B\u0435\u043D\u0438\u044F.",
+      gap: 15,
+      statusLabel: "\u0417\u043E\u043D\u0430 \u0441\u0438\u043D\u0435\u0440\u0433\u0438\u0438",
+      recommendation: "\u041F\u043E\u043F\u0440\u043E\u0431\u0443\u0439\u0442\u0435 \u0440\u0435\u0433\u0443\u043B\u044F\u0440\u043D\u0443\u044E \u043F\u0440\u0430\u043A\u0442\u0438\u043A\u0443 \xAB\u0421\u0432\u0438\u0434\u0430\u043D\u0438\u0435-\u0441\u044E\u0440\u043F\u0440\u0438\u0437\xBB \u0440\u0430\u0437 \u0432 \u0434\u0432\u0435 \u043D\u0435\u0434\u0435\u043B\u0438."
+    });
+  }
+  return {
+    radar,
+    overallScore,
+    archetype: {
+      title: matchedArchetype.title,
+      description: matchedArchetype.desc,
+      leadSpheres: leadKeys
+    },
+    synergyPoints,
+    growthZones,
+    destructivePatternsDetected: destructivePatterns
   };
 }
 
 // src/server/modules/tests/tests.service.ts
+var CATALOG_TEST_IDS = [
+  "TEST-S1",
+  "TEST-S2",
+  "TEST-S3",
+  "TEST-C1",
+  "TEST-S4",
+  "TEST-D1",
+  "TEST-D2"
+];
+var EXPECTED_QUESTIONS = {
+  "TEST-S1": 6,
+  "TEST-S2": 6,
+  "TEST-S3": 5,
+  "TEST-C1": 4,
+  "TEST-S4": 5,
+  "TEST-D1": 5,
+  "TEST-D2": 5
+};
+async function getTestsStatusForUser(userLogin, authUserId) {
+  const isProd8 = process.env.NODE_ENV === "production";
+  if (isProd8 && (!isSqlConfigured() || !db)) {
+    throw new DatabaseUnavailableError();
+  }
+  const cleanLogin = userLogin.toLowerCase().trim().replace(/^@/, "");
+  if (isSqlConfigured() && db) {
+    let currentDbUser = null;
+    if (authUserId) {
+      const [u] = await db.select().from(users).where(eq8(users.id, authUserId));
+      currentDbUser = u;
+    }
+    if (!currentDbUser && cleanLogin) {
+      const [u] = await db.select().from(users).where(eq8(users.login, cleanLogin));
+      currentDbUser = u;
+    }
+    if (!currentDbUser) {
+      return CATALOG_TEST_IDS.map((testId) => ({
+        testId,
+        isCompletedByMe: false,
+        isCompletedByPartner: false,
+        myAnswersCount: 0,
+        partnerAnswersCount: 0,
+        expectedQuestionsCount: EXPECTED_QUESTIONS[testId] || 5,
+        status: "not_started"
+      }));
+    }
+    const currentUserId = currentDbUser.id;
+    let partnerDbUser = null;
+    if (currentDbUser.partnerLogin) {
+      const cleanPartner = currentDbUser.partnerLogin.toLowerCase().trim().replace(/^@/, "");
+      const [pu] = await db.select().from(users).where(eq8(users.login, cleanPartner));
+      partnerDbUser = pu;
+    }
+    const partnerUserId = partnerDbUser ? partnerDbUser.id : null;
+    const cleanPartnerLogin = partnerDbUser ? partnerDbUser.login.toLowerCase().trim().replace(/^@/, "") : null;
+    const possibleCoupleIds = [cleanLogin];
+    if (cleanPartnerLogin) {
+      possibleCoupleIds.push(cleanPartnerLogin);
+      possibleCoupleIds.push([cleanLogin, cleanPartnerLogin].sort().join("_"));
+    }
+    const [coupleRecord] = await db.select().from(couples).where(
+      or5(
+        eq8(couples.user1Id, currentUserId),
+        eq8(couples.user2Id, currentUserId)
+      )
+    );
+    if (coupleRecord && coupleRecord.id) {
+      possibleCoupleIds.push(coupleRecord.id);
+    }
+    const sessions = await db.select().from(testSessions).where(inArray(testSessions.coupleId, possibleCoupleIds));
+    const result = [];
+    for (const testId of CATALOG_TEST_IDS) {
+      const expectedCount = EXPECTED_QUESTIONS[testId] || 5;
+      const testSessionList = sessions.filter((s) => s.testId === testId);
+      const testSessionIds = testSessionList.map((s) => s.id);
+      let myAnswersCount = 0;
+      let partnerAnswersCount = 0;
+      if (testSessionIds.length > 0) {
+        const myAnswers = await db.select({ questionId: testAnswers.questionId }).from(testAnswers).where(
+          and5(
+            eq8(testAnswers.userId, currentUserId),
+            inArray(testAnswers.sessionId, testSessionIds)
+          )
+        );
+        const uniqueMyQuestions = new Set(myAnswers.map((a) => a.questionId));
+        myAnswersCount = uniqueMyQuestions.size;
+        if (partnerUserId) {
+          const partnerAnswers = await db.select({ questionId: testAnswers.questionId }).from(testAnswers).where(
+            and5(
+              eq8(testAnswers.userId, partnerUserId),
+              inArray(testAnswers.sessionId, testSessionIds)
+            )
+          );
+          const uniquePartnerQuestions = new Set(partnerAnswers.map((a) => a.questionId));
+          partnerAnswersCount = uniquePartnerQuestions.size;
+        }
+      }
+      const isCompletedByMe = myAnswersCount >= expectedCount;
+      const isCompletedByPartner = partnerUserId ? partnerAnswersCount >= expectedCount : false;
+      let status = "not_started";
+      if (isCompletedByMe && isCompletedByPartner) {
+        status = "both_done";
+      } else if (isCompletedByMe && !isCompletedByPartner) {
+        status = "waiting_partner";
+      } else if (!isCompletedByMe && isCompletedByPartner) {
+        status = "partner_ready";
+      }
+      console.log(
+        `[TEST STATUS CHECK] Req User: ${currentDbUser.login} (${currentUserId}) -> testId: ${testId}, count: ${myAnswersCount}/${expectedCount}, Completed: ${isCompletedByMe}`
+      );
+      logger.info(
+        `[TEST STATUS CHECK] Req User: ${currentDbUser.login} (${currentUserId}) -> testId: ${testId}, count: ${myAnswersCount}/${expectedCount}, Completed: ${isCompletedByMe}`
+      );
+      result.push({
+        testId,
+        isCompletedByMe,
+        isCompletedByPartner,
+        myAnswersCount,
+        partnerAnswersCount,
+        expectedQuestionsCount: expectedCount,
+        status
+      });
+    }
+    return result;
+  }
+  const coupleKey = cleanLogin;
+  const cData = await getCoupleData(coupleKey);
+  const testsList = Array.isArray(cData?.tests) ? cData.tests : [];
+  return CATALOG_TEST_IDS.map((testId) => {
+    const expectedCount = EXPECTED_QUESTIONS[testId] || 5;
+    const t = testsList.find((x) => x.id === testId);
+    const myAnswers = t?.userAnswers?.[cleanLogin] || t?.userAnswers?.[authUserId || ""] || {};
+    const myCount = Object.keys(myAnswers).length;
+    const isCompletedByMe = myCount >= expectedCount;
+    return {
+      testId,
+      isCompletedByMe,
+      isCompletedByPartner: false,
+      myAnswersCount: myCount,
+      partnerAnswersCount: 0,
+      expectedQuestionsCount: expectedCount,
+      status: isCompletedByMe ? "waiting_partner" : "not_started"
+    };
+  });
+}
 async function processTestCompletion(tx, sessionId, userId, coupleId) {
   const rawUserAnswers = await tx.select().from(testAnswers).where(eq8(testAnswers.sessionId, sessionId));
   const userAnswers = rawUserAnswers.filter((a) => a.userId === userId);
@@ -4383,45 +4997,74 @@ async function processTestCompletion(tx, sessionId, userId, coupleId) {
     userId,
     coupleId,
     sessionId,
+    traitScores: individualVector.traitScores,
+    dominantVectors: individualVector.dominantVectors,
     eSafety: individualVector.eSafety.toFixed(2),
     aAutonomy: individualVector.aAutonomy.toFixed(2),
     cCloseness: individualVector.cCloseness.toFixed(2),
     rRepair: individualVector.rRepair.toFixed(2),
     vFuture: individualVector.vFuture.toFixed(2),
+    consistencyScore: individualVector.consistencyScore.toFixed(2),
     updatedAt: /* @__PURE__ */ new Date()
   }).onConflictDoUpdate({
     target: userPsychProfiles.userId,
     set: {
+      traitScores: individualVector.traitScores,
+      dominantVectors: individualVector.dominantVectors,
       eSafety: individualVector.eSafety.toFixed(2),
       aAutonomy: individualVector.aAutonomy.toFixed(2),
       cCloseness: individualVector.cCloseness.toFixed(2),
       rRepair: individualVector.rRepair.toFixed(2),
       vFuture: individualVector.vFuture.toFixed(2),
+      consistencyScore: individualVector.consistencyScore.toFixed(2),
       updatedAt: /* @__PURE__ */ new Date()
     }
   });
   const [couple] = await tx.select().from(couples).where(eq8(couples.id, coupleId));
-  if (!couple) return { state: "WAITING_FOR_PARTNER" };
+  if (!couple) return { state: "PARTNER_PENDING", personalVector: individualVector };
   const partnerId = couple.user1Id === userId ? couple.user2Id : couple.user1Id;
+  if (!partnerId) {
+    return { state: "PARTNER_PENDING", personalVector: individualVector };
+  }
   const [partnerProfile] = await tx.select().from(userPsychProfiles).where(eq8(userPsychProfiles.userId, partnerId));
   if (!partnerProfile) {
     return {
-      state: "WAITING_FOR_PARTNER",
+      state: "PARTNER_PENDING",
       personalVector: individualVector
     };
   }
-  const partnerVector = {
-    eSafety: Number(partnerProfile.eSafety),
-    aAutonomy: Number(partnerProfile.aAutonomy),
-    cCloseness: Number(partnerProfile.cCloseness),
-    rRepair: Number(partnerProfile.rRepair),
-    vFuture: Number(partnerProfile.vFuture)
+  const partnerScales = partnerProfile.traitScores || {
+    s1: 50,
+    s2: 50,
+    s3: 50,
+    s4: 50,
+    s5: 50,
+    s6: 50,
+    s7: 50,
+    s8: 50,
+    s9: 50,
+    s10: 50,
+    s11: 50,
+    s12: 50,
+    s13: 50,
+    s14: 50,
+    s15: 50,
+    s16: 50,
+    s17: 50,
+    s18: 50,
+    s19: 50,
+    s20: 50,
+    s21: 50,
+    s22: 50,
+    s23: 50,
+    s24: 50
   };
-  const radarReport = calculateCoupleRadarMatrix(individualVector, partnerVector);
+  const radarReport = calculateCoupleMatrix(individualVector.traitScores, partnerScales);
   await tx.insert(coupleReports).values({
     id: crypto8.randomUUID(),
     sessionId,
     coupleId,
+    radarMetrics: radarReport.radar,
     radarTrust: radarReport.radar.trust.toFixed(2),
     radarCloseness: radarReport.radar.closeness.toFixed(2),
     radarCommunication: radarReport.radar.communication.toFixed(2),
@@ -4430,10 +5073,18 @@ async function processTestCompletion(tx, sessionId, userId, coupleId) {
     archetypeTitle: radarReport.archetype.title,
     archetypeDescription: radarReport.archetype.description,
     leadSpheres: radarReport.archetype.leadSpheres,
-    calculatedAt: /* @__PURE__ */ new Date()
+    synergyPoints: radarReport.synergyPoints,
+    growthZones: radarReport.growthZones,
+    blindSpots: {
+      destructivePatterns: radarReport.destructivePatternsDetected,
+      growthZones: radarReport.growthZones
+    },
+    calculatedAt: /* @__PURE__ */ new Date(),
+    createdAt: /* @__PURE__ */ new Date()
   }).onConflictDoUpdate({
     target: coupleReports.coupleId,
     set: {
+      radarMetrics: radarReport.radar,
       radarTrust: radarReport.radar.trust.toFixed(2),
       radarCloseness: radarReport.radar.closeness.toFixed(2),
       radarCommunication: radarReport.radar.communication.toFixed(2),
@@ -4442,11 +5093,17 @@ async function processTestCompletion(tx, sessionId, userId, coupleId) {
       archetypeTitle: radarReport.archetype.title,
       archetypeDescription: radarReport.archetype.description,
       leadSpheres: radarReport.archetype.leadSpheres,
+      synergyPoints: radarReport.synergyPoints,
+      growthZones: radarReport.growthZones,
+      blindSpots: {
+        destructivePatterns: radarReport.destructivePatternsDetected,
+        growthZones: radarReport.growthZones
+      },
       calculatedAt: /* @__PURE__ */ new Date()
     }
   });
   return {
-    state: "COUPLE_HARMONY_READY",
+    state: "HARMONY_READY",
     personalVector: individualVector,
     coupleReport: radarReport
   };
@@ -4457,8 +5114,12 @@ async function submitTestAnswer(params) {
     coupleId,
     userLogin,
     questionId,
-    selectedValue,
-    expectedQuestionsCount = 15
+    selectedValue = 0,
+    expectedQuestionsCount = 15,
+    reactionTimeMs,
+    toggleCount,
+    targetType,
+    rawPayload
   } = params;
   const isProd8 = process.env.NODE_ENV === "production";
   if (isProd8 && (!isSqlConfigured() || !db)) {
@@ -4500,10 +5161,20 @@ async function submitTestAnswer(params) {
           userId,
           questionId,
           selectedValue: selectedValue.toString(),
-          weight: "1.00"
+          weight: "1.00",
+          reactionTimeMs: reactionTimeMs ?? null,
+          toggleCount: toggleCount ?? 0,
+          targetType: targetType ?? "self",
+          rawPayload: rawPayload ?? null
         }).onConflictDoUpdate({
           target: [testAnswers.sessionId, testAnswers.userId, testAnswers.questionId],
-          set: { selectedValue: selectedValue.toString() }
+          set: {
+            selectedValue: selectedValue.toString(),
+            reactionTimeMs: reactionTimeMs ?? null,
+            toggleCount: toggleCount ?? 0,
+            targetType: targetType ?? "self",
+            rawPayload: rawPayload ?? null
+          }
         });
         const participantsProgress = await tx.select({
           userId: testAnswers.userId,
@@ -4560,13 +5231,40 @@ async function submitTestAnswer(params) {
 
 // src/server/modules/tests/tests.routes.ts
 var testsRouter = Router8();
+testsRouter.get("/status", requireAuth, async (req, res, next) => {
+  try {
+    const userLogin = req.user?.login;
+    if (!userLogin) {
+      return res.status(401).json({ error: "\u041D\u0435\u043E\u0431\u0445\u043E\u0434\u0438\u043C\u0430 \u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446\u0438\u044F" });
+    }
+    const statuses = await getTestsStatusForUser(userLogin);
+    return res.status(200).json({
+      success: true,
+      statuses
+    });
+  } catch (err) {
+    logger.error("\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u044F \u0441\u0442\u0430\u0442\u0443\u0441\u043E\u0432 \u0442\u0435\u0441\u0442\u043E\u0432", err);
+    next(err);
+  }
+});
+testsRouter.get("/catalog", requireAuth, async (_req, res) => {
+  return res.status(200).json({
+    success: true,
+    testIds: CATALOG_TEST_IDS,
+    expectedQuestions: EXPECTED_QUESTIONS
+  });
+});
 var submitAnswerSchema = z6.object({
   sessionId: z6.string().optional(),
   testId: z6.string().min(1),
   coupleId: z6.string().min(1),
   questionId: z6.string().min(1),
-  selectedValue: z6.number(),
-  expectedQuestionsCount: z6.number().optional()
+  selectedValue: z6.union([z6.number(), z6.string()]).optional().default(0),
+  expectedQuestionsCount: z6.number().optional(),
+  reactionTimeMs: z6.number().nullable().optional(),
+  toggleCount: z6.number().optional(),
+  targetType: z6.string().optional(),
+  rawPayload: z6.any().optional()
 });
 testsRouter.post(
   "/submit-answer",
@@ -4586,7 +5284,11 @@ testsRouter.post(
         userLogin,
         questionId: req.body.questionId,
         selectedValue: req.body.selectedValue,
-        expectedQuestionsCount: req.body.expectedQuestionsCount
+        expectedQuestionsCount: req.body.expectedQuestionsCount,
+        reactionTimeMs: req.body.reactionTimeMs,
+        toggleCount: req.body.toggleCount,
+        targetType: req.body.targetType,
+        rawPayload: req.body.rawPayload
       });
       return res.status(200).json({
         success: true,
@@ -4657,7 +5359,87 @@ async function initDatabase() {
         text text NOT NULL,
         created_at text NOT NULL
       )`,
-      `CREATE INDEX IF NOT EXISTS chat_messages_sender_recipient_idx ON chat_messages(sender_login, recipient_login)`
+      `CREATE INDEX IF NOT EXISTS chat_messages_sender_recipient_idx ON chat_messages(sender_login, recipient_login)`,
+      `CREATE TABLE IF NOT EXISTS test_sessions (
+        id text PRIMARY KEY,
+        test_id text NOT NULL,
+        couple_id text NOT NULL,
+        test_class text NOT NULL DEFAULT 'couple',
+        status text NOT NULL DEFAULT 'in_progress',
+        completed_at timestamp with time zone,
+        created_at timestamp with time zone NOT NULL DEFAULT now()
+      )`,
+      `CREATE INDEX IF NOT EXISTS test_sessions_couple_id_idx ON test_sessions(couple_id)`,
+      `CREATE TABLE IF NOT EXISTS test_answers (
+        id text PRIMARY KEY,
+        session_id text NOT NULL,
+        user_id text NOT NULL,
+        question_id text NOT NULL,
+        scale_id text,
+        selected_value numeric(8, 2) NOT NULL,
+        weight numeric(5, 2) NOT NULL DEFAULT 1.00,
+        reaction_time_ms integer,
+        toggle_count integer NOT NULL DEFAULT 0,
+        target_type varchar(24) NOT NULL DEFAULT 'self',
+        raw_payload jsonb,
+        created_at timestamp with time zone NOT NULL DEFAULT now(),
+        CONSTRAINT uniq_user_session_question UNIQUE (session_id, user_id, question_id)
+      )`,
+      `CREATE INDEX IF NOT EXISTS test_answers_session_idx ON test_answers(session_id)`,
+      `CREATE INDEX IF NOT EXISTS test_answers_user_idx ON test_answers(user_id)`,
+      `ALTER TABLE test_answers ADD COLUMN IF NOT EXISTS reaction_time_ms integer`,
+      `ALTER TABLE test_answers ADD COLUMN IF NOT EXISTS toggle_count integer NOT NULL DEFAULT 0`,
+      `ALTER TABLE test_answers ADD COLUMN IF NOT EXISTS target_type varchar(24) NOT NULL DEFAULT 'self'`,
+      `ALTER TABLE test_answers ADD COLUMN IF NOT EXISTS raw_payload jsonb`,
+      `CREATE TABLE IF NOT EXISTS user_psych_profiles (
+        user_id text PRIMARY KEY,
+        couple_id text NOT NULL,
+        session_id text NOT NULL,
+        e_safety numeric(5, 2) NOT NULL,
+        a_autonomy numeric(5, 2) NOT NULL,
+        c_closeness numeric(5, 2) NOT NULL,
+        r_repair numeric(5, 2) NOT NULL,
+        v_future numeric(5, 2) NOT NULL,
+        consistency_score numeric(5, 2),
+        raw_responses jsonb,
+        updated_at timestamp with time zone NOT NULL DEFAULT now()
+      )`,
+      `ALTER TABLE user_psych_profiles ADD COLUMN IF NOT EXISTS consistency_score numeric(5, 2)`,
+      `ALTER TABLE user_psych_profiles ADD COLUMN IF NOT EXISTS trait_scores jsonb`,
+      `ALTER TABLE user_psych_profiles ADD COLUMN IF NOT EXISTS dominant_vectors jsonb`,
+      `CREATE TABLE IF NOT EXISTS couple_reports (
+        id text PRIMARY KEY,
+        session_id text NOT NULL,
+        couple_id text NOT NULL UNIQUE,
+        radar_trust numeric(5, 2) NOT NULL DEFAULT 50.00,
+        radar_closeness numeric(5, 2) NOT NULL DEFAULT 50.00,
+        radar_communication numeric(5, 2) NOT NULL DEFAULT 50.00,
+        radar_intimacy numeric(5, 2) NOT NULL DEFAULT 50.00,
+        radar_values numeric(5, 2) NOT NULL DEFAULT 50.00,
+        radar_metrics jsonb,
+        archetype_title text NOT NULL,
+        archetype_description text NOT NULL,
+        lead_spheres jsonb NOT NULL,
+        synergy_points jsonb,
+        growth_zones jsonb,
+        blind_spots jsonb,
+        calculated_at timestamp with time zone NOT NULL DEFAULT now(),
+        created_at timestamp with time zone NOT NULL DEFAULT now()
+      )`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS radar_trust numeric(5, 2)`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS radar_closeness numeric(5, 2)`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS radar_communication numeric(5, 2)`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS radar_intimacy numeric(5, 2)`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS radar_values numeric(5, 2)`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS radar_metrics jsonb`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS archetype_title text`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS archetype_description text`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS lead_spheres jsonb`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS synergy_points jsonb`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS growth_zones jsonb`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS blind_spots jsonb`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS calculated_at timestamp with time zone DEFAULT now()`,
+      `ALTER TABLE couple_reports ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now()`
     ];
     for (const stmt of statements) {
       try {

@@ -62,11 +62,7 @@ export const TestRunnerModal: React.FC<TestRunnerModalProps> = ({
     const elapsed = Date.now() - questionStartTimeRef.current;
     toggleCountRef.current += 1;
 
-    const totalUsed = Object.values(allocations).reduce((sum, v) => sum + v, 0);
-    const maxPts = q.tradeOffMaxPoints || 10;
-    const isValid = totalUsed === maxPts;
-
-    onSelectOption(q.id, isValid ? 1 : 0, {
+    onSelectOption(q.id, allocations, {
       reactionTimeMs: elapsed,
       toggleCount: toggleCountRef.current,
       targetType: 'self',
@@ -76,11 +72,17 @@ export const TestRunnerModal: React.FC<TestRunnerModalProps> = ({
 
   // Check if current question is answerable / answered
   let isAnswered = false;
-  if (q.type === 'trade_off') {
-    const raw = (userAnswers as any)[`__meta_${q.id}`]?.rawPayload || selectedVal;
+  const currentTradeOffMaxPoints = q?.tradeOffMaxPoints || q?.totalPoints || 10;
+
+  if (q?.type === 'trade_off') {
+    const raw =
+      typeof selectedVal === 'object' && selectedVal !== null
+        ? selectedVal
+        : (userAnswers as any)[`__meta_${q.id}`]?.rawPayload;
+
     if (typeof raw === 'object' && raw !== null) {
       const sum = Object.values(raw).reduce((acc: number, v: any) => acc + (Number(v) || 0), 0);
-      isAnswered = sum === (q.tradeOffMaxPoints || 10);
+      isAnswered = sum === currentTradeOffMaxPoints;
     } else {
       isAnswered = selectedVal === 1;
     }
@@ -152,7 +154,7 @@ export const TestRunnerModal: React.FC<TestRunnerModalProps> = ({
                 {q.type === 'trade_off' && q.tradeOffItems && (
                   <TradeOffQuestion
                     items={q.tradeOffItems}
-                    maxPoints={q.tradeOffMaxPoints || 10}
+                    maxPoints={currentTradeOffMaxPoints}
                     allocations={
                       typeof selectedVal === 'object' && selectedVal !== null
                         ? selectedVal

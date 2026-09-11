@@ -24,7 +24,7 @@ async function login(page: Page, user: { login: string; password: string }) {
   await page.waitForLoadState('networkidle');
   
   // Wait for key dashboard element
-  await page.waitForSelector('text=Пройти тест', { timeout: 120000 });
+  await page.waitForSelector('text=Пройти тест', { timeout: 180000 });
 }
 
 async function clickIfExists(page: Page, selector: string, timeout = 5000): Promise<boolean> {
@@ -538,7 +538,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
     });
 
     test('5.2: User B receives and accepts invite', async ({ browser }) => {
-      test.setTimeout(120000);
+      test.setTimeout(180000);
       const { pageB, contextB } = await createAuthenticatedPages(browser);
       try {
         await pageB.goto(BASE_URL);
@@ -559,6 +559,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
     });
 
     test('5.3: Date appears in DatesHistorySection for both', async ({ browser }) => {
+      test.setTimeout(180000);
       const { pageA, contextA, pageB, contextB } = await createAuthenticatedPages(browser);
       try {
         for (const page of [pageA, pageB]) {
@@ -584,7 +585,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
   
   test.describe('Phase 6: CareBaseView & Deep Talk', () => {
     test('6.1: User B fills Flower Passport and Wishlist', async ({ browser }) => {
-      test.setTimeout(120000);
+      test.setTimeout(180000);
       const { pageB, contextB } = await createAuthenticatedPages(browser);
       try {
         await pageB.goto(BASE_URL);

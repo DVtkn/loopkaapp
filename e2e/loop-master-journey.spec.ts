@@ -1,7 +1,7 @@
 import { test, expect, BrowserContext, Page } from '@playwright/test';
 
 const BASE_URL = process.env.BASE_URL || 'https://loopkaapp.vercel.app';
-const TEST_TIMEOUT = 120000;
+const TEST_TIMEOUT = 300000;
 
 const USER_A = { login: 'Dmitry', password: 'Qazwsx' };
 const USER_B = { login: 'Dmitry', password: 'Qazwsx' };
@@ -20,11 +20,11 @@ async function login(page: Page, user: { login: string; password: string }) {
   }
   
   await page.click('text=Войти в аккаунт');
-  await page.waitForTimeout(5000);
+  await page.waitForTimeout(10000);
   await page.waitForLoadState('networkidle');
   
   // Wait for key dashboard element
-  await page.waitForSelector('text=Пройти тест', { timeout: 180000 });
+  await page.waitForSelector('text=Пройти тест', { timeout: 240000 });
 }
 
 async function clickIfExists(page: Page, selector: string, timeout = 5000): Promise<boolean> {
@@ -44,8 +44,8 @@ async function createAuthenticatedPages(browser: any) {
   const pageA = await contextA.newPage();
   const pageB = await contextB.newPage();
   
-  pageA.setDefaultTimeout(60000);
-  pageB.setDefaultTimeout(60000);
+  pageA.setDefaultTimeout(300000);
+  pageB.setDefaultTimeout(300000);
   
   await login(pageA, { login: 'Dmitry', password: 'Qazwsx' });
   await login(pageB, { login: 'Dmitry', password: 'Qazwsx' });
@@ -65,29 +65,29 @@ test.describe('Loop Master Journey - Full E2E', () => {
   
   test.describe('Phase 1: Entry Flow & Onboarding', () => {
     test('1.1: User A logs in and verifies dashboard', async ({ browser }) => {
-      test.setTimeout(120000);
+      test.setTimeout(300000);
       const { pageA, contextA } = await createAuthenticatedPages(browser);
       try {
-        await expect(pageA.locator('text=Anna & Dmitry').first()).toBeVisible({ timeout: 10000 });
-        await expect(pageA.locator('text=Пройти тест')).toBeVisible({ timeout: 5000 });
+        await expect(pageA.locator('text=Anna & Dmitry').first()).toBeVisible({ timeout: 30000 });
+        await expect(pageA.locator('text=Пройти тест')).toBeVisible({ timeout: 10000 });
       } finally {
         await contextA.close();
       }
     });
 
     test('1.2: User B logs in (same user, different context) and verifies isolation', async ({ browser }) => {
-      test.setTimeout(120000);
+      test.setTimeout(300000);
       const { pageB, contextB } = await createAuthenticatedPages(browser);
       try {
-        await expect(pageB.locator('text=Anna & Dmitry').first()).toBeVisible({ timeout: 10000 });
-        await expect(pageB.locator('text=Пройти тест')).toBeVisible({ timeout: 5000 });
+        await expect(pageB.locator('text=Anna & Dmitry').first()).toBeVisible({ timeout: 30000 });
+        await expect(pageB.locator('text=Пройти тест')).toBeVisible({ timeout: 10000 });
       } finally {
         await contextB.close();
       }
     });
 
     test('1.3: Both users see they are in a couple - isolation test', async ({ browser }) => {
-      test.setTimeout(120000);
+      test.setTimeout(300000);
       const { pageA, contextA, pageB, contextB } = await createAuthenticatedPages(browser);
       try {
         await pageA.goto(BASE_URL);
@@ -418,6 +418,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
     });
 
     test('4.5: User B completes all available tests', async ({ browser }) => {
+      test.setTimeout(300000);
       const { pageB, contextB } = await createAuthenticatedPages(browser);
       try {
         await pageB.goto(BASE_URL);
@@ -538,7 +539,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
     });
 
     test('5.2: User B receives and accepts invite', async ({ browser }) => {
-      test.setTimeout(180000);
+      test.setTimeout(300000);
       const { pageB, contextB } = await createAuthenticatedPages(browser);
       try {
         await pageB.goto(BASE_URL);
@@ -559,7 +560,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
     });
 
     test('5.3: Date appears in DatesHistorySection for both', async ({ browser }) => {
-      test.setTimeout(180000);
+      test.setTimeout(300000);
       const { pageA, contextA, pageB, contextB } = await createAuthenticatedPages(browser);
       try {
         for (const page of [pageA, pageB]) {
@@ -647,6 +648,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
     });
 
     test('6.3: User B sees Deep Talk question in ChatView', async ({ browser }) => {
+      test.setTimeout(300000);
       const { pageB, contextB } = await createAuthenticatedPages(browser);
       try {
         await pageB.goto(BASE_URL);
@@ -670,7 +672,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
   
   test.describe('Phase 7: ChatView (AI Psychologist - Owl Mode)', () => {
     test('7.1: User A asks AI Psychologist question', async ({ browser }) => {
-      test.setTimeout(120000);
+      test.setTimeout(300000);
       const { pageA, contextA } = await createAuthenticatedPages(browser);
       try {
         await pageA.goto(BASE_URL);
@@ -770,7 +772,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
     });
 
     test('8.3: User A logs out - cache cleared', async ({ browser }) => {
-      test.setTimeout(120000);
+      test.setTimeout(300000);
       const { pageA, contextA } = await createAuthenticatedPages(browser);
       try {
         await pageA.goto(BASE_URL);

@@ -11,6 +11,7 @@ import { TestCard } from './tests/TestCard.tsx';
 import { TestFeaturedCard } from './tests/TestFeaturedCard.tsx';
 import { TestRunnerModal } from './tests/TestRunnerModal.tsx';
 import { TestCompletedModal } from './tests/TestCompletedModal.tsx';
+import { apiFetch } from '../utils/api.ts';
 
 export const TestsView: React.FC<{ initialMode?: 'catalog' | 'report' }> = ({
   initialMode = 'catalog',

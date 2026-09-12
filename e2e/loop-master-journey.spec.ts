@@ -7,24 +7,24 @@ const USER_A = { login: 'Dmitry', password: 'Qazwsx' };
 const USER_B = { login: 'Dmitry', password: 'Qazwsx' };
 
 async function login(page: Page, user: { login: string; password: string }) {
-  await page.goto(BASE_URL);
-  await page.waitForLoadState('networkidle');
-  
+  // networkidle никогда не наступает: приложение держит SSE/realtime соединение.
+  // Поэтому везде используем domcontentloaded + ожидание конкретного элемента.
+  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('text=Вход', { timeout: 60000 });
+
   await page.click('text=Вход');
   await page.waitForTimeout(1000);
-  
+
   const inputs = await page.locator('input').all();
   if (inputs.length >= 2) {
     await inputs[0].fill(user.login);
     await inputs[1].fill(user.password);
   }
-  
+
   await page.click('text=Войти в аккаунт');
-  await page.waitForTimeout(10000);
-  await page.waitForLoadState('networkidle');
-  
-  // Wait for key dashboard element
-  await page.waitForSelector('text=Пройти тест', { timeout: 240000 });
+
+  // Wait for key dashboard element (dashboard renders ~3s after login)
+  await page.waitForSelector('text=Пройти тест', { timeout: 60000 });
 }
 
 async function clickIfExists(page: Page, selector: string, timeout = 5000): Promise<boolean> {
@@ -65,7 +65,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
   
   test.describe('Phase 1: Entry Flow & Onboarding', () => {
     test('1.1: User A logs in and verifies dashboard', async ({ browser }) => {
-      test.setTimeout(300000);
+      test.setTimeout(120000);
       const { pageA, contextA } = await createAuthenticatedPages(browser);
       try {
         await expect(pageA.locator('text=Anna & Dmitry').first()).toBeVisible({ timeout: 30000 });
@@ -76,7 +76,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
     });
 
     test('1.2: User B logs in (same user, different context) and verifies isolation', async ({ browser }) => {
-      test.setTimeout(300000);
+      test.setTimeout(120000);
       const { pageB, contextB } = await createAuthenticatedPages(browser);
       try {
         await expect(pageB.locator('text=Anna & Dmitry').first()).toBeVisible({ timeout: 30000 });
@@ -87,13 +87,13 @@ test.describe('Loop Master Journey - Full E2E', () => {
     });
 
     test('1.3: Both users see they are in a couple - isolation test', async ({ browser }) => {
-      test.setTimeout(300000);
+      test.setTimeout(120000);
       const { pageA, contextA, pageB, contextB } = await createAuthenticatedPages(browser);
       try {
         await pageA.goto(BASE_URL);
         await pageB.goto(BASE_URL);
-        await pageA.waitForLoadState('networkidle');
-        await pageB.waitForLoadState('networkidle');
+        await pageA.waitForLoadState('domcontentloaded');
+        await pageB.waitForLoadState('domcontentloaded');
         
         const titleA = await pageA.title();
         const titleB = await pageB.title();
@@ -116,7 +116,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
       const { pageA, contextA } = await createAuthenticatedPages(browser);
       try {
         await pageA.goto(BASE_URL);
-        await pageA.waitForLoadState('networkidle');
+        await pageA.waitForLoadState('domcontentloaded');
         
         const hugButton = pageA.locator('text=Обнять, text=🤗, button:has-text("Обнять")');
         if (await hugButton.count() > 0) {
@@ -148,7 +148,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
       const { pageA, contextA } = await createAuthenticatedPages(browser);
       try {
         await pageA.goto(BASE_URL);
-        await pageA.waitForLoadState('networkidle');
+        await pageA.waitForLoadState('domcontentloaded');
         
         const moodButton = pageA.locator('[data-testid="mood-picker"], button:has-text("Настроение"), button:has-text("😊"), .mood-picker-button');
         if (await moodButton.count() > 0) {
@@ -184,7 +184,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
       const { pageA, contextA } = await createAuthenticatedPages(browser);
       try {
         await pageA.goto(BASE_URL);
-        await pageA.waitForLoadState('networkidle');
+        await pageA.waitForLoadState('domcontentloaded');
         
         await pageA.click('text=Мы');
         await pageA.waitForTimeout(1000);
@@ -220,7 +220,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
       const { pageB, contextB } = await createAuthenticatedPages(browser);
       try {
         await pageB.goto(BASE_URL);
-        await pageB.waitForLoadState('networkidle');
+        await pageB.waitForLoadState('domcontentloaded');
         
         await pageB.click('text=Мы');
         await pageB.waitForTimeout(1000);
@@ -260,7 +260,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
       try {
         for (const page of [pageA, pageB]) {
           await page.goto(BASE_URL);
-          await page.waitForLoadState('networkidle');
+          await page.waitForLoadState('domcontentloaded');
           
           await page.click('text=Мы');
           await page.waitForTimeout(1000);
@@ -296,7 +296,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
       const { pageA, contextA } = await createAuthenticatedPages(browser);
       try {
         await pageA.goto(BASE_URL);
-        await pageA.waitForLoadState('networkidle');
+        await pageA.waitForLoadState('domcontentloaded');
         
         await pageA.click('text=Тесты');
         await pageA.waitForTimeout(1000);
@@ -333,7 +333,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
       const { pageB, contextB } = await createAuthenticatedPages(browser);
       try {
         await pageB.goto(BASE_URL);
-        await pageB.waitForLoadState('networkidle');
+        await pageB.waitForLoadState('domcontentloaded');
         
         await pageB.click('text=Мы');
         await pageB.waitForTimeout(1000);
@@ -358,7 +358,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
       const { pageB, contextB } = await createAuthenticatedPages(browser);
       try {
         await pageB.goto(BASE_URL);
-        await pageB.waitForLoadState('networkidle');
+        await pageB.waitForLoadState('domcontentloaded');
         
         await pageB.click('text=Мы');
         await pageB.waitForTimeout(1000);
@@ -384,7 +384,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
       const { pageA, contextA } = await createAuthenticatedPages(browser);
       try {
         await pageA.goto(BASE_URL);
-        await pageA.waitForLoadState('networkidle');
+        await pageA.waitForLoadState('domcontentloaded');
         
         await pageA.click('text=Тесты');
         await pageA.waitForTimeout(1000);
@@ -418,11 +418,11 @@ test.describe('Loop Master Journey - Full E2E', () => {
     });
 
     test('4.5: User B completes all available tests', async ({ browser }) => {
-      test.setTimeout(300000);
+      test.setTimeout(120000);
       const { pageB, contextB } = await createAuthenticatedPages(browser);
       try {
         await pageB.goto(BASE_URL);
-        await pageB.waitForLoadState('networkidle');
+        await pageB.waitForLoadState('domcontentloaded');
         
         await pageB.click('text=Тесты');
         await pageB.waitForTimeout(1000);
@@ -464,7 +464,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
       try {
         for (const page of [pageA, pageB]) {
           await page.goto(BASE_URL);
-          await page.waitForLoadState('networkidle');
+          await page.waitForLoadState('domcontentloaded');
           
           await page.click('text=Мы');
           await page.waitForTimeout(1000);
@@ -505,7 +505,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
       const { pageA, contextA } = await createAuthenticatedPages(browser);
       try {
         await pageA.goto(BASE_URL);
-        await pageA.waitForLoadState('networkidle');
+        await pageA.waitForLoadState('domcontentloaded');
         
         await pageA.click('text=Свидания');
         await pageA.waitForTimeout(1000);
@@ -539,11 +539,11 @@ test.describe('Loop Master Journey - Full E2E', () => {
     });
 
     test('5.2: User B receives and accepts invite', async ({ browser }) => {
-      test.setTimeout(300000);
+      test.setTimeout(120000);
       const { pageB, contextB } = await createAuthenticatedPages(browser);
       try {
         await pageB.goto(BASE_URL);
-        await pageB.waitForLoadState('networkidle');
+        await pageB.waitForLoadState('domcontentloaded');
         
         await pageB.click('text=Свидания');
         await pageB.waitForTimeout(1000);
@@ -560,7 +560,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
     });
 
     test('5.3: Date appears in DatesHistorySection for both', async ({ browser }) => {
-      test.setTimeout(300000);
+      test.setTimeout(120000);
       const { pageA, contextA, pageB, contextB } = await createAuthenticatedPages(browser);
       try {
         for (const page of [pageA, pageB]) {
@@ -590,7 +590,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
       const { pageB, contextB } = await createAuthenticatedPages(browser);
       try {
         await pageB.goto(BASE_URL);
-        await pageB.waitForLoadState('networkidle');
+        await pageB.waitForLoadState('domcontentloaded');
         
         await pageB.click('text=Мы');
         await pageB.waitForTimeout(1000);
@@ -629,7 +629,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
       const { pageA, contextA } = await createAuthenticatedPages(browser);
       try {
         await pageA.goto(BASE_URL);
-        await pageA.waitForLoadState('networkidle');
+        await pageA.waitForLoadState('domcontentloaded');
         
         await pageA.click('text=Мы');
         await pageA.waitForTimeout(500);
@@ -648,11 +648,11 @@ test.describe('Loop Master Journey - Full E2E', () => {
     });
 
     test('6.3: User B sees Deep Talk question in ChatView', async ({ browser }) => {
-      test.setTimeout(300000);
+      test.setTimeout(120000);
       const { pageB, contextB } = await createAuthenticatedPages(browser);
       try {
         await pageB.goto(BASE_URL);
-        await pageB.waitForLoadState('networkidle');
+        await pageB.waitForLoadState('domcontentloaded');
         
         await pageB.click('text=Чат');
         await pageB.waitForTimeout(2000);
@@ -672,11 +672,11 @@ test.describe('Loop Master Journey - Full E2E', () => {
   
   test.describe('Phase 7: ChatView (AI Psychologist - Owl Mode)', () => {
     test('7.1: User A asks AI Psychologist question', async ({ browser }) => {
-      test.setTimeout(300000);
+      test.setTimeout(120000);
       const { pageA, contextA } = await createAuthenticatedPages(browser);
       try {
         await pageA.goto(BASE_URL);
-        await pageA.waitForLoadState('networkidle');
+        await pageA.waitForLoadState('domcontentloaded');
         
         await pageA.click('text=Чат');
         await pageA.waitForTimeout(2000);
@@ -718,7 +718,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
       const { pageA, contextA } = await createAuthenticatedPages(browser);
       try {
         await pageA.goto(BASE_URL);
-        await pageA.waitForLoadState('networkidle');
+        await pageA.waitForLoadState('domcontentloaded');
         
         await pageA.click('text=Профиль');
         await pageA.waitForTimeout(1000);
@@ -744,7 +744,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
       const { pageA, contextA } = await createAuthenticatedPages(browser);
       try {
         await pageA.goto(BASE_URL);
-        await pageA.waitForLoadState('networkidle');
+        await pageA.waitForLoadState('domcontentloaded');
         
         await pageA.click('text=Профиль');
         await pageA.waitForTimeout(1000);
@@ -772,11 +772,11 @@ test.describe('Loop Master Journey - Full E2E', () => {
     });
 
     test('8.3: User A logs out - cache cleared', async ({ browser }) => {
-      test.setTimeout(300000);
+      test.setTimeout(120000);
       const { pageA, contextA } = await createAuthenticatedPages(browser);
       try {
         await pageA.goto(BASE_URL);
-        await pageA.waitForLoadState('networkidle');
+        await pageA.waitForLoadState('domcontentloaded');
         
         await pageA.click('text=Профиль');
         await pageA.waitForTimeout(500);
@@ -784,7 +784,7 @@ test.describe('Loop Master Journey - Full E2E', () => {
         const logoutClicked = await clickIfExists(pageA, 'text=Выход, text=Logout, text=Выйти');
         if (logoutClicked) {
           await pageA.waitForTimeout(2000);
-          await pageA.waitForLoadState('networkidle');
+          await pageA.waitForLoadState('domcontentloaded');
           
           const localStorageCleared = await pageA.evaluate(() => {
             const keys = Object.keys(localStorage);

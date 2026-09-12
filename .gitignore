@@ -4,3 +4,8 @@ test-results/
 *.env*
 .vscode/
 .docker/
+# screenshots at root (grouped to docs/screenshots instead)
+/*.png
+/*.jpg
+.DS_Store
+**/.DS_Store

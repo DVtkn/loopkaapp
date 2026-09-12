@@ -9,3 +9,6 @@ test-results/
 /*.jpg
 .DS_Store
 **/.DS_Store
+# local data (grouped to infra, not tracked)
+data/db_store.json
+/assets/

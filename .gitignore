@@ -12,3 +12,4 @@ test-results/
 # local data (grouped to infra, not tracked)
 data/db_store.json
 /assets/
+.vercel
